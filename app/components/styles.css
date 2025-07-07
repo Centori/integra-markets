@@ -1,0 +1,697 @@
+/* CSS Variables - Color Palette matching React Native app */
+:root {
+    --bg-primary: #121212;
+    --bg-secondary: #1E1E1E;
+    --text-primary: #ECECEC;
+    --text-secondary: #A0A0A0;
+    --accent-positive: #4ECCA3;
+    --accent-positive-bg: rgba(78, 204, 163, 0.1);
+    --accent-neutral: #A0A0A0;
+    --accent-neutral-bg: rgba(160, 160, 160, 0.1);
+    --accent-negative: #F05454;
+    --accent-negative-bg: rgba(240, 84, 84, 0.1);
+    --accent-data: #30A5FF;
+    --divider: #333333;
+    --card-border: #333333;
+    --icon-active: #4ECCA3;
+    --icon-inactive: #A0A0A0;
+    --prediction-yes: #4ECCA3;
+    --prediction-no: #F05454;
+    --fab-color: #4ECCA3;
+}
+
+/* Reset and Base Styles */
+* {
+    margin: 0;
+    padding: 0;
+    box-sizing: border-box;
+}
+
+body {
+    font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, sans-serif;
+    background-color: var(--bg-primary);
+    color: var(--text-primary);
+    min-height: 100vh;
+    overflow-x: hidden;
+}
+
+.material-icons {
+    font-size: inherit;
+    vertical-align: middle;
+}
+
+/* App Container */
+.app-container {
+    display: flex;
+    flex-direction: column;
+    min-height: 100vh;
+    max-width: 480px;
+    margin: 0 auto;
+    background-color: var(--bg-primary);
+    position: relative;
+}
+
+/* Navigation Tabs */
+.tab-navigation {
+    display: flex;
+    background-color: var(--bg-secondary);
+    border-top: 1px solid var(--divider);
+    position: fixed;
+    bottom: 0;
+    left: 50%;
+    transform: translateX(-50%);
+    width: 100%;
+    max-width: 480px;
+    z-index: 1000;
+}
+
+.tab-btn {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    padding: 8px 5px;
+    background: none;
+    border: none;
+    color: var(--icon-inactive);
+    cursor: pointer;
+    transition: color 0.2s;
+}
+
+.tab-btn.active {
+    color: var(--icon-active);
+}
+
+.tab-btn span:first-child {
+    font-size: 24px;
+    margin-bottom: 2px;
+}
+
+.tab-btn span:last-child {
+    font-size: 10px;
+}
+
+/* Screen Container */
+.screen-container {
+    flex: 1;
+    background-color: var(--bg-primary);
+    padding-bottom: 80px;
+}
+
+.screen-container.hidden {
+    display: none;
+}
+
+/* App Header */
+.app-header {
+    padding: 10px 20px;
+}
+
+.prediction-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+}
+
+.header-title {
+    color: var(--text-primary);
+    font-size: 28px;
+    font-weight: 300;
+    margin: 0;
+}
+
+.filter-icon-btn {
+    background: none;
+    border: none;
+    color: var(--text-secondary);
+    cursor: pointer;
+    padding: 5px;
+}
+
+/* Filters Container */
+.filters-container {
+    display: flex;
+    gap: 10px;
+    padding: 10px 15px;
+    overflow-x: auto;
+    scrollbar-width: none;
+    -ms-overflow-style: none;
+}
+
+.filters-container::-webkit-scrollbar {
+    display: none;
+}
+
+.filter-btn {
+    display: flex;
+    align-items: center;
+    gap: 5px;
+    background-color: var(--bg-secondary);
+    border: none;
+    border-radius: 20px;
+    padding: 8px 15px;
+    color: var(--text-secondary);
+    font-size: 14px;
+    cursor: pointer;
+    white-space: nowrap;
+    transition: all 0.2s;
+}
+
+.filter-btn.active {
+    background-color: var(--accent-positive);
+    color: var(--bg-primary);
+    font-weight: 500;
+}
+
+.filter-btn .material-icons {
+    font-size: 14px;
+}
+
+/* Trader Forecast Bar */
+.trader-forecast-bar {
+    padding: 10px 15px;
+    text-align: center;
+}
+
+.forecast-segments {
+    display: flex;
+    height: 6px;
+    width: 100%;
+    border-radius: 3px;
+    overflow: hidden;
+    background-color: var(--bg-secondary);
+    margin-bottom: 5px;
+}
+
+.segment {
+    height: 100%;
+    position: relative;
+}
+
+.segment.bearish {
+    flex: 1;
+    background-color: var(--accent-negative);
+}
+
+.segment.bullish {
+    flex: 3;
+    background-color: var(--accent-positive);
+}
+
+.segment.neutral {
+    flex: 1;
+    background-color: var(--accent-neutral);
+}
+
+.active-segment-indicator {
+    position: absolute;
+    bottom: 0;
+    left: 25%;
+    width: 50%;
+    height: 2px;
+    background-color: #00FF00;
+    border-radius: 1px;
+}
+
+.trader-forecast-text {
+    color: var(--text-secondary);
+    font-size: 11px;
+}
+
+/* Feed */
+.feed {
+    flex: 1;
+    padding: 5px 15px 20px;
+    overflow-y: auto;
+}
+
+/* AI Insight Card */
+.ai-card-outer-container {
+    background-color: var(--bg-secondary);
+    border-radius: 12px;
+    margin-bottom: 15px;
+    border: 1px solid var(--card-border);
+    padding: 2px;
+    box-shadow: 0 1px 2px rgba(0, 0, 0, 0.1);
+}
+
+.ai-card-inner-container {
+    background-color: var(--bg-secondary);
+    border-radius: 10px;
+    padding: 15px;
+    position: relative;
+}
+
+.dismiss-button {
+    position: absolute;
+    top: 10px;
+    right: 10px;
+    padding: 5px;
+    background: none;
+    border: none;
+    color: var(--text-secondary);
+    cursor: pointer;
+    z-index: 1;
+}
+
+.ai-summary-title {
+    color: var(--text-secondary);
+    font-size: 11px;
+    font-weight: bold;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    margin-bottom: 8px;
+}
+
+.ai-summary-text {
+    color: var(--text-primary);
+    font-size: 15px;
+    line-height: 21px;
+    margin-bottom: 15px;
+}
+
+.ai-outlook-section {
+    margin-bottom: 15px;
+}
+
+.ai-outlook-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 8px;
+}
+
+.ai-outlook-title-container {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+}
+
+.ai-outlook-title {
+    color: var(--accent-positive);
+    font-size: 14px;
+    font-weight: bold;
+    text-transform: uppercase;
+}
+
+.ai-outlook-score-tag {
+    background-color: var(--accent-positive);
+    border-radius: 4px;
+    padding: 3px 8px;
+}
+
+.ai-outlook-score-text {
+    color: var(--bg-primary);
+    font-size: 12px;
+    font-weight: bold;
+}
+
+.ai-outlook-text {
+    color: var(--text-primary);
+    font-size: 14px;
+    line-height: 20px;
+}
+
+.ai-footer {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding-top: 10px;
+    border-top: 1px solid var(--divider);
+    margin-top: 5px;
+    gap: 5px;
+    cursor: pointer;
+}
+
+.ai-footer-text {
+    color: var(--text-secondary);
+    font-size: 12px;
+    font-style: italic;
+}
+
+/* News Cards */
+.news-card {
+    background-color: var(--bg-secondary);
+    border-radius: 8px;
+    padding: 15px;
+    margin-bottom: 15px;
+    cursor: pointer;
+    transition: background-color 0.2s;
+}
+
+.news-card:hover {
+    background-color: rgba(30, 30, 30, 0.8);
+}
+
+.card-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 12px;
+}
+
+.sentiment-info {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+
+.sentiment-tag {
+    display: flex;
+    align-items: center;
+    padding: 4px 8px;
+    border-radius: 4px;
+    gap: 4px;
+}
+
+.sentiment-text {
+    font-weight: bold;
+    font-size: 12px;
+}
+
+.score-tag {
+    padding: 4px 8px;
+    border-radius: 4px;
+}
+
+.score-text {
+    color: var(--text-primary);
+    font-weight: bold;
+    font-size: 12px;
+}
+
+/* Sentiment Colors */
+.bearish { color: var(--accent-negative); }
+.bullish { color: var(--accent-positive); }
+.neutral { color: var(--accent-neutral); }
+
+.bearish-bg { background-color: var(--accent-negative-bg); }
+.bullish-bg { background-color: var(--accent-positive-bg); }
+.neutral-bg { background-color: var(--accent-neutral-bg); }
+
+.score-bearish-bg { background-color: var(--accent-negative); }
+.score-bullish-bg { background-color: var(--accent-positive); }
+.score-neutral-bg { background-color: var(--accent-neutral); }
+
+.card-body {
+    margin-bottom: 15px;
+}
+
+.headline {
+    color: var(--text-primary);
+    font-size: 18px;
+    font-weight: 500;
+    margin-bottom: 5px;
+    line-height: 22px;
+}
+
+.summary {
+    color: var(--text-secondary);
+    font-size: 14px;
+    line-height: 20px;
+}
+
+.card-footer {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    border-top: 1px solid var(--divider);
+    padding-top: 10px;
+}
+
+.source-link {
+    color: var(--accent-data);
+    font-size: 13px;
+    font-weight: 500;
+    text-decoration: none;
+    display: flex;
+    align-items: center;
+    gap: 2px;
+}
+
+.source-link .material-icons {
+    font-size: 12px;
+}
+
+.share-btn {
+    background: none;
+    border: none;
+    color: var(--accent-data);
+    cursor: pointer;
+    padding: 5px;
+}
+
+.timestamp {
+    color: var(--text-secondary);
+    font-size: 12px;
+}
+
+/* Stats Row (Prediction Markets) */
+.stats-row {
+    display: flex;
+    justify-content: space-around;
+    padding: 15px 10px;
+}
+
+.stats-box {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    flex: 1;
+}
+
+.stats-icon {
+    font-size: 24px;
+    margin-bottom: 5px;
+}
+
+.stats-value {
+    color: var(--text-primary);
+    font-size: 18px;
+    font-weight: 600;
+    margin-top: 5px;
+}
+
+.stats-label {
+    color: var(--text-secondary);
+    font-size: 11px;
+    margin-top: 3px;
+}
+
+/* Market Cards */
+.market-card {
+    background-color: var(--bg-secondary);
+    border-radius: 8px;
+    padding: 15px;
+    margin-bottom: 15px;
+    cursor: pointer;
+    transition: background-color 0.2s;
+}
+
+.market-card:hover {
+    background-color: rgba(30, 30, 30, 0.8);
+}
+
+.market-card-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 10px;
+}
+
+.market-category {
+    color: var(--accent-data);
+    font-size: 11px;
+    font-weight: bold;
+    text-transform: uppercase;
+}
+
+.market-value {
+    color: var(--text-secondary);
+    font-size: 12px;
+    display: flex;
+    align-items: center;
+    gap: 2px;
+}
+
+.market-title {
+    color: var(--text-primary);
+    font-size: 16px;
+    font-weight: 500;
+    margin-bottom: 15px;
+    line-height: 21px;
+}
+
+.market-info-row {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 15px;
+    padding-bottom: 10px;
+    border-bottom: 1px solid var(--divider);
+}
+
+.market-info-label {
+    color: var(--text-secondary);
+    font-size: 10px;
+    text-transform: uppercase;
+    margin-bottom: 2px;
+}
+
+.market-info-value {
+    color: var(--text-primary);
+    font-size: 13px;
+    font-weight: 500;
+}
+
+.alert-button {
+    background: none;
+    border: none;
+    padding: 5px;
+    cursor: pointer;
+    color: var(--text-secondary);
+}
+
+.alert-button .material-icons {
+    font-size: 20px;
+}
+
+.market-yes-no-row {
+    display: flex;
+    gap: 10px;
+}
+
+.market-option-box {
+    flex: 1;
+    border: 1px solid var(--divider);
+    border-radius: 6px;
+    padding: 10px;
+    position: relative;
+    cursor: pointer;
+    transition: all 0.2s;
+}
+
+.selected-yes {
+    border-color: var(--prediction-yes);
+    background-color: rgba(78, 204, 163, 0.05);
+}
+
+.selected-no {
+    border-color: var(--prediction-no);
+    background-color: rgba(240, 84, 84, 0.05);
+}
+
+.market-option-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 8px;
+}
+
+.market-option-percent {
+    font-size: 14px;
+    font-weight: bold;
+}
+
+.yes-color { color: var(--prediction-yes); }
+.no-color { color: var(--prediction-no); }
+
+.market-option-label {
+    color: var(--text-primary);
+    font-size: 14px;
+    font-weight: 500;
+    margin-bottom: 4px;
+}
+
+.market-option-price {
+    color: var(--text-secondary);
+    font-size: 12px;
+}
+
+.checkmark-circle {
+    position: absolute;
+    top: 8px;
+    right: 8px;
+    width: 18px;
+    height: 18px;
+    border-radius: 50%;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+}
+
+.yes-bg { background-color: var(--prediction-yes); }
+.no-bg { background-color: var(--prediction-no); }
+
+.checkmark-circle .material-icons {
+    font-size: 12px;
+    color: var(--bg-secondary);
+}
+
+.show-more-button {
+    background-color: var(--bg-secondary);
+    padding: 12px;
+    border-radius: 6px;
+    text-align: center;
+    margin-top: 10px;
+    border: none;
+    cursor: pointer;
+    width: 100%;
+}
+
+.show-more-text {
+    color: var(--accent-data);
+    font-size: 14px;
+    font-weight: 500;
+}
+
+/* Floating Action Button */
+.fab {
+    position: fixed;
+    bottom: 100px;
+    right: 20px;
+    width: 56px;
+    height: 56px;
+    border-radius: 50%;
+    background-color: var(--fab-color);
+    border: none;
+    cursor: pointer;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.25);
+    z-index: 999;
+    transition: transform 0.2s;
+}
+
+.fab:hover {
+    transform: scale(1.05);
+}
+
+.fab .material-icons {
+    font-size: 28px;
+    color: var(--bg-primary);
+}
+
+/* Responsive Design */
+@media (max-width: 480px) {
+    .app-container {
+        max-width: 100%;
+    }
+    
+    .tab-navigation {
+        max-width: 100%;
+    }
+    
+    .fab {
+        right: 15px;
+        bottom: 90px;
+    }
+}
+
+@media (min-width: 481px) {
+    .app-container {
+        border-left: 1px solid var(--divider);
+        border-right: 1px solid var(--divider);
+    }
+}
