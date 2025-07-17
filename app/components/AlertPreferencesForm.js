@@ -11,6 +11,7 @@ import {
   Alert,
 } from 'react-native';
 import { MaterialIcons } from '@expo/vector-icons';
+import { DEFAULT_WEBSITE_SOURCES, getSuggestedWebsiteURLs } from '../config/default_sources';
 
 // Color palette
 const colors = {
@@ -24,7 +25,7 @@ const colors = {
 };
 
 const AlertPreferencesForm = ({ onComplete, onSkip, showSkipOption = false }) => {
-  const [activeTab, setActiveTab] = useState('Commodities');
+  const [activeTab, setActiveTab] = useState('Websites');
   const [selectedCommodities, setSelectedCommodities] = useState(['Zinc', 'Wheat', 'Tin']);
   const [selectedRegions, setSelectedRegions] = useState(['North America', 'Middle East']);
   const [selectedCurrencies, setSelectedCurrencies] = useState(['USD', 'EUR']);
@@ -35,8 +36,12 @@ const AlertPreferencesForm = ({ onComplete, onSkip, showSkipOption = false }) =>
   const [customCommodity, setCustomCommodity] = useState('');
   const [customRegion, setCustomRegion] = useState('');
   const [customCurrency, setCustomCurrency] = useState('');
+  const [websiteURL, setWebsiteURL] = useState('');
+  const [websiteURLs, setWebsiteURLs] = useState([]);
+  const [customKeyword, setCustomKeyword] = useState('');
+  const [keywords, setKeywords] = useState([]);
 
-  const tabs = ['Commodities', 'Regions', 'Currencies', 'Keywords', 'Sources'];
+  const tabs = ['Commodities', 'Regions', 'Currencies', 'Websites', 'Keywords', 'Sources'];
   const frequencies = ['Real-time', 'Daily', 'Weekly'];
   const thresholds = ['Low', 'Medium', 'High'];
 
@@ -54,6 +59,8 @@ const AlertPreferencesForm = ({ onComplete, onSkip, showSkipOption = false }) =>
     'USD', 'EUR', 'GBP', 'JPY', 'CHF', 'CAD',
     'AUD', 'CNY', 'RUB', 'INR', 'BRL', 'SAR'
   ];
+  
+  const suggestedWebsites = DEFAULT_WEBSITE_SOURCES;
 
   // Commodities functions
   const removeCommodity = (commodity) => {
@@ -109,20 +116,60 @@ const AlertPreferencesForm = ({ onComplete, onSkip, showSkipOption = false }) =>
     }
   };
 
+  // Keywords functions
+  const removeKeyword = (keyword) => {
+    setKeywords(prev => prev.filter(item => item !== keyword));
+  };
+
+  const addKeyword = (keyword) => {
+    if (!keywords.includes(keyword)) {
+      setKeywords(prev => [...prev, keyword]);
+    }
+  };
+
+  const addCustomKeyword = () => {
+    if (customKeyword.trim() && !keywords.includes(customKeyword.trim())) {
+      setKeywords(prev => [...prev, customKeyword.trim()]);
+      setCustomKeyword('');
+    }
+  };
+
+  // Website URLs functions
+  const removeWebsiteURL = (url) => {
+    setWebsiteURLs(prev => prev.filter(item => item !== url));
+  };
+
+  const addWebsiteURL = () => {
+    if (websiteURL.trim() && !websiteURLs.includes(websiteURL.trim())) {
+      // Basic URL validation
+      const urlPattern = /^(https?:\/\/)?([\da-z\.-]+)\.([a-z\.]{2,6})([\/\w \.-]*)*\/?$/;
+      if (urlPattern.test(websiteURL.trim())) {
+        setWebsiteURLs(prev => [...prev, websiteURL.trim()]);
+        setWebsiteURL('');
+      } else {
+        Alert.alert('Invalid URL', 'Please enter a valid website URL');
+      }
+    }
+  };
+
   const handleSavePreferences = () => {
     const preferences = {
       commodities: selectedCommodities,
       regions: selectedRegions,
       currencies: selectedCurrencies,
+      keywords: keywords,
+      websiteURLs: websiteURLs,
       alertFrequency,
       alertThreshold,
       pushNotifications,
       emailAlerts,
     };
 
+    const totalItems = selectedCommodities.length + selectedRegions.length + selectedCurrencies.length + keywords.length + websiteURLs.length;
+    
     Alert.alert(
       'Preferences Saved',
-      `Your alert preferences have been configured for ${selectedCommodities.length} commodities, ${selectedRegions.length} regions, and ${selectedCurrencies.length} currencies.`,
+      `Your alert preferences have been configured:\n• ${selectedCommodities.length} commodities\n• ${selectedRegions.length} regions\n• ${selectedCurrencies.length} currencies\n• ${keywords.length} keywords\n• ${websiteURLs.length} website sources\n\nTotal: ${totalItems} tracking items`,
       [
         {
           text: 'Continue',
@@ -213,7 +260,7 @@ const AlertPreferencesForm = ({ onComplete, onSkip, showSkipOption = false }) =>
       {selectedRegions.length > 0 ? (
         <View style={styles.selectedCommoditiesContainer}>
           {selectedRegions.map((region, index) => (
-            <View key={index} style={[styles.commodityTag, { backgroundColor: colors.accentPositive }]}>
+            <View key={index} style={[styles.commodityTag, { backgroundColor: colors.accentData }]}>
               <Text style={styles.commodityTagText}>{region}</Text>
               <TouchableOpacity onPress={() => removeRegion(region)}>
                 <MaterialIcons name="close" size={16} color={colors.textPrimary} />
@@ -320,13 +367,116 @@ const AlertPreferencesForm = ({ onComplete, onSkip, showSkipOption = false }) =>
     </View>
   );
 
-  const renderOtherTab = (tabName) => (
+  const renderWebsitesTab = () => (
     <View style={styles.tabContent}>
-      <View style={styles.comingSoonContainer}>
-        <MaterialIcons name="info-outline" size={48} color={colors.textSecondary} />
-        <Text style={styles.comingSoonTitle}>{tabName}</Text>
-        <Text style={styles.comingSoonText}>This feature is coming soon</Text>
+      {/* Selected Websites */}
+      <Text style={styles.sectionTitle}>Selected Websites</Text>
+      {websiteURLs.length > 0 ? (
+        <View style={styles.selectedCommoditiesContainer}>
+          {websiteURLs.map((url, index) => (
+            <View key={index} style={[styles.commodityTag, { backgroundColor: colors.accentData }]}>
+              <Text style={styles.commodityTagText} numberOfLines={1}>{url}</Text>
+              <TouchableOpacity onPress={() => removeWebsiteURL(url)}>
+                <MaterialIcons name="close" size={16} color={colors.textPrimary} />
+              </TouchableOpacity>
+            </View>
+          ))}
+        </View>
+      ) : (
+        <Text style={styles.emptyCommoditiesText}>No websites added yet.</Text>
+      )}
+      
+      {/* Website URL Input */}
+      <View style={styles.customInputContainer}>
+        <TextInput
+          style={styles.customInput}
+          placeholder="Enter website URL"
+          placeholderTextColor={colors.textSecondary}
+          value={websiteURL}
+          onChangeText={setWebsiteURL}
+          keyboardType="url"
+          autoCapitalize="none"
+          autoCorrect={false}
+        />
+        <TouchableOpacity style={styles.addButton} onPress={addWebsiteURL}>
+          <MaterialIcons name="add" size={24} color={colors.textPrimary} />
+        </TouchableOpacity>
       </View>
+      
+      {/* Suggested Websites */}
+      <Text style={styles.sectionTitle}>Suggested Sources:</Text>
+      <View style={styles.suggestedOptionsContainer}>
+        {suggestedWebsites.map((website, index) => (
+          <TouchableOpacity
+            key={index}
+            style={[
+              styles.suggestedOption,
+              websiteURLs.includes(website.url) && styles.selectedSuggestedOption
+            ]}
+            onPress={() => {
+              if (!websiteURLs.includes(website.url)) {
+                setWebsiteURLs(prev => [...prev, website.url]);
+              }
+            }}
+          >
+            <Text style={[
+              styles.suggestedOptionText,
+              websiteURLs.includes(website.url) && styles.selectedSuggestedOptionText
+            ]}>
+              {website.name}
+            </Text>
+          </TouchableOpacity>
+        ))}
+      </View>
+    </View>
+  );
+  const renderKeywordsTab = () => (
+    <View style={styles.tabContent}>
+      {/* Selected Keywords */}
+      <Text style={styles.sectionTitle}>Selected Keywords</Text>
+      {keywords.length > 0 ? (
+        <View style={styles.selectedCommoditiesContainer}>
+          {keywords.map((keyword, index) => (
+            <View key={index} style={[styles.commodityTag, { backgroundColor: colors.accentPositive }]}>
+              <Text style={[styles.commodityTagText, { color: colors.bgPrimary }]}>{keyword}</Text>
+              <TouchableOpacity onPress={() => removeKeyword(keyword)}>
+                <MaterialIcons name="close" size={16} color={colors.bgPrimary} />
+              </TouchableOpacity>
+            </View>
+          ))}
+        </View>
+      ) : (
+        <Text style={styles.emptyCommoditiesText}>No keywords selected yet.</Text>
+      )}
+
+      {/* Custom Keyword Input */}
+      <View style={styles.customInputContainer}>
+        <TextInput
+          style={styles.customInput}
+          placeholder="Enter keyword to track"
+          placeholderTextColor={colors.textSecondary}
+          value={customKeyword}
+          onChangeText={setCustomKeyword}
+        />
+        <TouchableOpacity style={styles.addButton} onPress={addCustomKeyword}>
+          <MaterialIcons name="add" size={24} color={colors.textPrimary} />
+        </TouchableOpacity>
+      </View>
+
+      <Text style={styles.thresholdDescription}>
+        Track specific keywords in news articles and market reports
+      </Text>
+    </View>
+  );
+
+  const renderSourcesTab = () => (
+    <View style={styles.tabContent}>
+      <Text style={styles.sectionTitle}>News Sources</Text>
+      <Text style={styles.emptyCommoditiesText}>Configure your preferred news sources and RSS feeds here.</Text>
+      
+      <Text style={styles.thresholdDescription}>
+        This section will allow you to configure various news sources, RSS feeds, and other information sources for your alerts.
+      </Text>
     </View>
   );
 
@@ -336,7 +486,7 @@ const AlertPreferencesForm = ({ onComplete, onSkip, showSkipOption = false }) =>
 
       {/* Enhanced Header with skip option */}
       <View style={styles.header}>
-        <TouchableOpacity onPress={() => onComplete()}>
+        <TouchableOpacity onPress={() => onComplete && onComplete()}>
           <MaterialIcons name="arrow-back" size={24} color={colors.accentData} />
         </TouchableOpacity>
         <Text style={styles.headerTitle}>Alert Preferences</Text>
@@ -377,7 +527,13 @@ const AlertPreferencesForm = ({ onComplete, onSkip, showSkipOption = false }) =>
           ? renderRegionsTab()
           : activeTab === 'Currencies'
           ? renderCurrenciesTab()
-          : renderOtherTab(activeTab)}
+          : activeTab === 'Keywords'
+          ? renderKeywordsTab()
+          : activeTab === 'Websites'
+          ? renderWebsitesTab() 
+          : activeTab === 'Sources'
+          ? renderSourcesTab()
+          : null}
 
         {/* Alert Frequency */}
         <Text style={styles.sectionTitle}>Alert Frequency</Text>
@@ -528,7 +684,7 @@ const styles = StyleSheet.create({
   commodityTag: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: colors.accentData,
+backgroundColor: colors.accentData,
     borderRadius: 20,
     paddingHorizontal: 15,
     paddingVertical: 8,
@@ -570,7 +726,7 @@ const styles = StyleSheet.create({
     flexWrap: 'wrap',
   },
   suggestedOption: {
-    backgroundColor: colors.bgSecondary,
+    backgroundColor: colors.accentPositive + '20',
     borderRadius: 20,
     paddingHorizontal: 15,
     paddingVertical: 10,
@@ -578,10 +734,10 @@ const styles = StyleSheet.create({
     marginBottom: 10,
   },
   selectedSuggestedOption: {
-    backgroundColor: colors.accentPositive,
+backgroundColor: colors.accentData,
   },
   suggestedOptionText: {
-    color: colors.textSecondary,
+    color: colors.accentPositive,
     fontSize: 14,
   },
   selectedSuggestedOptionText: {

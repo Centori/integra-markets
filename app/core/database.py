@@ -10,6 +10,7 @@ from supabase import create_client, Client
 from sqlalchemy import create_engine, MetaData, Column, Integer, String, Boolean, DateTime, Text, Float, ForeignKey
 from sqlalchemy.ext.declarative import declarative_base
 from sqlalchemy.orm import sessionmaker, Session, relationship
+from sqlalchemy.pool import StaticPool
 from app.core.config import settings
 
 # Load environment variables

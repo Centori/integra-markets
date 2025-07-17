@@ -68,7 +68,7 @@ const marketFocusOptions = [
 const WelcomeCard = ({ onNext }) => (
     <View style={styles.welcomeCard}>
         <View style={styles.welcomeHeader}>
-            <MaterialCommunityIcons name="chart-bubble" size={48} color={colors.accentPositive} />
+            <Image source={require('../assets/images/integra-logo-hq.png')} style={styles.logoImage} />
             <Text style={styles.welcomeTitle}>Welcome to Integra Markets</Text>
             <Text style={styles.welcomeSubtitle}>
                 The AI-powered platform for commodity trading insights and prediction markets
@@ -84,10 +84,6 @@ const WelcomeCard = ({ onNext }) => (
                 <MaterialCommunityIcons name="chart-line" size={24} color={colors.accentData} />
                 <Text style={styles.featureText}>Real-time news and sentiment</Text>
             </View>
-            <View style={styles.featureItem}>
-                <MaterialCommunityIcons name="chart-bubble" size={24} color={colors.accentPositive} />
-                <Text style={styles.featureText}>Prediction market insights</Text>
-            </View>
         </View>
 
         <TouchableOpacity style={styles.primaryButton} onPress={onNext}>
@@ -100,8 +96,8 @@ const WelcomeCard = ({ onNext }) => (
 // Role Selection Component
 const RoleSelectionCard = ({ selectedRole, onSelect }) => (
     <View style={styles.formCard}>
-        <Text style={styles.cardTitle}>What's your role?</Text>
-        <Text style={styles.cardSubtitle}>Help us customize your experience</Text>
+        <Text style={styles.cardTitle}>What's your role? (Optional)</Text>
+        <Text style={styles.cardSubtitle}>Help us customize your experience - you can skip this if you prefer</Text>
         
         <View style={styles.optionsGrid}>
             {roleOptions.map((role) => (
@@ -144,8 +140,8 @@ const RoleSelectionCard = ({ selectedRole, onSelect }) => (
 // Experience Selection Component
 const ExperienceSelectionCard = ({ selectedExperience, onSelect }) => (
     <View style={styles.formCard}>
-        <Text style={styles.cardTitle}>Years of experience?</Text>
-        <Text style={styles.cardSubtitle}>This helps us tailor content complexity</Text>
+        <Text style={styles.cardTitle}>Years of experience? (Optional)</Text>
+        <Text style={styles.cardSubtitle}>This helps us tailor content complexity - you can skip this if you prefer</Text>
         
         <View style={styles.optionsList}>
             {experienceOptions.map((exp) => (
@@ -183,8 +179,8 @@ const ExperienceSelectionCard = ({ selectedExperience, onSelect }) => (
 // Market Focus Selection Component
 const MarketFocusCard = ({ selectedMarkets, onToggle, onSkip }) => (
     <View style={styles.formCard}>
-        <Text style={styles.cardTitle}>Market focus areas</Text>
-        <Text style={styles.cardSubtitle}>Select your primary interests (multiple allowed)</Text>
+        <Text style={styles.cardTitle}>Market focus areas (Optional)</Text>
+        <Text style={styles.cardSubtitle}>Select your primary interests (multiple allowed) - you can skip this if you prefer</Text>
         
         <View style={styles.marketGrid}>
             {marketFocusOptions.map((market) => (
@@ -322,12 +318,12 @@ const DetailsFormCard = ({ formData, onUpdate }) => {
 
     return (
         <View style={styles.formCard}>
-            <Text style={styles.cardTitle}>Additional details</Text>
-            <Text style={styles.cardSubtitle}>Help us personalize your experience</Text>
+            <Text style={styles.cardTitle}>Additional details (Optional)</Text>
+            <Text style={styles.cardSubtitle}>Help us personalize your experience - all fields are optional</Text>
             
             {/* Profile Photo Section */}
             <View style={styles.inputGroup}>
-                <Text style={styles.inputLabel}>Profile Photo</Text>
+                <Text style={styles.inputLabel}>Profile Photo (Optional)</Text>
                 <View style={styles.photoSection}>
                     <View style={styles.photoContainer}>
                         {formData.profilePhoto ? (
@@ -356,7 +352,7 @@ const DetailsFormCard = ({ formData, onUpdate }) => {
             </View>
 
             <View style={styles.inputGroup}>
-                <Text style={styles.inputLabel}>Institution/Company</Text>
+                <Text style={styles.inputLabel}>Institution/Company (Optional)</Text>
                 <TextInput
                     style={styles.textInput}
                     value={formData.institution}
@@ -368,7 +364,7 @@ const DetailsFormCard = ({ formData, onUpdate }) => {
             </View>
 
             <View style={styles.inputGroup}>
-                <Text style={styles.inputLabel}>Username or Display Name</Text>
+                <Text style={styles.inputLabel}>Username or Display Name (Optional)</Text>
                 <TextInput
                     style={styles.textInput}
                     value={formData.username}
@@ -380,7 +376,7 @@ const DetailsFormCard = ({ formData, onUpdate }) => {
             </View>
 
             <View style={styles.inputGroup}>
-                <Text style={styles.inputLabel}>Bio/Description</Text>
+                <Text style={styles.inputLabel}>Bio/Description (Optional)</Text>
                 <TextInput
                     style={[styles.textInput, styles.textArea]}
                     value={formData.bio}
@@ -438,7 +434,7 @@ const ProgressIndicator = ({ currentStep, totalSteps }) => (
 );
 
 // Main Onboarding Component
-const OnboardingForm = ({ onComplete, onSkip, showSkipOption = false }) => {
+const OnboardingForm = ({ onComplete, onSkip, showSkipOption = false, userData = null }) => {
     const [currentStep, setCurrentStep] = useState(0);
     const [formData, setFormData] = useState({
         role: '',
@@ -448,8 +444,10 @@ const OnboardingForm = ({ onComplete, onSkip, showSkipOption = false }) => {
         linkedin: '',
         github: '',
         bio: '',
-        username: '',
-        profilePhoto: null
+        profilePhoto: null,
+        username: userData?.username || userData?.email?.split('@')[0] || '',
+        fullName: userData?.fullName || '',
+        email: userData?.email || '',
     });
 
     const totalSteps = 5;
@@ -535,11 +533,11 @@ const OnboardingForm = ({ onComplete, onSkip, showSkipOption = false }) => {
     const canProceed = () => {
         switch (currentStep) {
             case 0: return true; // Welcome screen
-            case 1: return formData.role !== '';
-            case 2: return formData.experience !== '';
+            case 1: return formData.role !== '' || true; // Optional
+            case 2: return formData.experience !== '' || true; // Optional
             case 3: return true; // Allow proceeding without selection due to skip option
-            case 4: return formData.username.trim() !== '';
-            default: return false;
+            case 4: return true; // Username is also optional now
+            default: return true;
         }
     };
 
@@ -729,7 +727,7 @@ const styles = StyleSheet.create({
     
     // Welcome Card Styles
     welcomeCard: {
-        backgroundColor: colors.bgSecondary,
+        backgroundColor: '#000000', // Jet black background as requested
         borderRadius: 12,
         padding: 24,
         alignItems: 'center',
@@ -737,6 +735,11 @@ const styles = StyleSheet.create({
     welcomeHeader: {
         alignItems: 'center',
         marginBottom: 32,
+    },
+    logoImage: {
+        width: 80,
+        height: 80,
+        resizeMode: 'contain',
     },
     welcomeTitle: {
         color: colors.textPrimary,

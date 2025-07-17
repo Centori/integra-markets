@@ -15,6 +15,9 @@ from services.weather import get_weather_alerts
 # Create API router
 api_router = APIRouter()
 
+# Export the router as 'router' to match the import in main.py
+router = api_router
+
 # Request models
 class NewsPreprocessRequest(BaseModel):
     text: str

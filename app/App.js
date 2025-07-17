@@ -10,16 +10,20 @@ import {
   StatusBar,
   Linking,
   Alert,
+  Image,
 } from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { MaterialIcons, MaterialCommunityIcons } from '@expo/vector-icons';
+import Toast from 'react-native-toast-message';
 import TodayDashboard from './components/TodayDashboard';
 import IntegraLoadingPage from './components/IntegraLoadingPage';
+import AuthLoadingScreen from './components/AuthLoadingScreen';
 import OnboardingForm from './components/OnboardingForm';
 import AlertPreferencesForm from './components/AlertPreferencesForm';
 import { activateAgentMode, getAgentStatus } from './config/agent';
 import { checkApiStatus } from './services/api';
 import AIAnalysisOverlay from './components/AIAnalysisOverlay';
+import { showToast, toastMessages } from './utils/toast';
 
 // --- Color Palette ---
 const colors = {
@@ -241,148 +245,20 @@ const NewsCard = ({ item }) => {
   );
 };
 
-// --- Enhanced Alerts Screen Component ---
-const AlertsScreen = ({ onNavigateToPreferences, onNavigateHome }) => {
-  const [activeAlertTab, setActiveAlertTab] = useState('Keyword');
-  
-  const alertTabs = ['Keyword', 'Website URL'];
-  
-  const userAlerts = [
-    { id: 1, title: 'OIL', subtitle: '> $85', type: 'price', enabled: true },
-    { id: 2, title: 'GOLD', subtitle: 'Bearish trend', type: 'sentiment', enabled: false },
-    { id: 3, title: 'WHEAT', subtitle: 'Breaking news', type: 'news', enabled: true },
-  ];
-  
-  const keywordAlerts = [
-    { id: 1, keyword: 'Brent', enabled: true },
-    { id: 2, keyword: 'WTI', enabled: true },
-    { id: 3, keyword: 'Hurricane', enabled: true },
-  ];
-
-  return (
-    <SafeAreaView style={styles.safeArea}>
-      <StatusBar barStyle="light-content" />
-      <View style={styles.mobileContainer}>
-        {/* Header with navigation back */}
-        <View style={styles.alertsHeader}>
-          <TouchableOpacity onPress={onNavigateHome} style={styles.backButton}>
-            <MaterialIcons name="arrow-back" size={24} color={colors.accentData} />
-          </TouchableOpacity>
-          <Text style={styles.headerTitle}>Alerts</Text>
-          <View style={styles.alertsHeaderActions}>
-            <TouchableOpacity onPress={onNavigateToPreferences}>
-              <MaterialIcons name="settings" size={24} color={colors.accentData} />
-            </TouchableOpacity>
-            <TouchableOpacity onPress={() => Alert.alert('Add Alert', 'Create new alert')}>
-              <MaterialIcons name="add" size={24} color={colors.accentData} />
-            </TouchableOpacity>
-          </View>
-        </View>
-
-        {/* Alert Type Tabs */}
-        <View style={styles.alertTabsContainer}>
-          {alertTabs.map((tab) => (
-            <TouchableOpacity
-              key={tab}
-              style={[styles.alertTab, activeAlertTab === tab ? styles.activeAlertTab : {}]}
-              onPress={() => setActiveAlertTab(tab)}
-            >
-              <MaterialIcons 
-                name={tab === 'Keyword' ? 'label' : 'language'} 
-                size={16} 
-                color={activeAlertTab === tab ? colors.textPrimary : colors.textSecondary} 
-              />
-              <Text style={[styles.alertTabText, activeAlertTab === tab ? styles.activeAlertTabText : {}]}>
-                {tab}
-              </Text>
-            </TouchableOpacity>
-          ))}
-        </View>
-
-        {/* Search Input */}
-        <View style={styles.alertSearchContainer}>
-          <MaterialIcons name="search" size={20} color={colors.textSecondary} />
-          <Text style={styles.alertSearchPlaceholder}>Enter keyword to track...</Text>
-          <TouchableOpacity>
-            <MaterialIcons name="notifications" size={20} color={colors.textSecondary} />
-          </TouchableOpacity>
-        </View>
-
-        <ScrollView style={styles.alertsContent}>
-          {/* Your Alerts Section */}
-          <Text style={styles.alertsSectionTitle}>YOUR ALERTS</Text>
-          {userAlerts.map((alert) => (
-            <View key={alert.id} style={styles.alertCard}>
-              <View style={styles.alertCardContent}>
-                <Text style={styles.alertTitle}>{alert.title}</Text>
-                <Text style={styles.alertSubtitle}>{alert.subtitle}</Text>
-              </View>
-              <TouchableOpacity onPress={() => Alert.alert('Toggle Alert', `${alert.enabled ? 'Disable' : 'Enable'} ${alert.title} alert`)}>
-                <MaterialIcons 
-                  name={alert.enabled ? 'notifications' : 'notifications-off'} 
-                  size={20} 
-                  color={alert.enabled ? colors.accentPositive : colors.textSecondary} 
-                />
-              </TouchableOpacity>
-            </View>
-          ))}
-
-          {/* Keyword Alerts Section */}
-          <Text style={styles.alertsSectionTitle}>KEYWORD ALERTS</Text>
-          {keywordAlerts.map((alert) => (
-            <View key={alert.id} style={styles.alertCard}>
-              <View style={styles.alertCardContent}>
-                <Text style={styles.alertTitle}>{alert.keyword}</Text>
-              </View>
-              <TouchableOpacity onPress={() => Alert.alert('Toggle Alert', `${alert.enabled ? 'Disable' : 'Enable'} ${alert.keyword} alert`)}>
-                <MaterialIcons 
-                  name={alert.enabled ? 'notifications' : 'notifications-off'} 
-                  size={20} 
-                  color={alert.enabled ? colors.accentPositive : colors.textSecondary} 
-                />
-              </TouchableOpacity>
-            </View>
-          ))}
-
-          {/* Quick Navigation Card */}
-          <View style={styles.quickNavCard}>
-            <TouchableOpacity onPress={onNavigateHome} style={styles.quickNavButton}>
-              <MaterialIcons name="home" size={24} color={colors.accentData} />
-              <Text style={styles.quickNavText}>Back to News Feed</Text>
-            </TouchableOpacity>
-          </View>
-        </ScrollView>
-
-        {/* Bottom Navigation */}
-        <View style={styles.bottomNav}>
-          <TouchableOpacity style={styles.navItem} onPress={onNavigateHome}>
-            <MaterialIcons name="flash-on" size={24} color={colors.textSecondary} />
-            <Text style={styles.navLabel}>Today</Text>
-          </TouchableOpacity>
-          <TouchableOpacity style={styles.navItem}>
-            <MaterialIcons name="notifications" size={24} color={colors.accentPositive} />
-            <Text style={[styles.navLabel, styles.activeNavLabel]}>Alerts</Text>
-          </TouchableOpacity>
-          <TouchableOpacity style={styles.navItem} onPress={() => Alert.alert('Profile', 'Navigate to profile')}>
-            <MaterialIcons name="person" size={24} color={colors.textSecondary} />
-            <Text style={styles.navLabel}>Profile</Text>
-          </TouchableOpacity>
-        </View>
-      </View>
-    </SafeAreaView>
-  );
-};
 
 // --- Enhanced Profile Screen Component ---
-const ProfileScreen = ({ onNavigateToOnboarding, onNavigateToAlertPreferences, onResetUserData, onNavigateHome, userOnboarded, alertPreferencesSet }) => {
+const ProfileScreen = ({ onNavigateToOnboarding, onNavigateToAlertPreferences, onResetUserData, onDeleteAccount, onNavigateHome, userOnboarded, alertPreferencesSet, userData }) => {
   const profileMenuItems = [
     {
-      id: 'onboarding',
-      title: 'View Onboarding',
-      subtitle: 'Replay the welcome experience',
-      icon: 'school',
-      onPress: onNavigateToOnboarding,
-      status: userOnboarded ? 'completed' : 'pending'
+      id: 'account',
+      title: 'Account Settings',
+      subtitle: 'Manage your account',
+      icon: 'manage-accounts',
+      onPress: () => { 
+        Alert.alert('Account Settings', 'Account management and onboarding replay coming soon');
+        onNavigateToOnboarding();
+      },
+      status: 'available'
     },
     {
       id: 'alerts',
@@ -393,19 +269,11 @@ const ProfileScreen = ({ onNavigateToOnboarding, onNavigateToAlertPreferences, o
       status: alertPreferencesSet ? 'completed' : 'pending'
     },
     {
-      id: 'account',
-      title: 'Account Settings',
-      subtitle: 'Manage your account',
-      icon: 'manage-accounts',
-      onPress: () => Alert.alert('Account Settings', 'Account management coming soon'),
-      status: 'available'
-    },
-    {
       id: 'notifications',
       title: 'Notification Settings',
       subtitle: 'Control push notifications',
       icon: 'notifications-active',
-      onPress: () => Alert.alert('Notifications', 'Notification settings coming soon'),
+      onPress: () => setShowNotificationSettings(true),
       status: 'available'
     },
     {
@@ -413,7 +281,7 @@ const ProfileScreen = ({ onNavigateToOnboarding, onNavigateToAlertPreferences, o
       title: 'Data & Privacy',
       subtitle: 'Manage your data preferences',
       icon: 'privacy-tip',
-      onPress: () => Alert.alert('Privacy', 'Privacy settings coming soon'),
+      onPress: () => setShowPrivacyPolicy(true),
       status: 'available'
     },
     {
@@ -422,6 +290,14 @@ const ProfileScreen = ({ onNavigateToOnboarding, onNavigateToAlertPreferences, o
       subtitle: 'Clear all preferences and start over',
       icon: 'refresh',
       onPress: onResetUserData,
+      status: 'danger'
+    },
+    {
+      id: 'delete',
+      title: 'Delete Account',
+      subtitle: 'Permanently delete your account and all data',
+      icon: 'delete-forever',
+      onPress: onDeleteAccount,
       status: 'danger'
     }
   ];
@@ -442,18 +318,24 @@ const ProfileScreen = ({ onNavigateToOnboarding, onNavigateToAlertPreferences, o
         <ScrollView style={styles.profileContent}>
           {/* Profile Summary Card */}
           <View style={styles.profileSummaryCard}>
-            <View style={styles.profileAvatar}>
-              <MaterialIcons name="person" size={40} color={colors.textPrimary} />
-            </View>
+            {userData?.photoUrl ? (
+              <Image source={{ uri: userData.photoUrl }} style={styles.profileAvatar} />
+            ) : (
+              <View style={styles.profileAvatar}>
+                <MaterialIcons name="person" size={40} color={colors.textPrimary} />
+              </View>
+            )}
             <View style={styles.profileInfo}>
-              <Text style={styles.profileName}>Integra User</Text>
+              <Text style={styles.profileName}>
+                {userData?.name || userData?.username || (userData?.isGuest ? 'Guest User' : 'Integra User')}
+              </Text>
+              <Text style={styles.profileStatus}>
+                {userData?.email || ''}
+              </Text>
               <Text style={styles.profileStatus}>
                 {userOnboarded && alertPreferencesSet ? 'Setup Complete' : 'Setup In Progress'}
               </Text>
             </View>
-            <TouchableOpacity onPress={onNavigateHome} style={styles.homeQuickButton}>
-              <MaterialIcons name="home" size={20} color={colors.accentData} />
-            </TouchableOpacity>
           </View>
 
           {/* Menu Items */}
@@ -483,9 +365,6 @@ const ProfileScreen = ({ onNavigateToOnboarding, onNavigateToAlertPreferences, o
                   </View>
                 </View>
                 <View style={styles.menuItemRight}>
-                  {item.status === 'completed' && (
-                    <MaterialIcons name="check-circle" size={16} color={colors.accentPositive} />
-                  )}
                   {item.status === 'pending' && (
                     <MaterialIcons name="warning" size={16} color={colors.accentNegative} />
                   )}
@@ -537,14 +416,19 @@ export default function App() {
   const [agentActive, setAgentActive] = useState(false);
   const [apiRunning, setApiRunning] = useState(false);
   const [isLoading, setIsLoading] = useState(true);
+  const [showAuth, setShowAuth] = useState(false);
   const [showOnboarding, setShowOnboarding] = useState(false);
   const [showAlertPreferences, setShowAlertPreferences] = useState(false);
+  const [userData, setUserData] = useState(null);
+  const [userPreferences, setUserPreferences] = useState(null);
   
   // Enhanced navigation state
-  const [userOnboarded, setUserOnboarded] = useState(true); // Default to true for testing
+  const [userOnboarded, setUserOnboarded] = useState(false); // Start with false to check auth
   const [alertPreferencesSet, setAlertPreferencesSet] = useState(true); // Default to true for testing
-  const [skipOnboarding, setSkipOnboarding] = useState(true); // Default to true for testing
+  const [skipOnboarding, setSkipOnboarding] = useState(false); // Start with false
   const [showMenuDrawer, setShowMenuDrawer] = useState(false);
+  const [showNotificationSettings, setShowNotificationSettings] = useState(false);
+  const [showPrivacyPolicy, setShowPrivacyPolicy] = useState(false);
 
   // Load user preferences and onboarding state
   useEffect(() => {
@@ -553,27 +437,47 @@ export default function App() {
 
   const loadUserState = async () => {
     try {
-      // Check if user has completed onboarding
+      // Check authentication status first
+      const savedUserData = await AsyncStorage.getItem('userData');
+      const savedPreferences = await AsyncStorage.getItem('userPreferences');
       const onboardingComplete = await AsyncStorage.getItem('onboarding_complete');
       const alertPrefsSet = await AsyncStorage.getItem('alert_preferences_set');
       const userSkippedOnboarding = await AsyncStorage.getItem('skipped_onboarding');
       
-      // For testing, set defaults if no stored values
-      setUserOnboarded(onboardingComplete === 'true' || onboardingComplete === null);
+      if (savedUserData) {
+        const user = JSON.parse(savedUserData);
+        setUserData(user);
+        console.log('User authenticated:', user.username || user.email);
+        
+        if (savedPreferences) {
+          setUserPreferences(JSON.parse(savedPreferences));
+          setUserOnboarded(true);
+        } else if (user.authMethod === 'google' && !user.hasCompletedOnboarding) {
+          // Google user who hasn't completed full onboarding
+          setShowOnboarding(true);
+        } else {
+          setUserOnboarded(onboardingComplete === 'true');
+        }
+      } else {
+        // No user data, show authentication
+        console.log('No user data found - showing authentication');
+        setShowAuth(true);
+        return; // Exit early
+      }
+      
       setAlertPreferencesSet(alertPrefsSet === 'true' || alertPrefsSet === null);
-      setSkipOnboarding(userSkippedOnboarding === 'true' || userSkippedOnboarding === null);
+      setSkipOnboarding(userSkippedOnboarding === 'true');
       
       console.log('User state loaded:', {
-        onboarded: onboardingComplete === 'true' || onboardingComplete === null,
+        authenticated: !!savedUserData,
+        onboarded: onboardingComplete === 'true' || !!savedPreferences,
         alertPrefs: alertPrefsSet === 'true' || alertPrefsSet === null,
-        skipped: userSkippedOnboarding === 'true' || userSkippedOnboarding === null
+        skipped: userSkippedOnboarding === 'true'
       });
     } catch (error) {
       console.warn('Error loading user state:', error);
-      // Set defaults for testing
-      setUserOnboarded(true);
-      setAlertPreferencesSet(true);
-      setSkipOnboarding(true);
+      // If error, show authentication
+      setShowAuth(true);
     }
   };
 
@@ -633,9 +537,14 @@ export default function App() {
     setUserOnboarded(true);
     setShowOnboarding(false);
     
+    // Show toast confirmation
+    toastMessages.onboarding.completed();
+    
     // Show alert preferences if not set
     if (!alertPreferencesSet) {
-      setShowAlertPreferences(true);
+      setTimeout(() => {
+        setShowAlertPreferences(true);
+      }, 500); // Small delay after toast
     }
   };
 
@@ -645,24 +554,29 @@ export default function App() {
     setSkipOnboarding(true);
     setShowOnboarding(false);
     
+    // Show toast confirmation
+    toastMessages.onboarding.skipped();
+    
     // Still offer alert preferences setup
-    Alert.alert(
-      'Quick Setup',
-      'Would you like to set up alert preferences now, or do this later?',
-      [
-        {
-          text: 'Later',
-          style: 'cancel',
-          onPress: () => {
-            // Go straight to main app
+    setTimeout(() => {
+      Alert.alert(
+        'Quick Setup',
+        'Would you like to set up alert preferences now, or do this later?',
+        [
+          {
+            text: 'Later',
+            style: 'cancel',
+            onPress: () => {
+              // Go straight to main app
+            }
+          },
+          {
+            text: 'Set Up Now',
+            onPress: () => setShowAlertPreferences(true)
           }
-        },
-        {
-          text: 'Set Up Now',
-          onPress: () => setShowAlertPreferences(true)
-        }
-      ]
-    );
+        ]
+      );
+    }, 1000);
   };
 
   const handleAlertPreferencesComplete = async (preferences) => {
@@ -670,11 +584,23 @@ export default function App() {
     await saveUserState('alert_preferences_set', true);
     setAlertPreferencesSet(true);
     setShowAlertPreferences(false);
+    
+    // Navigate back to main app
+    setActiveNav('Today');
+    
+    // Show toast confirmation
+    toastMessages.alerts.preferencesSet();
   };
 
   const handleAlertPreferencesSkip = async () => {
     console.log('Alert preferences skipped');
     setShowAlertPreferences(false);
+    
+    // Navigate back to main app
+    setActiveNav('Today');
+    
+    // Show toast confirmation
+    toastMessages.alerts.preferencesSkipped();
   };
 
   // Navigation helpers
@@ -686,30 +612,143 @@ export default function App() {
     setShowAlertPreferences(true);
   };
 
+  const handleAuthComplete = async (user) => {
+    try {
+      await AsyncStorage.setItem('userData', JSON.stringify(user));
+      setUserData(user);
+      setShowAuth(false);
+      
+      // Show welcome toast
+      if (user.isNewUser) {
+        toastMessages.auth.signupSuccess();
+      } else {
+        toastMessages.auth.loginSuccess();
+      }
+      
+      // If it's a Google user or new email signup, go to onboarding
+      // If it's a returning user, check for existing preferences
+      if (user.authMethod === 'google' || user.isNewUser) {
+        setShowOnboarding(true);  // Navigate to onboarding
+      } else {
+        const savedPreferences = await AsyncStorage.getItem('userPreferences');
+        if (savedPreferences) {
+          setUserPreferences(JSON.parse(savedPreferences));
+          setUserOnboarded(true);
+        } else {
+          setShowOnboarding(true); // Navigate to onboarding if no preferences
+        }
+      }
+    } catch (error) {
+      console.error('Error saving user data:', error);
+      toastMessages.auth.loginError();
+      Alert.alert('Error', 'Failed to save user data. Please try again.');
+    }
+  };
+
+  const handleAuthSkip = async (guestData) => {
+    try {
+      await AsyncStorage.setItem('userData', JSON.stringify(guestData));
+      setUserData(guestData);
+      setShowAuth(false);
+      setShowOnboarding(true);
+    } catch (error) {
+      console.error('Error saving guest data:', error);
+      Alert.alert('Error', 'Failed to save guest data. Please try again.');
+    }
+  };
+
+  const handleSignOut = async () => {
+    try {
+      await AsyncStorage.multiRemove(['userData', 'userPreferences', 'onboarding_complete', 'alert_preferences_set']);
+      setUserData(null);
+      setUserPreferences(null);
+      setUserOnboarded(false);
+      setShowAuth(true);
+      setActiveNav('Today');
+    } catch (error) {
+      console.error('Error signing out:', error);
+      Alert.alert('Error', 'Failed to sign out. Please try again.');
+    }
+  };
+
   const resetUserData = async () => {
     Alert.alert(
       'Reset User Data',
-      'This will clear all your preferences and show onboarding again. Continue?',
+      'This will clear all your preferences and show authentication again. Continue?',
       [
         { text: 'Cancel', style: 'cancel' },
         {
           text: 'Reset',
           style: 'destructive',
+                onPress: async () => {
+                  try {
+                    await AsyncStorage.multiRemove([
+                      'userData',
+                      'userPreferences',
+                      'onboarding_complete',
+                      'alert_preferences_set',
+                      'skipped_onboarding'
+                    ]);
+                    
+                    // Show toast confirmation
+                    toastMessages.navigation.dataReset();
+                    
+                    // Reset state and show authentication
+                    setUserData(null);
+                    setUserPreferences(null);
+                    setUserOnboarded(false);
+                    setAlertPreferencesSet(false);
+                    setSkipOnboarding(false);
+                    
+                    setTimeout(() => {
+                      setShowAuth(true);
+                    }, 2000); // Delay to let toast show
+                  } catch (error) {
+                    console.warn('Error resetting user data:', error);
+                    toastMessages.general.error('Failed to reset app data');
+                  }
+                }
+        }
+      ]
+    );
+  };
+
+  const deleteAccount = async () => {
+    Alert.alert(
+      'Delete Account',
+      'This will permanently delete your account and all associated data. This action cannot be undone. Continue?',
+      [
+        { text: 'Cancel', style: 'cancel' },
+        {
+          text: 'Delete Account',
+          style: 'destructive',
           onPress: async () => {
             try {
+              // Clear all local data
               await AsyncStorage.multiRemove([
+                'userData',
+                'userPreferences',
                 'onboarding_complete',
                 'alert_preferences_set',
                 'skipped_onboarding'
               ]);
               
-              // Reset state
+              // Show toast confirmation
+              toastMessages.general.success('Account deleted successfully');
+              
+              // Reset state and show authentication
+              setUserData(null);
+              setUserPreferences(null);
               setUserOnboarded(false);
               setAlertPreferencesSet(false);
               setSkipOnboarding(false);
-              setShowOnboarding(true);
+              
+              setTimeout(() => {
+                setShowAuth(true);
+              }, 2000); // Delay to let toast show
             } catch (error) {
-              console.warn('Error resetting user data:', error);
+              console.warn('Error deleting account:', error);
+              toastMessages.general.error('Failed to delete account');
             }
           }
         }
@@ -737,6 +776,16 @@ export default function App() {
     return <IntegraLoadingPage onLoadingComplete={handleLoadingComplete} />;
   }
 
+  // Show authentication screen
+  if (showAuth) {
+    return (
+      <AuthLoadingScreen 
+        onAuthComplete={handleAuthComplete}
+        onSkip={handleAuthSkip}
+      />
+    );
+  }
+
   // Show onboarding with skip option (only if explicitly requested)
   if (showOnboarding) {
     console.log('Showing onboarding');
@@ -745,6 +794,7 @@ export default function App() {
         onComplete={handleOnboardingComplete}
         onSkip={handleOnboardingSkip}
         showSkipOption={true}
+        userData={userData}
       />
     );
   }
@@ -766,10 +816,22 @@ export default function App() {
   
   // Render different screens based on activeNav
   if (activeNav === 'Alerts') {
+    // Navigate directly to Alert Preferences instead of separate AlertsScreen
     return (
-      <AlertsScreen 
-        onNavigateToPreferences={navigateToAlertPreferences}
-        onNavigateHome={() => setActiveNav('Today')}
+      <AlertPreferencesForm 
+        onComplete={(preferences) => {
+          console.log('Alert preferences completed:', preferences);
+          setActiveNav('Today'); // Navigate back to main app
+          if (preferences) {
+            handleAlertPreferencesComplete(preferences);
+          }
+        }}
+        onSkip={() => {
+          console.log('Alert preferences skipped');
+          setActiveNav('Today'); // Navigate back to main app
+          handleAlertPreferencesSkip();
+        }}
+        showSkipOption={false}
       />
     );
   }
@@ -780,9 +842,11 @@ export default function App() {
         onNavigateToOnboarding={navigateToOnboarding}
         onNavigateToAlertPreferences={navigateToAlertPreferences}
         onResetUserData={resetUserData}
+        onDeleteAccount={deleteAccount}
         onNavigateHome={() => setActiveNav('Today')}
         userOnboarded={userOnboarded}
         alertPreferencesSet={alertPreferencesSet}
+        userData={userData}
       />
     );
   }
@@ -811,9 +875,6 @@ export default function App() {
             <View style={styles.headerActions}>
               <TouchableOpacity onPress={() => Alert.alert('Notifications', 'View all notifications')}>
                 <MaterialIcons name="notifications-none" size={24} color={colors.textPrimary} />
-              </TouchableOpacity>
-              <TouchableOpacity onPress={() => setShowMenuDrawer(!showMenuDrawer)}>
-                <MaterialIcons name="menu" size={24} color={colors.textPrimary} />
               </TouchableOpacity>
             </View>
           </View>
@@ -886,17 +947,6 @@ export default function App() {
           </ScrollView>
         </View>
 
-        {/* Trader Forecast Bar */}
-        <TouchableOpacity style={styles.traderForecastBar} onPress={() => Alert.alert('Trader Forecasts', 'Show detailed forecast info.')}>
-          <View style={styles.forecastSegments}>
-            <View style={[styles.segment, { flex: 1, backgroundColor: colors.accentNegative }]} />
-            <View style={[styles.segment, { flex: 3, backgroundColor: colors.accentPositive }]}>
-              <View style={styles.activeSegmentIndicator}/>
-            </View>
-            <View style={[styles.segment, { flex: 1, backgroundColor: colors.accentNeutral }]} />
-          </View>
-          <Text style={styles.traderForecastText}>114 trader forecasts</Text>
-        </TouchableOpacity>
 
         {/* News Feed */}
         <ScrollView style={styles.feed} contentContainerStyle={{ paddingBottom: 120 }}>
@@ -929,6 +979,11 @@ export default function App() {
                 console.log('Navigating to:', item.label);
                 setActiveNav(item.label);
                 setShowMenuDrawer(false); // Close menu when navigating
+                
+                // Show navigation toast for non-current screens
+                if (item.label !== activeNav) {
+                  showToast.info(`Switched to ${item.label}`, 'Navigate between sections');
+                }
               }}
             >
               <MaterialIcons
@@ -944,6 +999,9 @@ export default function App() {
           ))}
         </View>
       </View>
+      
+      {/* Toast Component - Always rendered last */}
+      <Toast />
     </SafeAreaView>
   );
 }
@@ -1179,38 +1237,6 @@ const styles = StyleSheet.create({
     color: colors.bgPrimary,
     fontSize: 10,
     fontWeight: 'bold',
-  },
-  // --- Trader Forecast Bar Styles ---
-  traderForecastBar: {
-    paddingHorizontal: 15,
-    paddingVertical: 10,
-    alignItems: 'center',
-  },
-  forecastSegments: {
-    flexDirection: 'row',
-    height: 6,
-    width: '100%',
-    borderRadius: 3,
-    overflow: 'hidden',
-    backgroundColor: colors.bgSecondary,
-    marginBottom: 5,
-  },
-  segment: {
-    height: '100%',
-    position: 'relative',
-  },
-  activeSegmentIndicator: {
-    position: 'absolute',
-    bottom: 0,
-    left: '25%',
-    width: '50%',
-    height: 2,
-    backgroundColor: '#00FF00',
-    borderRadius: 1,
-  },
-  traderForecastText: {
-    color: colors.textSecondary,
-    fontSize: 11,
   },
   // --- "You're all caught up!" Section Styles ---
   caughtUpSection: {

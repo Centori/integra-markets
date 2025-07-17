@@ -168,9 +168,9 @@ class WeatherService:
             weather_impact = WeatherImpact(
                 weather_data_id=recent_weather.id,
                 commodity_id=commodity.id,
-                impact_level=impact_level.get("level"),
-                impact_description=impact_level.get("description"),
-                created_at=datetime.utcnow()
+                impact_score=impact_level.get("score", 0.0),
+                confidence=impact_level.get("confidence", 0.5),
+                analysis=impact_level.get("description")
             )
             
             self.db.add(weather_impact)
@@ -190,7 +190,9 @@ class WeatherService:
         # Default impact
         impact = {
             "level": "neutral",
-            "description": "No significant impact expected"
+            "description": "No significant impact expected",
+            "score": 0.0,
+            "confidence": 0.5
         }
         
         # Analyze based on commodity type and weather
@@ -200,22 +202,30 @@ class WeatherService:
                 if weather.precipitation and weather.precipitation > 30:
                     impact = {
                         "level": "negative",
-                        "description": f"Heavy rainfall ({weather.precipitation}mm) may damage crops"
+                        "description": f"Heavy rainfall ({weather.precipitation}mm) may damage crops",
+                        "score": -0.7,
+                        "confidence": 0.8
                     }
                 else:
                     impact = {
                         "level": "positive",
-                        "description": "Moderate rainfall beneficial for crop growth"
+                        "description": "Moderate rainfall beneficial for crop growth",
+                        "score": 0.3,
+                        "confidence": 0.6
                     }
             elif weather.weather_condition.lower() in ["clear", "clouds"] and weather.temperature > 30:
                 impact = {
                     "level": "negative",
-                    "description": f"High temperatures ({weather.temperature}°C) may stress crops"
+                    "description": f"High temperatures ({weather.temperature}°C) may stress crops",
+                    "score": -0.5,
+                    "confidence": 0.7
                 }
             elif weather.weather_condition.lower() in ["snow", "freezing"]:
                 impact = {
                     "level": "negative",
-                    "description": "Freezing conditions may damage crops"
+                    "description": "Freezing conditions may damage crops",
+                    "score": -0.9,
+                    "confidence": 0.9
                 }
                 
         elif commodity.category == "energy":
@@ -223,12 +233,16 @@ class WeatherService:
             if weather.temperature < 5:
                 impact = {
                     "level": "positive",
-                    "description": f"Cold temperatures ({weather.temperature}°C) increase heating demand"
+                    "description": f"Cold temperatures ({weather.temperature}°C) increase heating demand",
+                    "score": 0.6,
+                    "confidence": 0.8
                 }
             elif weather.temperature > 30:
                 impact = {
                     "level": "positive",
-                    "description": f"High temperatures ({weather.temperature}°C) increase cooling demand"
+                    "description": f"High temperatures ({weather.temperature}°C) increase cooling demand",
+                    "score": 0.4,
+                    "confidence": 0.7
                 }
                 
         return impact
@@ -288,3 +302,37 @@ class WeatherService:
                 })
         
         return results
+
+# Standalone function for API compatibility
+def get_weather_alerts() -> Dict[str, Any]:
+    """Get active weather alerts affecting commodity markets"""
+    # This is a placeholder function that would normally fetch from a database
+    # For now, return sample data
+    return {
+        "alerts": [
+            {
+                "id": 1,
+                "type": "severe_weather",
+                "commodity": "CORN",
+                "region": "US Midwest",
+                "description": "Severe thunderstorms with potential hail damage to crops",
+                "severity": "high",
+                "impact_score": -0.7,
+                "start_time": "2024-01-15T14:00:00Z",
+                "end_time": "2024-01-15T20:00:00Z"
+            },
+            {
+                "id": 2,
+                "type": "drought",
+                "commodity": "WHEAT",
+                "region": "Australia",
+                "description": "Prolonged dry conditions affecting wheat production",
+                "severity": "medium",
+                "impact_score": -0.5,
+                "start_time": "2024-01-10T00:00:00Z",
+                "end_time": None
+            }
+        ],
+        "total_alerts": 2,
+        "last_updated": "2024-01-15T12:00:00Z"
+    }

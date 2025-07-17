@@ -7,7 +7,7 @@ from datetime import datetime, timedelta
 from sqlalchemy.orm import Session
 
 from app.core.config import settings
-from app.models.commodities import Commodity, CommodityPrice
+from app.models.commodities import Commodity, PriceData
 
 # Configure logging
 logger = logging.getLogger(__name__)
@@ -108,7 +108,7 @@ class MarketDataService:
             logger.error(f"Error fetching historical data for {symbol}: {str(e)}")
             return []
     
-    async def update_commodity_price(self, commodity_id: int) -> Optional[CommodityPrice]:
+    async def update_commodity_price(self, commodity_id: int) -> Optional[PriceData]:
         """Update price for a specific commodity"""
         # Get commodity
         commodity = self.db.query(Commodity).filter(Commodity.id == commodity_id).first()
@@ -117,24 +117,25 @@ class MarketDataService:
             return None
         
         # Skip if no trading symbol
-        if not commodity.trading_symbol:
+        if not commodity.symbol:
             logger.warning(f"Commodity {commodity.name} has no trading symbol")
             return None
         
         # Fetch current price
-        price_data = await self.fetch_commodity_price(commodity.trading_symbol)
+        price_data = await self.fetch_commodity_price(commodity.symbol)
         if not price_data:
             logger.error(f"Failed to fetch price for {commodity.name}")
             return None
         
         # Create price record
-        price = CommodityPrice(
+        price = PriceData(
             commodity_id=commodity.id,
-            price=price_data.get("price", 0),
-            change=price_data.get("change", 0),
-            change_percent=float(price_data.get("change_percent", 0)),
+            open_price=price_data.get("price", 0),
+            high_price=price_data.get("price", 0),
+            low_price=price_data.get("price", 0),
+            close_price=price_data.get("price", 0),
             volume=price_data.get("volume", 0),
-            timestamp=datetime.utcnow()
+            date=datetime.utcnow()
         )
         
         self.db.add(price)
@@ -152,9 +153,9 @@ class MarketDataService:
             return {}
         
         # Get latest price
-        latest_price = self.db.query(CommodityPrice).filter(
-            CommodityPrice.commodity_id == commodity_id
-        ).order_by(CommodityPrice.timestamp.desc()).first()
+        latest_price = self.db.query(PriceData).filter(
+            PriceData.commodity_id == commodity_id
+        ).order_by(PriceData.date.desc()).first()
         
         if not latest_price:
             logger.warning(f"No price data for commodity {commodity.name}")
@@ -167,10 +168,10 @@ class MarketDataService:
             }
         
         # Get historical prices for trend analysis
-        historical_prices = self.db.query(CommodityPrice).filter(
-            CommodityPrice.commodity_id == commodity_id,
-            CommodityPrice.timestamp >= datetime.utcnow() - timedelta(days=30)
-        ).order_by(CommodityPrice.timestamp.asc()).all()
+        historical_prices = self.db.query(PriceData).filter(
+            PriceData.commodity_id == commodity_id,
+            PriceData.date >= datetime.utcnow() - timedelta(days=30)
+        ).order_by(PriceData.date.asc()).all()
         
         # Calculate trend
         trend_data = self._calculate_trend(historical_prices)
@@ -178,16 +179,16 @@ class MarketDataService:
         return {
             "commodity_id": commodity_id,
             "name": commodity.name,
-            "symbol": commodity.trading_symbol,
-            "price": latest_price.price,
-            "change": latest_price.change,
-            "change_percent": latest_price.change_percent,
+            "symbol": commodity.symbol,
+            "price": latest_price.close_price,
+            "change": latest_price.close_price - latest_price.open_price,
+            "change_percent": ((latest_price.close_price - latest_price.open_price) / latest_price.open_price * 100) if latest_price.open_price > 0 else 0,
             "volume": latest_price.volume,
             "trend": trend_data,
-            "last_updated": latest_price.timestamp.isoformat()
+            "last_updated": latest_price.date.isoformat()
         }
     
-    def _calculate_trend(self, prices: List[CommodityPrice]) -> Dict[str, Any]:
+    def _calculate_trend(self, prices: List[PriceData]) -> Dict[str, Any]:
         """Calculate price trend from historical data"""
         if not prices or len(prices) < 2:
             return {
@@ -197,7 +198,7 @@ class MarketDataService:
             }
         
         # Extract prices and dates
-        price_data = [(p.timestamp, p.price) for p in prices]
+        price_data = [(p.date, p.close_price) for p in prices]
         df = pd.DataFrame(price_data, columns=["timestamp", "price"])
         
         # Calculate simple moving averages
@@ -255,7 +256,7 @@ class MarketDataService:
     
     async def update_all_commodity_prices(self) -> Dict[str, Any]:
         """Update prices for all commodities"""
-        commodities = self.db.query(Commodity).filter(Commodity.trading_symbol != None).all()
+        commodities = self.db.query(Commodity).filter(Commodity.symbol != None).all()
         
         results = {
             "total": len(commodities),
@@ -273,7 +274,7 @@ class MarketDataService:
                     results["details"].append({
                         "commodity_id": commodity.id,
                         "commodity_name": commodity.name,
-                        "price": price.price,
+                        "price": price.close_price,
                         "status": "success"
                     })
                 else:

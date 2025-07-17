@@ -1,4 +1,4 @@
-// IntegraIcon.js - Reusable branded icon component
+// IntegraIcon.js - Official Integra branded icon component (matches media kit)
 import React, { useEffect } from 'react';
 import { View, Animated } from 'react-native';
 
@@ -29,26 +29,21 @@ const IntegraIcon = ({
         }
     }, [animated]);
 
-    // Color configurations for different variants
+    // Color configurations for different variants (updated to match media kit)
     const getColors = () => {
         switch (variant) {
             case 'loading':
                 return {
-                    border: animated 
-                        ? animatedValue.interpolate({
-                            inputRange: [0, 0.5, 1],
-                            outputRange: ['#4ECCA3', '#6B7280', '#4ECCA3']
-                        })
-                        : '#FFFFFF',
-                    dot: '#FFFFFF',
-                    line: '#6B7280',
+                    border: '#4ECCA3', // Always green for the border
+                    dot: '#4ECCA3',    // Green for the dot
+                    line: '#4ECCA3',   // Green for the line (no more grey)
                     background: '#000000'
                 };
             case 'app-icon':
                 return {
-                    border: '#FFFFFF',
-                    dot: '#FFFFFF',
-                    line: '#FFFFFF',
+                    border: '#4ECCA3', // Green border
+                    dot: '#4ECCA3',    // Green dot
+                    line: '#4ECCA3',   // Green line
                     background: '#000000'
                 };
             default:
@@ -63,12 +58,13 @@ const IntegraIcon = ({
 
     const colors = getColors();
     const iconSize = size;
+    // Updated dimensions to match media kit specifications
     const borderWidth = Math.max(2, size * 0.015);
-    const dotSize = size * 0.06;
-    const lineWidth = size * 0.06;
-    const lineHeight = size * 0.2;
-    const cornerRadius = size * 0.18;
-    const gapSize = size * 0.04;
+    const dotSize = size * 0.06;        // 6% of total size for slim design
+    const lineWidth = size * 0.06;      // 6% of total size for slim design  
+    const lineHeight = size * 0.2;      // 20% of total size
+    const cornerRadius = size * 0.1;    // 10% for more square appearance (updated from 0.18)
+    const gapSize = size * 0.04;        // Gap between dot and line
 
     return (
         <View style={[
@@ -98,7 +94,7 @@ const IntegraIcon = ({
                         width: dotSize,
                         height: dotSize,
                         backgroundColor: colors.dot,
-                        borderRadius: dotSize / 2,
+                        borderRadius: cornerRadius * 0.1, // Square-ish dot like in media kit
                         marginBottom: gapSize,
                     }}
                 />
@@ -107,7 +103,7 @@ const IntegraIcon = ({
                         width: lineWidth,
                         height: lineHeight,
                         backgroundColor: colors.line,
-                        borderRadius: lineWidth / 2,
+                        borderRadius: cornerRadius * 0.1, // Square-ish line like in media kit
                     }}
                 />
             </Animated.View>

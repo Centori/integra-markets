@@ -15,6 +15,12 @@ import {
 } from 'react-native';
 import { MaterialIcons, MaterialCommunityIcons } from '@expo/vector-icons';
 import IntegraIcon from './IntegraIcon';
+import AuthOptionsComponent from './AuthButtons';
+import * as AuthSession from 'expo-auth-session';
+import * as WebBrowser from 'expo-web-browser';
+import * as Crypto from 'expo-crypto';
+
+WebBrowser.maybeCompleteAuthSession();
 
 const { width: screenWidth, height: screenHeight } = Dimensions.get('window');
 
@@ -150,10 +156,11 @@ const AuthLoadingScreen = ({ onAuthComplete, onSkip }) => {
     const handleGoogleAuth = async () => {
         setIsLoading(true);
         
-        // Simulate Google authentication
+        // For now, simulate Google Sign-In with a mock user
+        // TODO: Implement actual Google OAuth flow with expo-auth-session
         setTimeout(() => {
             setIsLoading(false);
-            const userData = {
+            const mockGoogleUser = {
                 id: 'google_' + Date.now().toString(),
                 email: 'user@gmail.com',
                 fullName: 'Google User',
@@ -161,8 +168,9 @@ const AuthLoadingScreen = ({ onAuthComplete, onSkip }) => {
                 authMethod: 'google',
                 isNewUser: false,
             };
-            onAuthComplete(userData);
+            onAuthComplete(mockGoogleUser);
         }, 1500);
+        
     };
 
     const handleSkip = () => {
@@ -257,19 +265,15 @@ const AuthLoadingScreen = ({ onAuthComplete, onSkip }) => {
                     </Text>
                 </View>
 
+                <AuthOptionsComponent 
+                    onAuthComplete={onAuthComplete} 
+                    disabled={isLoading}
+                />
+                
                 <View style={styles.authOptions}>
-                    <TouchableOpacity 
-                        style={styles.googleButton}
-                        onPress={handleGoogleAuth}
-                        disabled={isLoading}
-                    >
-                        <MaterialIcons name="google" size={24} color={colors.textPrimary} />
-                        <Text style={styles.googleButtonText}>Continue with Google</Text>
-                    </TouchableOpacity>
-
                     <View style={styles.dividerContainer}>
                         <View style={styles.divider} />
-                        <Text style={styles.dividerText}>or</Text>
+                        <Text style={styles.dividerText}>or continue with email</Text>
                         <View style={styles.divider} />
                     </View>
 

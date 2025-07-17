@@ -3,7 +3,7 @@
  * Handles communication with the Python FastAPI backend
  */
 
-const API_BASE_URL = 'http://localhost:8000';
+const API_BASE_URL = 'http://172.20.10.7:8000';
 const API_URL = `${API_BASE_URL}/api`;
 
 /**

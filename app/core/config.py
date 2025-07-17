@@ -32,12 +32,20 @@ class Settings(BaseSettings):
     ENABLE_LLM_FEATURES: bool = Field(True, env="ENABLE_LLM_FEATURES")
     FREE_TIER_DAILY_LLM_LIMIT: int = Field(2, env="FREE_TIER_DAILY_LLM_LIMIT")
     
+    # Model Configuration
+    MODELS_DIR: str = Field("./models", env="MODELS_DIR")
+    
     # FinBERT Configuration
     FINBERT_MODEL: str = Field("ProsusAI/finbert", env="FINBERT_MODEL")
-    FINBERT_CACHE_DIR: str = Field("./app/models/cache", env="FINBERT_CACHE_DIR")
+    FINBERT_CACHE_DIR: str = Field("./models/finbert", env="FINBERT_CACHE_DIR")
     
     # NLTK Data Path
-    NLTK_DATA_PATH: str = Field("./app/models/nltk_data", env="NLTK_DATA_PATH")
+    NLTK_DATA_PATH: str = Field("./models/nltk_data", env="NLTK_DATA_PATH")
+    
+    # Model Download Configuration
+    AUTO_DOWNLOAD_MODELS: bool = Field(False, env="AUTO_DOWNLOAD_MODELS")
+    MODELS_BUNDLE_URL: Optional[str] = Field(None, env="MODELS_BUNDLE_URL")
+    OFFLINE_MODE: bool = Field(False, env="OFFLINE_MODE")
     
     # API Configuration
     HOST: str = Field("0.0.0.0", env="HOST")
@@ -45,6 +53,16 @@ class Settings(BaseSettings):
     
     # CORS
     CORS_ORIGINS: List[str] = Field(["*"], env="CORS_ORIGINS")
+    
+    # Email Configuration (Zoho Mail)
+    ZOHO_MAIL_SMTP_HOST: str = Field("smtp.zoho.com", env="ZOHO_MAIL_SMTP_HOST")
+    ZOHO_MAIL_SMTP_PORT: int = Field(587, env="ZOHO_MAIL_SMTP_PORT")
+    ZOHO_MAIL_FROM_EMAIL: Optional[str] = Field(None, env="ZOHO_MAIL_FROM_EMAIL")
+    ZOHO_MAIL_FROM_NAME: str = Field("Integra Markets", env="ZOHO_MAIL_FROM_NAME")
+    ZOHO_MAIL_CLIENT_ID: Optional[str] = Field(None, env="ZOHO_MAIL_CLIENT_ID")
+    ZOHO_MAIL_CLIENT_SECRET: Optional[str] = Field(None, env="ZOHO_MAIL_CLIENT_SECRET")
+    ZOHO_MAIL_REFRESH_TOKEN: Optional[str] = Field(None, env="ZOHO_MAIL_REFRESH_TOKEN")
+    ZOHO_MAIL_APP_PASSWORD: Optional[str] = Field(None, env="ZOHO_MAIL_APP_PASSWORD")
     
     # Use SettingsConfigDict instead of the old Config class
     model_config = SettingsConfigDict(

@@ -101,13 +101,6 @@ class IntegraApp {
         // Market card interactions
         this.setupMarketCardInteractions();
 
-        // Trader forecast bar
-        const forecastBar = document.querySelector('.trader-forecast-bar');
-        if (forecastBar) {
-            forecastBar.addEventListener('click', () => {
-                this.showToast('114 trader forecasts - 75% Bullish, 15% Bearish, 10% Neutral');
-            });
-        }
 
         // FAB button
         const fab = document.querySelector('.fab');

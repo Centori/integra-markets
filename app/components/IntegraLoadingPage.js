@@ -136,23 +136,23 @@ const styles = StyleSheet.create({
         width: 192,
         height: 192,
         borderWidth: 4,
-        borderColor: colors.shinyGreen,
-        borderRadius: 24,
-        justifyContent: 'center',
-        alignItems: 'center',
+borderColor: colors.accentPositive,
+    borderRadius: 24,
+    justifyContent: 'center',
+    alignItems: 'center',
     },
     iconDot: {
         width: 16,
         height: 16,
-        backgroundColor: colors.shinyGreen,
-        borderRadius: 4,
-        marginBottom: 24,
+backgroundColor: colors.accentPositive,
+    borderRadius: 4,
+    marginBottom: 24,
     },
     iconLine: {
         width: 16,
         height: 96,
-        backgroundColor: colors.shinyGray,
-        borderRadius: 4,
+backgroundColor: colors.accentPositive,
+    borderRadius: 4,
     },
     textContainer: {
         alignItems: 'center',
@@ -164,13 +164,13 @@ const styles = StyleSheet.create({
     brandTextMain: {
         fontSize: 24,
         fontWeight: '500',
-        color: colors.shinyGreen,
+        color: colors.textPrimary, // White text as requested
         marginRight: 4,
     },
     brandTextSub: {
         fontSize: 18,
         fontWeight: '300',
-        color: colors.shinyGreen,
+        color: colors.textPrimary, // White text as requested
     },
     shinyText: {
         color: colors.shinyGreen,
