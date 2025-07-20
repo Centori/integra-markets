@@ -20,6 +20,8 @@ import IntegraLoadingPage from './components/IntegraLoadingPage';
 import AuthLoadingScreen from './components/AuthLoadingScreen';
 import OnboardingForm from './components/OnboardingForm';
 import AlertPreferencesForm from './components/AlertPreferencesForm';
+import ProfileScreen from './components/ProfileScreen';
+import ComprehensiveProfileScreen from './components/ComprehensiveProfileScreen';
 import { activateAgentMode, getAgentStatus } from './config/agent';
 import { checkApiStatus } from './services/api';
 import AIAnalysisOverlay from './components/AIAnalysisOverlay';
@@ -246,168 +248,6 @@ const NewsCard = ({ item }) => {
 };
 
 
-// --- Enhanced Profile Screen Component ---
-const ProfileScreen = ({ onNavigateToOnboarding, onNavigateToAlertPreferences, onResetUserData, onDeleteAccount, onNavigateHome, userOnboarded, alertPreferencesSet, userData }) => {
-  const profileMenuItems = [
-    {
-      id: 'account',
-      title: 'Account Settings',
-      subtitle: 'Manage your account',
-      icon: 'manage-accounts',
-      onPress: () => { 
-        Alert.alert('Account Settings', 'Account management and onboarding replay coming soon');
-        onNavigateToOnboarding();
-      },
-      status: 'available'
-    },
-    {
-      id: 'alerts',
-      title: 'Alert Preferences',
-      subtitle: 'Customize your notifications',
-      icon: 'tune',
-      onPress: onNavigateToAlertPreferences,
-      status: alertPreferencesSet ? 'completed' : 'pending'
-    },
-    {
-      id: 'notifications',
-      title: 'Notification Settings',
-      subtitle: 'Control push notifications',
-      icon: 'notifications-active',
-      onPress: () => setShowNotificationSettings(true),
-      status: 'available'
-    },
-    {
-      id: 'data',
-      title: 'Data & Privacy',
-      subtitle: 'Manage your data preferences',
-      icon: 'privacy-tip',
-      onPress: () => setShowPrivacyPolicy(true),
-      status: 'available'
-    },
-    {
-      id: 'reset',
-      title: 'Reset App Data',
-      subtitle: 'Clear all preferences and start over',
-      icon: 'refresh',
-      onPress: onResetUserData,
-      status: 'danger'
-    },
-    {
-      id: 'delete',
-      title: 'Delete Account',
-      subtitle: 'Permanently delete your account and all data',
-      icon: 'delete-forever',
-      onPress: onDeleteAccount,
-      status: 'danger'
-    }
-  ];
-
-  return (
-    <SafeAreaView style={styles.safeArea}>
-      <StatusBar barStyle="light-content" />
-      <View style={styles.mobileContainer}>
-        {/* Header with navigation back */}
-        <View style={styles.profileHeader}>
-          <TouchableOpacity onPress={onNavigateHome} style={styles.backButton}>
-            <MaterialIcons name="arrow-back" size={24} color={colors.accentData} />
-          </TouchableOpacity>
-          <Text style={styles.headerTitle}>Profile</Text>
-          <View style={styles.headerSpacer} />
-        </View>
-
-        <ScrollView style={styles.profileContent}>
-          {/* Profile Summary Card */}
-          <View style={styles.profileSummaryCard}>
-            {userData?.photoUrl ? (
-              <Image source={{ uri: userData.photoUrl }} style={styles.profileAvatar} />
-            ) : (
-              <View style={styles.profileAvatar}>
-                <MaterialIcons name="person" size={40} color={colors.textPrimary} />
-              </View>
-            )}
-            <View style={styles.profileInfo}>
-              <Text style={styles.profileName}>
-                {userData?.name || userData?.username || (userData?.isGuest ? 'Guest User' : 'Integra User')}
-              </Text>
-              <Text style={styles.profileStatus}>
-                {userData?.email || ''}
-              </Text>
-              <Text style={styles.profileStatus}>
-                {userOnboarded && alertPreferencesSet ? 'Setup Complete' : 'Setup In Progress'}
-              </Text>
-            </View>
-          </View>
-
-          {/* Menu Items */}
-          <View style={styles.profileMenuSection}>
-            <Text style={styles.sectionTitle}>Settings</Text>
-            {profileMenuItems.map((item) => (
-              <TouchableOpacity key={item.id} style={styles.profileMenuItem} onPress={item.onPress}>
-                <View style={styles.menuItemLeft}>
-                  <View style={[
-                    styles.menuItemIcon,
-                    item.status === 'danger' && styles.menuItemIconDanger
-                  ]}>
-                    <MaterialIcons 
-                      name={item.icon} 
-                      size={20} 
-                      color={item.status === 'danger' ? colors.accentNegative : colors.accentData} 
-                    />
-                  </View>
-                  <View style={styles.menuItemText}>
-                    <Text style={[
-                      styles.menuItemTitle,
-                      item.status === 'danger' && styles.menuItemTitleDanger
-                    ]}>
-                      {item.title}
-                    </Text>
-                    <Text style={styles.menuItemSubtitle}>{item.subtitle}</Text>
-                  </View>
-                </View>
-                <View style={styles.menuItemRight}>
-                  {item.status === 'pending' && (
-                    <MaterialIcons name="warning" size={16} color={colors.accentNegative} />
-                  )}
-                  <MaterialIcons name="chevron-right" size={20} color={colors.textSecondary} />
-                </View>
-              </TouchableOpacity>
-            ))}
-          </View>
-
-          {/* Quick Navigation Card */}
-          <View style={styles.quickNavCard}>
-            <TouchableOpacity onPress={onNavigateHome} style={styles.quickNavButton}>
-              <MaterialIcons name="home" size={24} color={colors.accentData} />
-              <Text style={styles.quickNavText}>Back to News Feed</Text>
-            </TouchableOpacity>
-          </View>
-
-          {/* App Info */}
-          <View style={styles.appInfoSection}>
-            <Text style={styles.appInfoText}>Integra Markets v1.0.0</Text>
-            <Text style={styles.appInfoSubtext}>AI-powered commodity trading insights</Text>
-          </View>
-        </ScrollView>
-
-        {/* Bottom Navigation */}
-        <View style={styles.bottomNav}>
-          <TouchableOpacity style={styles.navItem} onPress={onNavigateHome}>
-            <MaterialIcons name="flash-on" size={24} color={colors.textSecondary} />
-            <Text style={styles.navLabel}>Today</Text>
-          </TouchableOpacity>
-          <TouchableOpacity style={styles.navItem} onPress={() => Alert.alert('Alerts', 'Navigate to alerts')}>
-            <MaterialIcons name="notifications" size={24} color={colors.textSecondary} />
-            <Text style={styles.navLabel}>Alerts</Text>
-          </TouchableOpacity>
-          <TouchableOpacity style={styles.navItem}>
-            <MaterialIcons name="person" size={24} color={colors.accentPositive} />
-            <Text style={[styles.navLabel, styles.activeNavLabel]}>Profile</Text>
-          </TouchableOpacity>
-        </View>
-      </View>
-    </SafeAreaView>
-  );
-};
 
 // --- Main App Component ---
 export default function App() {
@@ -837,16 +677,74 @@ export default function App() {
   }
   
   if (activeNav === 'Profile') {
+    // Sample data for testing the comprehensive profile screen
+    const sampleUserProfile = {
+      username: userData?.username || userData?.name || 'Integra User',
+      role: userData?.role || 'trader',
+      institution: userData?.institution || 'Independent Trader',
+      bio: userData?.bio || 'Commodity trading professional focused on energy and metals markets.',
+      experience: userData?.experience || '5+ years',
+      marketFocus: userData?.marketFocus || ['Energy', 'Metals', 'Agriculture']
+    };
+
+    const sampleApiKeys = [
+      {
+        id: '1',
+        name: 'OpenAI API Key',
+        provider: 'openai',
+        createdAt: new Date('2024-01-15')
+      },
+      {
+        id: '2',
+        name: 'Claude API Key',
+        provider: 'claude',
+        createdAt: new Date('2024-02-01')
+      }
+    ];
+
+    const sampleBookmarks = [
+      {
+        id: '1',
+        title: 'Oil Prices Surge on Middle East Tensions',
+        source: 'Reuters'
+      },
+      {
+        id: '2',
+        title: 'Gold Reaches New High Amid Fed Uncertainty',
+        source: 'Bloomberg'
+      },
+      {
+        id: '3',
+        title: 'Copper Supply Disruption in Chile',
+        source: 'Mining Weekly'
+      },
+      {
+        id: '4',
+        title: 'Natural Gas Storage Levels Hit Record',
+        source: 'Energy Intelligence'
+      }
+    ];
+
     return (
-      <ProfileScreen 
-        onNavigateToOnboarding={navigateToOnboarding}
-        onNavigateToAlertPreferences={navigateToAlertPreferences}
-        onResetUserData={resetUserData}
-        onDeleteAccount={deleteAccount}
-        onNavigateHome={() => setActiveNav('Today')}
-        userOnboarded={userOnboarded}
-        alertPreferencesSet={alertPreferencesSet}
-        userData={userData}
+      <ComprehensiveProfileScreen 
+        userProfile={sampleUserProfile}
+        alertPreferences={{
+          commodities: ['Crude Oil', 'Gold', 'Natural Gas', 'Copper'],
+          frequency: 'daily',
+          notifications: true
+        }}
+        apiKeys={sampleApiKeys}
+        bookmarks={sampleBookmarks}
+        selectedProvider='openai'
+        onBack={() => setActiveNav('Today')}
+        removeAPIKey={(keyId) => {
+          console.log('Remove API key:', keyId);
+          Alert.alert('API Key Removed', `API key ${keyId} has been removed.`);
+        }}
+        selectProvider={(provider) => {
+          console.log('Selected provider:', provider);
+          Alert.alert('Provider Selected', `${provider} is now the active AI provider.`);
+        }}
       />
     );
   }
@@ -1525,5 +1423,243 @@ const styles = StyleSheet.create({
     color: colors.textSecondary,
     fontSize: 12,
     opacity: 0.7,
+  },
+  // Additional styles for enhanced ProfileScreen
+  section: {
+    marginBottom: 32,
+  },
+  sectionHeader: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center",
+    marginBottom: 16,
+  },
+  sectionTitleContainer: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 12,
+  },
+  editButton: {
+    backgroundColor: colors.bgSecondary,
+    borderRadius: 16,
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+  },
+  editButtonText: {
+    color: colors.accentData,
+    fontSize: 14,
+    fontWeight: "500",
+  },
+  addButton: {
+    backgroundColor: colors.bgSecondary,
+    borderRadius: 20,
+    padding: 8,
+  },
+  bookmarkCount: {
+    color: colors.textSecondary,
+    fontSize: 16,
+  },
+  profileCard: {
+    backgroundColor: colors.bgSecondary,
+    borderRadius: 16,
+    padding: 20,
+    borderWidth: 1,
+    borderColor: colors.divider,
+  },
+  profileHeaderContent: {
+    flexDirection: "row",
+    alignItems: "center",
+    marginBottom: 16,
+  },
+  profileBio: {
+    color: colors.textSecondary,
+    fontSize: 14,
+    lineHeight: 20,
+    marginBottom: 16,
+  },
+  profileStats: {
+    flexDirection: "row",
+    justifyContent: "space-around",
+    paddingTop: 16,
+    borderTopWidth: 1,
+    borderTopColor: colors.divider,
+  },
+  profileStat: {
+    alignItems: "center",
+  },
+  profileStatValue: {
+    color: colors.textPrimary,
+    fontSize: 18,
+    fontWeight: "600",
+    marginBottom: 4,
+  },
+  profileStatLabel: {
+    color: colors.textSecondary,
+    fontSize: 12,
+  },
+  alertsCard: {
+    backgroundColor: colors.bgSecondary,
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: colors.divider,
+    overflow: "hidden",
+  },
+  alertRow: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center",
+    padding: 16,
+    borderBottomWidth: 1,
+    borderBottomColor: colors.divider,
+  },
+  alertLabel: {
+    color: colors.textPrimary,
+    fontSize: 16,
+  },
+  alertValue: {
+    color: colors.textSecondary,
+    fontSize: 14,
+  },
+  emptyState: {
+    backgroundColor: colors.bgSecondary,
+    borderRadius: 12,
+    padding: 24,
+    alignItems: "center",
+    borderWidth: 1,
+    borderColor: colors.divider,
+  },
+  emptyStateText: {
+    color: colors.textPrimary,
+    fontSize: 16,
+    fontWeight: "500",
+    marginBottom: 8,
+  },
+  emptyStateSubtext: {
+    color: colors.textSecondary,
+    fontSize: 14,
+    textAlign: "center",
+  },
+  keysList: {
+    gap: 12,
+  },
+  keyItem: {
+    flexDirection: "row",
+    alignItems: "center",
+    backgroundColor: colors.bgSecondary,
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: colors.divider,
+    overflow: "hidden",
+  },
+  keyContent: {
+    flex: 1,
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    padding: 16,
+  },
+  keyInfo: {
+    flex: 1,
+  },
+  keyName: {
+    color: colors.textPrimary,
+    fontSize: 16,
+    fontWeight: "500",
+    marginBottom: 4,
+  },
+  keyProvider: {
+    color: colors.textSecondary,
+    fontSize: 14,
+    marginBottom: 2,
+  },
+  keyDate: {
+    color: colors.textSecondary,
+    fontSize: 12,
+  },
+  deleteButton: {
+    padding: 16,
+    borderLeftWidth: 1,
+    borderLeftColor: colors.divider,
+  },
+  bookmarksList: {
+    gap: 12,
+  },
+  bookmarkItem: {
+    flexDirection: "row",
+    alignItems: "center",
+    backgroundColor: colors.bgSecondary,
+    borderRadius: 12,
+    padding: 16,
+    borderWidth: 1,
+    borderColor: colors.divider,
+  },
+  bookmarkContent: {
+    flex: 1,
+  },
+  bookmarkTitle: {
+    color: colors.textPrimary,
+    fontSize: 16,
+    fontWeight: "500",
+    marginBottom: 4,
+  },
+  bookmarkSource: {
+    color: colors.textSecondary,
+    fontSize: 14,
+  },
+  viewAllButton: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    backgroundColor: colors.bgSecondary,
+    borderRadius: 12,
+    padding: 16,
+    gap: 8,
+    borderWidth: 1,
+    borderColor: colors.divider,
+  },
+  viewAllText: {
+    color: colors.accentData,
+    fontSize: 16,
+    fontWeight: "500",
+  },
+  settingsList: {
+    backgroundColor: colors.bgSecondary,
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: colors.divider,
+    overflow: "hidden",
+  },
+  settingItem: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    padding: 16,
+    borderBottomWidth: 1,
+    borderBottomColor: colors.divider,
+  },
+  settingText: {
+    color: colors.textPrimary,
+    fontSize: 16,
+  },
+  modalPlaceholder: {
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    right: 0,
+    bottom: 0,
+    backgroundColor: 'rgba(0, 0, 0, 0.8)',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  modalPlaceholderText: {
+    color: colors.textPrimary,
+    fontSize: 18,
+    fontWeight: '600',
+    marginBottom: 20,
+  },
+  modalCloseText: {
+    color: colors.accentData,
+    fontSize: 16,
+    fontWeight: '500',
   },
 });

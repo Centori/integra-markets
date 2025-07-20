@@ -1,5 +1,8 @@
 {
   "ios": {
     "bundleIdentifier": "com.anonymous.integra"
-  }
+  },
+  "plugins": [
+    "expo-web-browser"
+  ]
 }

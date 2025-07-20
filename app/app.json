@@ -13,6 +13,7 @@
     },
     "plugins": [
       "expo-font"
-    ]
+    ],
+    "jsEngine": "jsc"
   }
 }
