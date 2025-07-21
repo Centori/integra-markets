@@ -1,7 +1,5 @@
-// Import the complete app from the app directory
-import React from 'react';
-import { registerRootComponent } from 'expo';
-import App from './TestApp';
+// Import the TestApp component
+import TestApp from './TestApp';
 
-// Register the main component
-registerRootComponent(App);
+// Export TestApp as the default export for Expo to register
+export default TestApp;
