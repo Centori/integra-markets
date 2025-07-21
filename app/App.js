@@ -162,6 +162,14 @@ const navItems = [
 const NewsCard = ({ item }) => {
   const [showAIAnalysisOverlay, setShowAIAnalysisOverlay] = useState(false);
   
+  const handleAIAnalysisPress = () => {
+    setShowAIAnalysisOverlay(true);
+  };
+  
+  const handleCloseAnalysis = () => {
+    setShowAIAnalysisOverlay(false);
+  };
+  
   let sentimentStyle, sentimentBgStyle, scoreBgStyle, iconColor;
   
   switch (item.sentiment) {
@@ -190,7 +198,7 @@ const NewsCard = ({ item }) => {
     <View>
       <TouchableOpacity 
         style={styles.card}
-        onPress={() => setShowAIAnalysisOverlay(true)}
+        onPress={handleAIAnalysisPress}
       >
         {/* Card Header */}
         <View style={styles.cardHeader}>
@@ -206,7 +214,9 @@ const NewsCard = ({ item }) => {
           </View>
           {/* Right side: AI Sparkle Icon */}
           {item.isAiInsight && (
-            <MaterialIcons name="auto-awesome" size={18} color={colors.accentData} />
+            <TouchableOpacity onPress={handleAIAnalysisPress}>
+              <MaterialIcons name="auto-awesome" size={18} color={colors.accentData} />
+            </TouchableOpacity>
           )}
         </View>
         {/* Card Body */}
@@ -234,6 +244,92 @@ const NewsCard = ({ item }) => {
         </View>
       </TouchableOpacity>
 
+      {/* AI Analysis Modal */}
+      {showAIAnalysisOverlay && (
+        <View style={styles.modalOverlay}>
+          <View style={styles.modalContainer}>
+            <View style={styles.modalHeader}>
+              <Text style={styles.modalTitle}>Integra Analysis</Text>
+              <TouchableOpacity onPress={handleCloseAnalysis}>
+                <MaterialIcons name="close" size={24} color={colors.textPrimary} />
+              </TouchableOpacity>
+            </View>
+            
+            <ScrollView style={styles.modalContent}>
+              {/* Article Title */}
+              <Text style={styles.articleTitle}>{item.headline}</Text>
+              <Text style={styles.articleSource}>{item.source}</Text>
+              
+              {/* Summary Section */}
+              <View style={styles.analysisSection}>
+                <Text style={styles.sectionTitle}>Summary</Text>
+                <Text style={styles.sectionText}>
+                  {item.preprocessing?.commodity === 'gas' 
+                    ? "Weekly natural gas storage report shows higher than expected inventory build, indicating potential oversupply conditions in key markets. This could signal bearish pressure on natural gas prices in the near term."
+                    : item.preprocessing?.commodity === 'agriculture'
+                    ? "Extended drought conditions in key agricultural regions raise concerns about crop yields and potential supply shortages. Weather patterns suggest continued stress on agricultural commodities."
+                    : item.preprocessing?.commodity === 'oil'
+                    ? "Geopolitical tensions and supply disruptions continue to create uncertainty in oil markets. Current events suggest potential for increased volatility and price movements."
+                    : "Market analysis indicates significant developments that could impact commodity prices and trading strategies in the near term."
+                  }
+                </Text>
+              </View>
+              
+              {/* Market Impact */}
+              <View style={styles.analysisSection}>
+                <Text style={styles.sectionTitle}>Market Impact</Text>
+                <View style={styles.impactContainer}>
+                  <View style={[styles.impactBadge, { 
+                    backgroundColor: item.preprocessing?.severity === 'high' ? colors.accentNegative : 
+                                   item.preprocessing?.severity === 'medium' ? colors.accentNeutral : colors.accentPositive 
+                  }]}>
+                    <Text style={styles.impactText}>
+                      {item.preprocessing?.severity?.toUpperCase() || 'MEDIUM'}
+                    </Text>
+                  </View>
+                  <Text style={styles.confidenceText}>
+                    Confidence: {((item.preprocessing?.confidence_score || 0.5) * 100).toFixed(0)}%
+                  </Text>
+                </View>
+              </View>
+              
+              {/* Key Drivers */}
+              <View style={styles.analysisSection}>
+                <Text style={styles.sectionTitle}>Key Sentiment Drivers</Text>
+                <View style={styles.driversContainer}>
+                  {(item.preprocessing?.trigger_keywords || ['market', 'supply', 'demand']).map((keyword, index) => (
+                    <View key={index} style={styles.driverTag}>
+                      <Text style={styles.driverText}>{keyword}</Text>
+                    </View>
+                  ))}
+                </View>
+              </View>
+              
+              {/* Trading Intelligence */}
+              <View style={styles.analysisSection}>
+                <Text style={styles.sectionTitle}>What this means for Traders</Text>
+                <View style={styles.tradingInsights}>
+                  <Text style={styles.insightText}>
+                    • Monitor {item.preprocessing?.commodity || 'commodity'} markets for volatility
+                  </Text>
+                  <Text style={styles.insightText}>
+                    • Consider risk management strategies for existing positions
+                  </Text>
+                  <Text style={styles.insightText}>
+                    • Watch for confirmation signals in related markets
+                  </Text>
+                </View>
+              </View>
+              
+              {/* AI Attribution */}
+              <View style={styles.attribution}>
+                <MaterialIcons name="auto-awesome" size={16} color={colors.textSecondary} />
+                <Text style={styles.attributionText}>AI-powered market analysis</Text>
+              </View>
+            </ScrollView>
+          </View>
+        </View>
+      )}
     </View>
   );
 };
@@ -1650,5 +1746,129 @@ const styles = StyleSheet.create({
     color: colors.accentData,
     fontSize: 16,
     fontWeight: '500',
+  },
+  // AI Analysis Modal Styles
+  modalOverlay: {
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    right: 0,
+    bottom: 0,
+    backgroundColor: 'rgba(0, 0, 0, 0.8)',
+    justifyContent: 'center',
+    alignItems: 'center',
+    zIndex: 1000,
+  },
+  modalContainer: {
+    backgroundColor: colors.bgSecondary,
+    borderRadius: 16,
+    width: '90%',
+    maxHeight: '80%',
+    borderWidth: 1,
+    borderColor: colors.divider,
+  },
+  modalHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    padding: 20,
+    borderBottomWidth: 1,
+    borderBottomColor: colors.divider,
+  },
+  modalTitle: {
+    color: colors.textPrimary,
+    fontSize: 20,
+    fontWeight: '600',
+  },
+  modalContent: {
+    padding: 20,
+    maxHeight: 400,
+  },
+  articleTitle: {
+    color: colors.textPrimary,
+    fontSize: 18,
+    fontWeight: '600',
+    marginBottom: 8,
+    lineHeight: 24,
+  },
+  articleSource: {
+    color: colors.accentData,
+    fontSize: 14,
+    marginBottom: 20,
+  },
+  analysisSection: {
+    marginBottom: 20,
+  },
+  sectionTitle: {
+    color: colors.accentData,
+    fontSize: 16,
+    fontWeight: '600',
+    marginBottom: 12,
+    borderLeftWidth: 3,
+    borderLeftColor: colors.accentData,
+    paddingLeft: 12,
+  },
+  sectionText: {
+    color: colors.textSecondary,
+    fontSize: 14,
+    lineHeight: 20,
+  },
+  impactContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 16,
+  },
+  impactBadge: {
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderRadius: 16,
+  },
+  impactText: {
+    color: colors.bgPrimary,
+    fontSize: 14,
+    fontWeight: '600',
+  },
+  confidenceText: {
+    color: colors.textSecondary,
+    fontSize: 14,
+  },
+  driversContainer: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 8,
+  },
+  driverTag: {
+    backgroundColor: colors.accentData,
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderRadius: 16,
+  },
+  driverText: {
+    color: colors.bgPrimary,
+    fontSize: 12,
+    fontWeight: '500',
+  },
+  tradingInsights: {
+    gap: 8,
+  },
+  insightText: {
+    color: colors.textSecondary,
+    fontSize: 14,
+    lineHeight: 20,
+  },
+  attribution: {
+    flexDirection: 'row',
+    justifyContent: 'center',
+    alignItems: 'center',
+    gap: 8,
+    paddingTop: 16,
+    borderTopWidth: 1,
+    borderTopColor: colors.divider,
+    marginTop: 16,
+  },
+  attributionText: {
+    color: colors.textSecondary,
+    fontSize: 12,
+    fontStyle: 'italic',
   },
 });
