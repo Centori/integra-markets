@@ -24,7 +24,7 @@ export default function NewsCard({ onAIClick }: NewsCardProps) {
         style={styles.aiButton}
         onPress={() => onAIClick(mockNewsItem)}
       >
-        <MaterialIcons name="psychology" size={24} color={Colors.primary} />
+        <MaterialIcons name="psychology" size={24} color={Colors.tint} />
         <Text style={styles.aiButtonText}>AI Analysis</Text>
       </TouchableOpacity>
     </View>
@@ -44,7 +44,7 @@ const styles = StyleSheet.create({
     elevation: 3,
   },
   date: {
-    color: Colors.darkGray,
+    color: Colors.textSecondary,
     fontSize: 12,
     marginBottom: 8,
   },
@@ -66,7 +66,7 @@ const styles = StyleSheet.create({
   },
   aiButtonText: {
     marginLeft: 8,
-    color: Colors.primary,
+    color: Colors.tint,
     fontWeight: '600',
   },
 });
