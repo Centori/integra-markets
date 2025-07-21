@@ -43,7 +43,7 @@ class SentimentResponse(BaseModel):
 def read_root():
     return {
         "message": "Integra AI Backend is running!",
-        "version": "1.0.0",
+        "version": "1.0.1",  # Updated version
         "endpoints": ["/analyze-sentiment", "/health"]
     }
 
