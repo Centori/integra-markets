@@ -418,24 +418,35 @@ export default function App() {
     }
   };
 
-  // Disable API calls for testing - just set to offline mode
+  // Check backend API status and initialize app
   useEffect(() => {
-    // For testing, just set API as offline and skip all backend checks
-    setApiRunning(false);
-    console.warn('API calls disabled for testing. Using sample data.');
-    
-    // Reduced loading time to 1 second for better UX
-    const timer = setTimeout(() => {
-      setIsLoading(false);
+    const initializeApp = async () => {
+      try {
+        console.log('Checking API status...');
+        const apiStatus = await checkApiStatus();
+        setApiRunning(apiStatus);
+        
+        if (apiStatus) {
+          console.log('FastAPI backend is running - using live data');
+        } else {
+          console.warn('FastAPI backend offline - using sample data');
+        }
+      } catch (error) {
+        console.warn('API check failed:', error);
+        setApiRunning(false);
+      }
       
-      // For testing, skip onboarding flows and go straight to main app
-      console.log('Loading complete - going to main app');
-    }, 1000);
-    
-    return () => {
-      clearTimeout(timer);
+      // Complete loading after API check
+      const timer = setTimeout(() => {
+        setIsLoading(false);
+        console.log('App initialization complete');
+      }, 1500);
+      
+      return () => clearTimeout(timer);
     };
-  }, []); // Remove dependencies to avoid re-triggering
+    
+    initializeApp();
+  }, []);
 
   // Handle agent mode activation
   useEffect(() => {
