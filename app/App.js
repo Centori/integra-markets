@@ -880,7 +880,7 @@ export default function App() {
                 
                 // Show navigation toast for non-current screens
                 if (item.label !== activeNav) {
-                  showToast.info(`Switched to ${item.label}`, 'Navigate between sections');
+                  showToast('info', `Switched to ${item.label}`, 'Navigate between sections');
                 }
               }}
             >
