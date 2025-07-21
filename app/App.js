@@ -23,6 +23,8 @@ import ProfileScreen from './components/ProfileScreen';
 import ComprehensiveProfileScreen from './components/ComprehensiveProfileScreen';
 import { activateAgentMode, getAgentStatus } from './config/agent';
 import { checkApiStatus } from './services/api';
+import { showToast } from './utils/toast';
+import Toast from 'react-native-toast-message';
 
 // Check if Hermes is enabled
 const isHermes = () => !!global.HermesInternal;
@@ -478,7 +480,7 @@ export default function App() {
     setShowOnboarding(false);
     
     // Show toast confirmation
-    toastMessages.onboarding.completed();
+    showToast('success', 'Onboarding Complete', 'Welcome to Integra Markets!');
     
     // Show alert preferences if not set
     if (!alertPreferencesSet) {
@@ -495,7 +497,7 @@ export default function App() {
     setShowOnboarding(false);
     
     // Show toast confirmation
-    toastMessages.onboarding.skipped();
+    showToast('info', 'Onboarding Skipped', 'You can complete onboarding later in settings.');
     
     // Still offer alert preferences setup
     setTimeout(() => {
@@ -529,7 +531,7 @@ export default function App() {
     setActiveNav('Today');
     
     // Show toast confirmation
-    toastMessages.alerts.preferencesSet();
+    showToast('success', 'Preferences Set', 'Your alert preferences have been saved.');
   };
 
   const handleAlertPreferencesSkip = async () => {
@@ -540,7 +542,7 @@ export default function App() {
     setActiveNav('Today');
     
     // Show toast confirmation
-    toastMessages.alerts.preferencesSkipped();
+    showToast('info', 'Preferences Skipped', 'You can set alert preferences later.');
   };
 
   // Navigation helpers
@@ -560,9 +562,9 @@ export default function App() {
       
       // Show welcome toast
       if (user.isNewUser) {
-        toastMessages.auth.signupSuccess();
+        showToast('success', 'Welcome!', 'Account created successfully');
       } else {
-        toastMessages.auth.loginSuccess();
+        showToast('success', 'Welcome back!', 'Logged in successfully');
       }
       
       // If it's a Google user or new email signup, go to onboarding
@@ -580,7 +582,7 @@ export default function App() {
       }
     } catch (error) {
       console.error('Error saving user data:', error);
-      toastMessages.auth.loginError();
+      showToast('error', 'Login Error', 'Failed to save user data. Please try again.');
       Alert.alert('Error', 'Failed to save user data. Please try again.');
     }
   };
@@ -631,7 +633,7 @@ export default function App() {
                     ]);
                     
                     // Show toast confirmation
-                    toastMessages.navigation.dataReset();
+                    showToast('success', 'Data Reset', 'All app data has been cleared');
                     
                     // Reset state and show authentication
                     setUserData(null);
@@ -645,7 +647,7 @@ export default function App() {
                     }, 2000); // Delay to let toast show
                   } catch (error) {
                     console.warn('Error resetting user data:', error);
-                    toastMessages.general.error('Failed to reset app data');
+                    showToast('error', 'Reset Failed', 'Failed to reset app data');
                   }
                 }
         }
@@ -674,7 +676,7 @@ export default function App() {
               ]);
               
               // Show toast confirmation
-              toastMessages.general.success('Account deleted successfully');
+              showToast('success', 'Account Deleted', 'Account deleted successfully');
               
               // Reset state and show authentication
               setUserData(null);
@@ -688,7 +690,7 @@ export default function App() {
               }, 2000); // Delay to let toast show
             } catch (error) {
               console.warn('Error deleting account:', error);
-              toastMessages.general.error('Failed to delete account');
+              showToast('error', 'Delete Failed', 'Failed to delete account');
             }
           }
         }
@@ -999,6 +1001,8 @@ export default function App() {
         </View>
       </View>
       
+      {/* Toast messages */}
+      <Toast />
     </SafeAreaView>
   );
 }

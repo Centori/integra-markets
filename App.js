@@ -1,5 +1,5 @@
 // Import the full Integra Markets app
-import App from './app/App';
+import IntegraApp from './app/App';
 
 // Export as the default export for Expo to register
-export default App;
+export default IntegraApp;
