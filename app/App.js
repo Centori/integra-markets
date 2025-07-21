@@ -27,6 +27,9 @@ import { checkApiStatus } from './services/api';
 import AIAnalysisOverlay from './components/AIAnalysisOverlay';
 import { showToast, toastMessages } from './utils/toast';
 
+// Check if Hermes is enabled
+const isHermes = () => !!global.HermesInternal;
+
 // --- Color Palette ---
 const colors = {
   bgPrimary: '#121212',
@@ -653,6 +656,7 @@ export default function App() {
 
   // Main app navigation logic
   console.log('Showing main app with activeNav:', activeNav);
+  console.log('Using Hermes:', isHermes());
   
   // Render different screens based on activeNav
   if (activeNav === 'Alerts') {

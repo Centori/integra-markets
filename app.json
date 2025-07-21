@@ -1,8 +1,20 @@
 {
-  "ios": {
-    "bundleIdentifier": "com.anonymous.integra"
-  },
-  "plugins": [
-    "expo-web-browser"
-  ]
+  "expo": {
+    "name": "integra",
+    "slug": "integra",
+    "version": "1.0.0",
+    "sdkVersion": "53.0.0",
+    "platforms": [
+      "ios",
+      "android"
+    ],
+    "ios": {
+      "bundleIdentifier": "com.anonymous.integra"
+    },
+    "jsEngine": "hermes",
+    "plugins": [
+      "expo-dev-client",
+      "expo-web-browser"
+    ]
+  }
 }

@@ -1,4 +1,4 @@
-// Import the complete app from the app directory
-import App from './app/App';
+// Import the simplified working app
+import App from './app/App.simple';
 
 export default App;

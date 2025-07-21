@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useState, useEffect } from 'react';
 import { 
   View, 
   Text, 
@@ -6,9 +6,13 @@ import {
   Modal, 
   TouchableOpacity, 
   ScrollView,
-  SafeAreaView
+  SafeAreaView,
+  TextInput,
+  ActivityIndicator
 } from 'react-native';
-import { Ionicons } from '@expo/vector-icons';
+import { Ionicons, MaterialIcons } from '@expo/vector-icons';
+import { analyzeNewsWithAI, sendChatMessage, CHAT_CONTEXTS, checkAIServiceAvailability } from '../services/aiChatService';
+import { getActiveApiConfig } from '../services/apiKeyService';
 
 interface AIAnalysisOverlayProps {
   isVisible: boolean;
@@ -17,9 +21,16 @@ interface AIAnalysisOverlayProps {
 }
 
 export default function AIAnalysisOverlay({ isVisible, onClose, news }: AIAnalysisOverlayProps) {
+  const [activeTab, setActiveTab] = useState<'analysis' | 'chat'>('analysis');
+  const [aiAnalysis, setAiAnalysis] = useState<any>(null);
+  const [loading, setLoading] = useState(false);
+  const [chatMessages, setChatMessages] = useState<Array<{role: string, content: string}>>([]);
+  const [inputMessage, setInputMessage] = useState('');
+  const [chatLoading, setChatLoading] = useState(false);
+  const [hasApiKey, setHasApiKey] = useState(false);
 
-  // Mock news data - matching the new design
-  const newsData = {
+  // Use news data from props or fallback to mock data
+  const newsData = news || {
     title: "US Natural Gas Storage Exceeds Expectations",
     summary: "Weekly natural gas storage report shows higher than expected inventory build, indicating potential oversupply conditions in key markets.",
     source: "Bloomberg",
@@ -28,9 +39,52 @@ export default function AIAnalysisOverlay({ isVisible, onClose, news }: AIAnalys
     sentimentScore: 0.77,
   };
 
-  // AI Analysis data - matching the new design
-  const aiAnalysis = {
+  // Check API availability and load analysis
+  useEffect(() => {
+    if (isVisible) {
+      checkApiAvailability();
+      loadAIAnalysis();
+    }
+  }, [isVisible, news]);
+
+  const checkApiAvailability = async () => {
+    try {
+      const available = await checkAIServiceAvailability();
+      setHasApiKey(available);
+    } catch (error) {
+      console.error('Error checking API availability:', error);
+      setHasApiKey(false);
+    }
+  };
+
+  const loadAIAnalysis = async () => {
+    if (!hasApiKey) {
+      // Use fallback mock data
+      setAiAnalysis(getMockAnalysis());
+      return;
+    }
+
+    setLoading(true);
+    try {
+      const analysis = await analyzeNewsWithAI(
+        newsData.summary,
+        newsData.title,
+        newsData.source
+      );
+      setAiAnalysis(analysis);
+    } catch (error) {
+      console.error('Error loading AI analysis:', error);
+      // Fallback to mock data
+      setAiAnalysis(getMockAnalysis());
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const getMockAnalysis = () => ({
     summary: "Weekly natural gas storage report shows higher than expected inventory build, indicating potential oversupply conditions in key markets. This could signal bearish pressure on natural gas prices in the near term.",
+    sentiment: "BEARISH",
+    confidence: 0.77,
     finbertSentiment: {
       bullish: 20.0,
       bearish: 70.0,
@@ -52,6 +106,35 @@ export default function AIAnalysisOverlay({ isVisible, onClose, news }: AIAnalys
       "Monitor inventory levels for continued oversupply signals",
       "Watch for seasonal demand patterns in upcoming weeks",
     ],
+  });
+
+  const sendChatMessageHandler = async () => {
+    if (!inputMessage.trim() || chatLoading || !hasApiKey) return;
+
+    const userMessage = { role: 'user', content: inputMessage };
+    setChatMessages(prev => [...prev, userMessage]);
+    setInputMessage('');
+    setChatLoading(true);
+
+    try {
+      const response = await sendChatMessage(
+        inputMessage,
+        CHAT_CONTEXTS.ANALYSIS,
+        chatMessages
+      );
+      
+      const aiMessage = { role: 'assistant', content: response.content };
+      setChatMessages(prev => [...prev, aiMessage]);
+    } catch (error) {
+      console.error('Chat error:', error);
+      const errorMessage = { 
+        role: 'assistant', 
+        content: 'Sorry, I encountered an error processing your request. Please check your API key configuration.' 
+      };
+      setChatMessages(prev => [...prev, errorMessage]);
+    } finally {
+      setChatLoading(false);
+    }
   };
   
   const getSentimentColor = (sentiment: any) => {
@@ -84,14 +167,74 @@ export default function AIAnalysisOverlay({ isVisible, onClose, news }: AIAnalys
           <View style={styles.header}>
             <View style={styles.headerLeft}>
               <Text style={styles.title}>integra Analysis</Text>
+              {!hasApiKey && (
+                <View style={styles.apiStatus}>
+                  <Text style={styles.apiStatusText}>No API Key</Text>
+                </View>
+              )}
             </View>
             <TouchableOpacity onPress={onClose} style={styles.closeButton}>
               <Ionicons name="close" size={24} color="#ECECEC" />
             </TouchableOpacity>
           </View>
+
+          {/* Tab Navigation */}
+          <View style={styles.tabContainer}>
+            <TouchableOpacity 
+              style={[styles.tab, activeTab === 'analysis' && styles.activeTab]}
+              onPress={() => setActiveTab('analysis')}
+            >
+              <MaterialIcons name="analytics" size={20} color={activeTab === 'analysis' ? '#30A5FF' : '#A0A0A0'} />
+              <Text style={[styles.tabText, activeTab === 'analysis' && styles.activeTabText]}>Analysis</Text>
+            </TouchableOpacity>
+            <TouchableOpacity 
+              style={[styles.tab, activeTab === 'chat' && styles.activeTab]}
+              onPress={() => setActiveTab('chat')}
+              disabled={!hasApiKey}
+            >
+              <MaterialIcons name="chat" size={20} color={!hasApiKey ? '#666' : activeTab === 'chat' ? '#30A5FF' : '#A0A0A0'} />
+              <Text style={[styles.tabText, activeTab === 'chat' && styles.activeTabText, !hasApiKey && styles.disabledTabText]}>Chat</Text>
+            </TouchableOpacity>
+          </View>
           
           <ScrollView style={styles.scrollView}>
-            {/* Article Title */}
+          {activeTab === 'chat' 
+          ? (
+            
+            <ScrollView style={styles.scrollView}>
+              <View style={styles.section}>
+                <View style={styles.sectionHeaderWithAccent}>
+                  <View style={styles.accentLine} />
+                  <Text style={styles.sectionTitleWhite}>Chat with AI</Text>
+                </View>
+                <View style={styles.chatContainer}>
+                  {chatMessages.map((message, index) => (
+                    <View key={index} style={styles.chatBubble(message.role)}>
+                      <Text style={styles.chatText}>{message.content}</Text>
+                    </View>
+                  ))}
+                  {chatLoading && (
+                    <ActivityIndicator size="small" color="#ECECEC" />
+                  )}
+                </View>
+              </View>
+              <View style={styles.inputContainer}>
+                <TextInput
+                  style={styles.input}
+                  placeholder="Type your message..."
+                  placeholderTextColor="#A0A0A0"
+                  value={inputMessage}
+                  onChangeText={setInputMessage}
+                  onSubmitEditing={sendChatMessageHandler}
+                  editable={!chatLoading}
+                />
+                <TouchableOpacity onPress={sendChatMessageHandler} disabled={chatLoading} style={styles.sendButton}>
+                  <Ionicons name="send" size={20} color="#30A5FF" />
+                </TouchableOpacity>
+              </View>
+            </ScrollView>
+          ) 
+          : 
             <View style={styles.articleSection}>
               <Text style={styles.articleTitle}>{newsData.title}</Text>
               <Text style={styles.articleSource}>{newsData.source}</Text>
@@ -459,10 +602,39 @@ const styles = StyleSheet.create({
     color: '#ECECEC',
     lineHeight: 22,
   },
-  // New modern styling
-  articleSection: {
-    paddingHorizontal: 24,
-    paddingVertical: 16,
+  chatContainer: {
+    padding: 16,
+  },
+  chatBubble: (role: string) => ({
+    backgroundColor: role === 'user' ? '#30A5FF' : '#333333',
+    alignSelf: role === 'user' ? 'flex-end' : 'flex-start',
+    borderRadius: 16,
+    padding: 12,
+    marginVertical: 4,
+    maxWidth: '70%',
+  }),
+  chatText: {
+    color: '#ECECEC',
+    fontSize: 14,
+  },
+  inputContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    borderTopWidth: 1,
+    borderTopColor: '#333333',
+    padding: 10,
+  },
+  input: {
+    flex: 1,
+    backgroundColor: '#1E1E1E',
+    borderRadius: 20,
+    padding: 10,
+    color: '#ECECEC',
+    fontSize: 14,
+    marginRight: 8,
+  },
+  sendButton: {
+    padding: 8,
   },
   articleTitle: {
     fontSize: 18,

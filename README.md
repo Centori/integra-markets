@@ -1,4 +1,3 @@
-<<<<<<< HEAD
 # 📈 Integra Markets v1.0
 
 AI-powered commodity trading insights and market sentiment analysis platform.
@@ -153,7 +152,3 @@ Proprietary - All rights reserved
 
 **Integra Markets v1.0** - AI-powered commodity trading insights  
 Built with ❤️ for traders and investors
-=======
-# -integra-markets
-AI-powered commodity trading insights and market sentiment analysis platform
->>>>>>> 0e0f0744a7f51010cecd861c93827370584d8db4

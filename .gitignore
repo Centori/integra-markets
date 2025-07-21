@@ -134,3 +134,5 @@ deployment/
 
 # Test files in root
 test_*.py
+-integra-markets/
+-integra-markets-backup/

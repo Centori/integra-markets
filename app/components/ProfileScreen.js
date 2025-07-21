@@ -51,7 +51,7 @@ const getRoleLabel = (role) => {
   return roleMap[role] || role;
 };
 
-export default function ProfileScreen({ userProfile, alertPreferences, apiKeys, bookmarks, onBack }) {
+export default function ProfileScreen({ userProfile, alertPreferences, apiKeys, bookmarks, onBack, onNavigateToSettings }) {
   const [selectedProvider, setSelectedProvider] = useState(null);
   const [showAPIKeySetup, setShowAPIKeySetup] = useState(false);
   const [showAlertPreferences, setShowAlertPreferences] = useState(false);
@@ -96,6 +96,14 @@ export default function ProfileScreen({ userProfile, alertPreferences, apiKeys, 
 
   const defaultAPIKeys = apiKeys || [];
   const defaultBookmarks = bookmarks || [];
+
+  const navigateToScreen = (screenName) => {
+    if (onNavigateToSettings) {
+      onNavigateToSettings(screenName);
+    } else {
+      Alert.alert('Coming Soon', `${screenName} will be available in the next update.`);
+    }
+  };
 
   return (
     <SafeAreaView style={styles.safeArea}>
@@ -314,15 +322,19 @@ export default function ProfileScreen({ userProfile, alertPreferences, apiKeys, 
           </View>
 
           <View style={styles.settingsList}>
-            <TouchableOpacity style={styles.settingItem}>
+            <TouchableOpacity style={styles.settingItem} onPress={() => navigateToScreen('NotificationsSettings')}>
               <Text style={styles.settingText}>Notifications</Text>
               <MaterialIcons name="chevron-right" color={colors.textSecondary} size={16} />
             </TouchableOpacity>
-            <TouchableOpacity style={styles.settingItem}>
-              <Text style={styles.settingText}>Privacy</Text>
+            <TouchableOpacity style={styles.settingItem} onPress={() => navigateToScreen('PrivacyPolicy')}>
+              <Text style={styles.settingText}>Privacy Policy</Text>
               <MaterialIcons name="chevron-right" color={colors.textSecondary} size={16} />
             </TouchableOpacity>
-            <TouchableOpacity style={styles.settingItem}>
+            <TouchableOpacity style={styles.settingItem} onPress={() => navigateToScreen('TermsOfService')}>
+              <Text style={styles.settingText}>Terms of Service</Text>
+              <MaterialIcons name="chevron-right" color={colors.textSecondary} size={16} />
+            </TouchableOpacity>
+            <TouchableOpacity style={styles.settingItem} onPress={() => navigateToScreen('About')}>
               <Text style={styles.settingText}>About</Text>
               <MaterialIcons name="chevron-right" color={colors.textSecondary} size={16} />
             </TouchableOpacity>
