@@ -14,7 +14,6 @@ import {
 } from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { MaterialIcons, MaterialCommunityIcons } from '@expo/vector-icons';
-import Toast from 'react-native-toast-message';
 import TodayDashboard from './components/TodayDashboard';
 import IntegraLoadingPage from './components/IntegraLoadingPage';
 import AuthLoadingScreen from './components/AuthLoadingScreen';
@@ -24,8 +23,6 @@ import ProfileScreen from './components/ProfileScreen';
 import ComprehensiveProfileScreen from './components/ComprehensiveProfileScreen';
 import { activateAgentMode, getAgentStatus } from './config/agent';
 import { checkApiStatus } from './services/api';
-import AIAnalysisOverlay from './components/AIAnalysisOverlay';
-import { showToast, toastMessages } from './utils/toast';
 
 // --- Color Palette ---
 const colors = {
@@ -190,7 +187,7 @@ const NewsCard = ({ item }) => {
   }
 
   return (
-    <>
+    <View>
       <TouchableOpacity 
         style={styles.card}
         onPress={() => setShowAIAnalysisOverlay(true)}
@@ -237,13 +234,7 @@ const NewsCard = ({ item }) => {
         </View>
       </TouchableOpacity>
 
-      {/* AI Analysis Overlay */}
-      <AIAnalysisOverlay
-        isVisible={showAIAnalysisOverlay}
-        onClose={() => setShowAIAnalysisOverlay(false)}
-        news={item}
-      />
-    </>
+    </View>
   );
 };
 
@@ -880,7 +871,7 @@ export default function App() {
                 
                 // Show navigation toast for non-current screens
                 if (item.label !== activeNav) {
-                  showToast('info', `Switched to ${item.label}`, 'Navigate between sections');
+                  console.log(`Switched to ${item.label}`);
                 }
               }}
             >
@@ -898,8 +889,6 @@ export default function App() {
         </View>
       </View>
       
-      {/* Toast Component - Always rendered last */}
-      <Toast />
     </SafeAreaView>
   );
 }
