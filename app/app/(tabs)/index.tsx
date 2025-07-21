@@ -2,7 +2,7 @@ import React, { useState } from 'react';
 import { View, StyleSheet } from 'react-native';
 import NewsCard from '../../components/NewsCard';
 import AIAnalysisOverlay from '../../components/AIAnalysisOverlay';
-import Colors from '../../constants/Colors';
+import Colors from '@/constants/colors';
 
 export default function FeedScreen() {
   const [isAIOverlayVisible, setIsAIOverlayVisible] = useState(false);
