@@ -334,8 +334,6 @@ const NewsCard = ({ item }) => {
   );
 };
 
-export default App;
-
 
 // --- Main App Component ---
 export default function App() {
