@@ -16,7 +16,7 @@
     ],
     "ios": {
       "bundleIdentifier": "com.centori.integra",
-      "buildNumber": "3",
+      "buildNumber": "4",
       "supportsTablet": true,
       "requireFullScreen": false,
       "infoPlist": {
