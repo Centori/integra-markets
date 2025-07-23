@@ -47,9 +47,7 @@
     },
     "plugins": [
       "expo-dev-client",
-      "expo-web-browser",
-      "expo-image-picker",
-      "expo-image-manipulator"
+      "expo-web-browser"
     ],
     "extra": {
       "eas": {

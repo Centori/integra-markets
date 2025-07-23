@@ -15,7 +15,7 @@ import {
 } from 'react-native';
 import { MaterialIcons, MaterialCommunityIcons } from '@expo/vector-icons';
 import * as ImagePicker from 'expo-image-picker';
-import * as ImageManipulator from 'expo-image-manipulator';
+// import * as ImageManipulator from 'expo-image-manipulator'; // Temporarily disabled
 
 // Use the same color palette as App.js
 const colors = {
@@ -285,14 +285,10 @@ const DetailsFormCard = ({ formData, onUpdate }) => {
 
     const processImage = async (uri) => {
         try {
-            // Resize and compress the image
-            const manipulatedImage = await ImageManipulator.manipulateAsync(
-                uri,
-                [{ resize: { width: 300, height: 300 } }],
-                { compress: 0.8, format: ImageManipulator.SaveFormat.JPEG }
-            );
-            
-            onUpdate('profilePhoto', manipulatedImage.uri);
+            // Temporarily disable image processing to prevent crashes
+            // TODO: Re-enable after fixing ImageManipulator import
+            console.log('Image processing temporarily disabled');
+            onUpdate('profilePhoto', uri); // Use original URI for now
         } catch (error) {
             Alert.alert("Error", "Failed to process image. Please try again.");
         }
