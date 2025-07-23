@@ -68,7 +68,9 @@ const marketFocusOptions = [
 const WelcomeCard = ({ onNext }) => (
     <View style={styles.welcomeCard}>
         <View style={styles.welcomeHeader}>
-            <Image source={require('../assets/images/integra-logo-hq.png')} style={styles.logoImage} />
+            <View style={styles.logoPlaceholder}>
+                <MaterialIcons name="analytics" size={60} color={colors.accentPositive} />
+            </View>
             <Text style={styles.welcomeTitle}>Welcome to Integra Markets</Text>
             <Text style={styles.welcomeSubtitle}>
                 The AI-powered platform for commodity trading insights and prediction markets
@@ -737,6 +739,15 @@ const styles = StyleSheet.create({
         height: 100,
         resizeMode: 'contain',
         marginBottom: 16,
+    },
+    logoPlaceholder: {
+        width: 100,
+        height: 100,
+        justifyContent: 'center',
+        alignItems: 'center',
+        marginBottom: 16,
+        backgroundColor: colors.accentPositiveBg,
+        borderRadius: 50,
     },
     welcomeTitle: {
         color: colors.textPrimary,
