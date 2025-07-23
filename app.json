@@ -1,25 +1,55 @@
 {
   "expo": {
-    "name": "integra",
+    "name": "Integra",
     "slug": "integra",
     "version": "1.0.0",
-    "sdkVersion": "53.0.0",
-    "platforms": [
-      "ios",
-      "android",
-      "web"
+    "orientation": "portrait",
+    "icon": "./assets/icon.png",
+    "userInterfaceStyle": "light",
+    "splash": {
+      "image": "./assets/splash.png",
+      "resizeMode": "contain",
+      "backgroundColor": "#ffffff"
+    },
+    "assetBundlePatterns": [
+      "**/*"
     ],
     "ios": {
-      "bundleIdentifier": "com.anonymous.integra",
+      "bundleIdentifier": "com.centori.integra",
+      "buildNumber": "1",
+      "supportsTablet": true,
+      "requireFullScreen": false,
       "infoPlist": {
-        "ITSAppUsesNonExemptEncryption": false
+        "ITSAppUsesNonExemptEncryption": false,
+        "NSCameraUsageDescription": "This app uses the camera to capture financial documents and receipts.",
+        "NSPhotoLibraryUsageDescription": "This app accesses your photo library to select financial documents and receipts.",
+        "NSFaceIDUsageDescription": "This app uses Face ID for secure authentication."
       }
     },
     "android": {
-      "package": "com.centori.integra"
+      "package": "com.centori.integra",
+      "versionCode": 1,
+      "compileSdkVersion": 34,
+      "targetSdkVersion": 34,
+      "adaptiveIcon": {
+        "foregroundImage": "./assets/adaptive-icon.png",
+        "backgroundColor": "#ffffff"
+      },
+      "permissions": [
+        "android.permission.CAMERA",
+        "android.permission.READ_EXTERNAL_STORAGE",
+        "android.permission.WRITE_EXTERNAL_STORAGE",
+        "android.permission.USE_FINGERPRINT"
+      ]
+    },
+    "web": {
+      "favicon": "./assets/favicon.png"
     },
     "plugins": [
-      "expo-web-browser"
+      "expo-dev-client",
+      "expo-web-browser",
+      "expo-image-picker",
+      "expo-image-manipulator"
     ],
     "extra": {
       "eas": {
