@@ -1,3 +1,4 @@
+/** @type {import('eslint').Linter.Config} */
 module.exports = {
   root: true,
   extends: [
@@ -12,7 +13,9 @@ module.exports = {
     ecmaFeatures: {
       jsx: true,
     },
-    project: './tsconfig.json',
+    project: ['./tsconfig.json'],
+    tsconfigRootDir: __dirname,
+    sourceType: 'module',
   },
   settings: {
     react: {
@@ -51,4 +54,5 @@ module.exports = {
       version: 'detect'
     }
   },
+  ignorePatterns: ['.eslintrc.js'],
 };

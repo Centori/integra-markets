@@ -199,6 +199,7 @@ export default function AIAnalysisOverlay({ isVisible, onClose, news }: AIAnalys
           
           <ScrollView style={styles.scrollView}>
             {activeTab === 'chat' ? (
+              <View style={styles.chatSection}>
                 <View style={styles.sectionHeaderWithAccent}>
                   <View style={styles.accentLine} />
                   <Text style={styles.sectionTitleWhite}>Chat with AI</Text>
@@ -213,8 +214,8 @@ export default function AIAnalysisOverlay({ isVisible, onClose, news }: AIAnalys
                     <ActivityIndicator size="small" color="#ECECEC" />
                   )}
                 </View>
-              </View>
-              <View style={styles.inputContainer}>
+                </View>
+                <View style={styles.inputContainer}>
                 <TextInput
                   style={styles.input}
                   placeholder="Type your message..."
@@ -227,6 +228,7 @@ export default function AIAnalysisOverlay({ isVisible, onClose, news }: AIAnalys
                 <TouchableOpacity onPress={sendChatMessageHandler} disabled={chatLoading} style={styles.sendButton}>
                   <Ionicons name="send" size={20} color="#30A5FF" />
                 </TouchableOpacity>
+                </View>
               </View>
             ) : (
               <>
@@ -817,5 +819,10 @@ const styles = StyleSheet.create({
   articleSection: {
     paddingHorizontal: 24,
     paddingVertical: 16,
+  },
+  // Chat section container
+  chatSection: {
+    flex: 1,
+    padding: 24,
   },
 });
