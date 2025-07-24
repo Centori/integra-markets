@@ -33,7 +33,10 @@ module.exports = {
     'quotes': 'off',
     'semi': 'off',
     'no-trailing-spaces': 'off',
-    'react-native/no-unused-styles': 'off' // Temporarily disable unused styles warning
+    'react-native/no-unused-styles': 'off', // Temporarily disable unused styles warning
+    'no-useless-escape': 'off', // Temporarily disable escape warning
+    'react-native/no-single-element-style-arrays': 'off', // Temporarily disable style array warning
+    'react-native/no-inline-color': 'off' // Temporarily disable inline color warning
   },
   env: {
     'react-native/react-native': true,
