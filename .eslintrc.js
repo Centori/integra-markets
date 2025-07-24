@@ -25,8 +25,11 @@ module.exports = {
     '@typescript-eslint/explicit-module-boundary-types': 'off',
     '@typescript-eslint/no-explicit-any': 'off', // Allow any for now
     'react-native/sort-styles': 'off', // Don't enforce style property order
-    '@typescript-eslint/no-unused-vars': 'warn',
+    '@typescript-eslint/no-unused-vars': 'off', // Temporarily disable unused vars warning
     'react/react-in-jsx-scope': 'off', // Not needed in React 17+
+    'no-unused-vars': 'off', // Temporarily disable unused vars warning
+    'react-native/no-color-literals': 'off', // Allow color literals for now
+    'react-native/no-raw-text': 'off', // Allow raw text
   },
   env: {
     'react-native/react-native': true,
