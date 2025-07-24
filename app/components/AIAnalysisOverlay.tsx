@@ -200,34 +200,35 @@ export default function AIAnalysisOverlay({ isVisible, onClose, news }: AIAnalys
           <ScrollView style={styles.scrollView}>
             {activeTab === 'chat' ? (
               <View style={styles.chatSection}>
-                <View style={styles.sectionHeaderWithAccent}>
-                  <View style={styles.accentLine} />
-                  <Text style={styles.sectionTitleWhite}>Chat with AI</Text>
-                </View>
-                <View style={styles.chatContainer}>
-                  {chatMessages.map((message, index) => (
-                    <View key={index} style={styles.chatBubble(message.role)}>
-                      <Text style={styles.chatText}>{message.content}</Text>
-                    </View>
-                  ))}
-                  {chatLoading && (
-                    <ActivityIndicator size="small" color="#ECECEC" />
-                  )}
-                </View>
-                </View>
-                <View style={styles.inputContainer}>
-                <TextInput
-                  style={styles.input}
-                  placeholder="Type your message..."
-                  placeholderTextColor="#A0A0A0"
-                  value={inputMessage}
-                  onChangeText={setInputMessage}
-                  onSubmitEditing={sendChatMessageHandler}
-                  editable={!chatLoading}
-                />
-                <TouchableOpacity onPress={sendChatMessageHandler} disabled={chatLoading} style={styles.sendButton}>
-                  <Ionicons name="send" size={20} color="#30A5FF" />
-                </TouchableOpacity>
+                <View style={[styles.section, styles.chatContainer]}>
+                  <View style={styles.sectionHeaderWithAccent}>
+                    <View style={styles.accentLine} />
+                    <Text style={styles.sectionTitleWhite}>Chat with AI</Text>
+                  </View>
+                  <View style={styles.messagesContainer}>
+                    {chatMessages.map((message, index) => (
+                      <View key={index} style={styles.chatBubble(message.role)}>
+                        <Text style={styles.chatText}>{message.content}</Text>
+                      </View>
+                    ))}
+                    {chatLoading && (
+                      <ActivityIndicator size="small" color="#ECECEC" />
+                    )}
+                  </View>
+                  <View style={styles.inputContainer}>
+                    <TextInput
+                      style={styles.input}
+                      placeholder="Type your message..."
+                      placeholderTextColor="#A0A0A0"
+                      value={inputMessage}
+                      onChangeText={setInputMessage}
+                      onSubmitEditing={sendChatMessageHandler}
+                      editable={!chatLoading}
+                    />
+                    <TouchableOpacity onPress={sendChatMessageHandler} disabled={chatLoading} style={styles.sendButton}>
+                      <Ionicons name="send" size={20} color="#30A5FF" />
+                    </TouchableOpacity>
+                  </View>
                 </View>
               </View>
             ) : (
@@ -824,5 +825,10 @@ const styles = StyleSheet.create({
   chatSection: {
     flex: 1,
     padding: 24,
+  },
+  // Messages container
+  messagesContainer: {
+    flex: 1,
+    marginBottom: 16,
   },
 });
