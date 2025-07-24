@@ -198,11 +198,7 @@ export default function AIAnalysisOverlay({ isVisible, onClose, news }: AIAnalys
           </View>
           
           <ScrollView style={styles.scrollView}>
-          {activeTab === 'chat' 
-          ? (
-            
-            <ScrollView style={styles.scrollView}>
-              <View style={styles.section}>
+            {activeTab === 'chat' ? (
                 <View style={styles.sectionHeaderWithAccent}>
                   <View style={styles.accentLine} />
                   <Text style={styles.sectionTitleWhite}>Chat with AI</Text>
@@ -232,15 +228,14 @@ export default function AIAnalysisOverlay({ isVisible, onClose, news }: AIAnalys
                   <Ionicons name="send" size={20} color="#30A5FF" />
                 </TouchableOpacity>
               </View>
-            </ScrollView>
-          ) 
-          : 
-            <View style={styles.articleSection}>
-              <Text style={styles.articleTitle}>{newsData.title}</Text>
-              <Text style={styles.articleSource}>{newsData.source}</Text>
-            </View>
+            ) : (
+              <>
+                <View style={styles.articleSection}>
+                  <Text style={styles.articleTitle}>{newsData.title}</Text>
+                  <Text style={styles.articleSource}>{newsData.source}</Text>
+                </View>
 
-            {/* Summary Section */}
+                {/* Summary Section */}
             <View style={styles.section}>
               <View style={styles.sectionHeaderWithAccent}>
                 <View style={styles.accentLine} />
@@ -786,5 +781,41 @@ const styles = StyleSheet.create({
     fontSize: 12,
     color: '#A0A0A0',
     fontStyle: 'italic',
+  },
+  // Tab styles
+  tabContainer: {
+    flexDirection: 'row',
+    paddingHorizontal: 16,
+    paddingVertical: 8,
+    borderBottomWidth: 1,
+    borderBottomColor: '#333333',
+    gap: 16,
+  },
+  tab: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingVertical: 8,
+    paddingHorizontal: 12,
+    borderRadius: 8,
+    gap: 8,
+  },
+  activeTab: {
+    backgroundColor: '#1E1E1E',
+  },
+  tabText: {
+    fontSize: 14,
+    color: '#A0A0A0',
+    fontWeight: '500',
+  },
+  activeTabText: {
+    color: '#30A5FF',
+  },
+  disabledTabText: {
+    color: '#666666',
+  },
+  // Add articleSection style
+  articleSection: {
+    paddingHorizontal: 24,
+    paddingVertical: 16,
   },
 });
