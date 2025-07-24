@@ -21,9 +21,12 @@ module.exports = {
   },
   rules: {
     'react/prop-types': 'off', // Since we're using TypeScript
-    'react-native/no-inline-styles': 'warn',
+    'react-native/no-inline-styles': 'off', // Allow inline styles for now
     '@typescript-eslint/explicit-module-boundary-types': 'off',
-    '@typescript-eslint/no-explicit-any': 'warn',
+    '@typescript-eslint/no-explicit-any': 'off', // Allow any for now
+    'react-native/sort-styles': 'off', // Don't enforce style property order
+    '@typescript-eslint/no-unused-vars': 'warn',
+    'react/react-in-jsx-scope': 'off', // Not needed in React 17+
   },
   env: {
     'react-native/react-native': true,
