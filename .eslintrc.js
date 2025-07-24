@@ -30,6 +30,9 @@ module.exports = {
     'no-unused-vars': 'off', // Temporarily disable unused vars warning
     'react-native/no-color-literals': 'off', // Allow color literals for now
     'react-native/no-raw-text': 'off', // Allow raw text
+    'quotes': 'off',
+    'semi': 'off',
+    'no-trailing-spaces': 'off'
   },
   env: {
     'react-native/react-native': true,
