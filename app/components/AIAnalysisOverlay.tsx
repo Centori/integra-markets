@@ -360,6 +360,7 @@ export default function AIAnalysisOverlay({ isVisible, onClose, news }: AIAnalys
                 <Text style={styles.attributionText}>AI-powered market analysis</Text>
               </View>
             </View>
+          </>
           </ScrollView>
         </SafeAreaView>
       </View>
