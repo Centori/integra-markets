@@ -36,9 +36,19 @@ module.exports = {
     'react-native/no-unused-styles': 'off', // Temporarily disable unused styles warning
     'no-useless-escape': 'off', // Temporarily disable escape warning
     'react-native/no-single-element-style-arrays': 'off', // Temporarily disable style array warning
-    'react-native/no-inline-color': 'off' // Temporarily disable inline color warning
+    'react-native/no-inline-color': 'off', // Temporarily disable inline color warning
+    'react/no-unescaped-entities': 'off' // Allow readable text with quotes
   },
   env: {
     'react-native/react-native': true,
+    'jest': true,
+    'es6': true,
+    'browser': true,
+    'node': true
+  },
+  settings: {
+    react: {
+      version: 'detect'
+    }
   },
 };
