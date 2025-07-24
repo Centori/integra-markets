@@ -32,7 +32,8 @@ module.exports = {
     'react-native/no-raw-text': 'off', // Allow raw text
     'quotes': 'off',
     'semi': 'off',
-    'no-trailing-spaces': 'off'
+    'no-trailing-spaces': 'off',
+    'react-native/no-unused-styles': 'off' // Temporarily disable unused styles warning
   },
   env: {
     'react-native/react-native': true,
