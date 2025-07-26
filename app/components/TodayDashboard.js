@@ -1,8 +1,9 @@
 import React, { useState, useEffect } from 'react';
-import { View, Text, ScrollView, StyleSheet, SafeAreaView, TouchableOpacity, ActivityIndicator, RefreshControl, Modal } from 'react-native';
+import { View, Text, ScrollView, StyleSheet, SafeAreaView, TouchableOpacity, ActivityIndicator, RefreshControl, Modal, Share, Alert } from 'react-native';
 import { Ionicons, MaterialIcons, MaterialCommunityIcons } from '@expo/vector-icons';
 import { dashboardApi, sentimentApi, marketDataApi } from '../services/api';
 import IntegraIcon from './IntegraIcon';
+import AIAnalysisOverlay from './AIAnalysisOverlay';
 
 const TodayDashboard = ({ agentActive }) => {
   const [selectedFilter, setSelectedFilter] = useState('All');
@@ -13,7 +14,9 @@ const TodayDashboard = ({ agentActive }) => {
   const [sentimentModalVisible, setSentimentModalVisible] = useState(false);
   const [sentimentAnalysis, setSentimentAnalysis] = useState(null);
   const [sentimentLoading, setSentimentLoading] = useState(false);
-  const [marketData, setMarketData] = useState(null);
+const [marketData, setMarketData] = useState(null);
+  const [aiOverlayVisible, setAiOverlayVisible] = useState(false);
+  const [selectedNews, setSelectedNews] = useState(null);
 
   const filterOptions = ['All', 'Bullish', 'Neutral', 'Bearish'];
 
@@ -383,7 +386,36 @@ const TodayDashboard = ({ agentActive }) => {
     </Modal>
   );
 
-  const renderNewsCard = (item) => (
+const renderNewsCard = (item) => {
+    
+    const openAIOverlay = (article) => {
+      setSelectedNews(article);
+      setAiOverlayVisible(true);
+    };
+    
+    const handleShare = async () => {
+      try {
+        const shareContent = {
+          message: `${item.headline}\n\n${item.summary}\n\nSentiment: ${item.sentiment} (${item.sentimentScore})\nSource: ${item.source}\n\nShared via Integra Markets`,
+          title: item.headline,
+        };
+        
+        const result = await Share.share(shareContent);
+        
+        if (result.action === Share.sharedAction) {
+          // User shared successfully
+          console.log('Shared successfully');
+        } else if (result.action === Share.dismissedAction) {
+          // User dismissed the share dialog
+          console.log('Share dismissed');
+        }
+      } catch (error) {
+        Alert.alert('Error', 'Unable to share this article');
+        console.error('Share error:', error);
+      }
+    };
+    
+    return (
     <View key={item.id} style={styles.newsCard}>
       <View style={styles.cardHeader}>
         <View style={styles.sentimentContainer}>
@@ -400,7 +432,7 @@ const TodayDashboard = ({ agentActive }) => {
         <View style={styles.cardHeaderRight}>
           <TouchableOpacity
             style={styles.aiButton}
-            onPress={() => showSentimentAnalysis(item)}
+            onPress={() => openAIOverlay(item)}
           >
             <MaterialCommunityIcons name="star-four-points" size={18} color="#30A5FF" />
           </TouchableOpacity>
@@ -418,13 +450,14 @@ const TodayDashboard = ({ agentActive }) => {
         </View>
         <View style={styles.cardActions}>
           <Text style={styles.timeAgo}>{item.timeAgo}</Text>
-          <TouchableOpacity style={styles.shareButton}>
+          <TouchableOpacity style={styles.shareButton} onPress={handleShare}>
             <MaterialIcons name="share" size={16} color="#A0A0A0" />
           </TouchableOpacity>
         </View>
       </View>
     </View>
-  );
+    );
+  };
 
   const renderFilterButton = (filter) => {
     const isSelected = selectedFilter === filter;
@@ -584,6 +617,11 @@ const TodayDashboard = ({ agentActive }) => {
       )}
       
       {renderSentimentModal()}
+      <AIAnalysisOverlay 
+        isVisible={aiOverlayVisible} 
+        onClose={() => setAiOverlayVisible(false)}
+        news={selectedNews}
+      />
     </SafeAreaView>
   );
 };
