@@ -7,7 +7,7 @@ export default function App() {
   const [isAIOverlayVisible, setIsAIOverlayVisible] = useState(false);
   const [selectedNews, setSelectedNews] = useState(null);
 
-  const handleAIClick = (newsItem) => {
+  const handleAIClick = (newsItem: any) => {
     setSelectedNews(newsItem);
     setIsAIOverlayVisible(true);
   };
@@ -19,7 +19,7 @@ export default function App() {
       <View style={styles.header}>
         <Text style={styles.headerTitle}>Integra Markets</Text>
         <TouchableOpacity>
-          <MaterialIcons name="notifications-outline" size={24} color={colors.text} />
+          <MaterialIcons name="notifications-none" size={24} color={colors.text} />
         </TouchableOpacity>
       </View>
 
