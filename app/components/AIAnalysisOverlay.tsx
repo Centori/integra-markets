@@ -15,12 +15,12 @@ import { analyzeNewsWithAI, sendChatMessage, CHAT_CONTEXTS, checkAIServiceAvaila
 import { getActiveApiConfig } from '../services/apiKeyService';
 
 interface AIAnalysisOverlayProps {
-  isVisible: boolean;
+  visible: boolean;
   onClose: () => void;
-  news: any;
+  article: any;
 }
 
-export default function AIAnalysisOverlay({ isVisible, onClose, news }: AIAnalysisOverlayProps) {
+export default function AIAnalysisOverlay({ visible, onClose, article }: AIAnalysisOverlayProps) {
   const [activeTab, setActiveTab] = useState<'analysis' | 'chat'>('analysis');
   const [aiAnalysis, setAiAnalysis] = useState<any>(null);
   const [loading, setLoading] = useState(false);
@@ -29,23 +29,23 @@ export default function AIAnalysisOverlay({ isVisible, onClose, news }: AIAnalys
   const [chatLoading, setChatLoading] = useState(false);
   const [hasApiKey, setHasApiKey] = useState(false);
 
-  // Use news data from props or fallback to mock data
-  const newsData = news || {
+  // Use article data from props or fallback to mock data
+  const newsData = article || {
     title: "US Natural Gas Storage Exceeds Expectations",
     summary: "Weekly natural gas storage report shows higher than expected inventory build, indicating potential oversupply conditions in key markets.",
     source: "Bloomberg",
-    timeAgo: "2 hours ago",
+    timestamp: "2 hours ago",
     sentiment: "BEARISH",
     sentimentScore: 0.77,
   };
 
   // Check API availability and load analysis
   useEffect(() => {
-    if (isVisible) {
+    if (visible) {
       checkApiAvailability();
       loadAIAnalysis();
     }
-  }, [isVisible, news]);
+  }, [visible, article]);
 
   const checkApiAvailability = async () => {
     try {
@@ -158,7 +158,7 @@ export default function AIAnalysisOverlay({ isVisible, onClose, news }: AIAnalys
     <Modal
       animationType="slide"
       transparent={true}
-      visible={isVisible}
+      visible={visible}
       onRequestClose={onClose}
     >
       <View style={styles.overlay}>
@@ -198,6 +198,7 @@ export default function AIAnalysisOverlay({ isVisible, onClose, news }: AIAnalys
           </View>
           
           <ScrollView style={styles.scrollView}>
+            <View style={styles.contentContainer}>
             {activeTab === 'chat' ? (
               <View style={styles.chatSection}>
                 <View style={[styles.section, styles.chatContainer]}>
@@ -360,7 +361,9 @@ export default function AIAnalysisOverlay({ isVisible, onClose, news }: AIAnalys
                 <Text style={styles.attributionText}>AI-powered market analysis</Text>
               </View>
             </View>
-          </>
+              </>
+            )}
+            </View>
           </ScrollView>
         </SafeAreaView>
       </View>
@@ -831,5 +834,9 @@ const styles = StyleSheet.create({
   messagesContainer: {
     flex: 1,
     marginBottom: 16,
+  },
+  // Content container for ScrollView
+  contentContainer: {
+    flex: 1,
   },
 });

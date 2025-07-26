@@ -1,5 +1,5 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import { showToast } from '../utils/toast';
+import { Alert } from 'react-native';
 
 // Keys for storing API keys securely
 const API_KEYS_STORAGE_KEY = '@api_keys';
@@ -155,11 +155,11 @@ export async function storeApiKey(provider, apiKey, name = null) {
     existingKeys.push(keyEntry);
     await AsyncStorage.setItem(API_KEYS_STORAGE_KEY, JSON.stringify(existingKeys));
 
-    showToast('success', 'API Key Added', `${keyEntry.name} has been added successfully`);
+    Alert.alert('API Key Added', `${keyEntry.name} has been added successfully`);
     return keyEntry;
   } catch (error) {
     console.error('Error storing API key:', error);
-    showToast('error', 'Failed to Add Key', error.message);
+    Alert.alert('Failed to Add Key', error.message);
     throw error;
   }
 }
@@ -209,11 +209,11 @@ export async function removeApiKey(keyId) {
       await clearSelectedProvider();
     }
     
-    showToast('success', 'API Key Removed', 'The API key has been removed successfully');
+    Alert.alert('API Key Removed', 'The API key has been removed successfully');
     return true;
   } catch (error) {
     console.error('Error removing API key:', error);
-    showToast('error', 'Failed to Remove Key', 'Could not remove the API key');
+    Alert.alert('Failed to Remove Key', 'Could not remove the API key');
     return false;
   }
 }

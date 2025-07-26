@@ -1,7 +1,6 @@
 import * as Notifications from 'expo-notifications';
-import { Platform } from 'react-native';
+import { Platform, Alert } from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import { showToast } from '../utils/toast';
 
 // Configure how notifications are handled when the app is running
 Notifications.setNotificationHandler({
@@ -75,7 +74,7 @@ export async function registerForPushNotificationsAsync() {
 
     // If permission not granted, show user-friendly message
     if (finalStatus !== 'granted') {
-      showToast('warning', 'Notifications Disabled', 'Enable notifications in settings to receive market alerts');
+      Alert.alert('Notifications Disabled', 'Enable notifications in settings to receive market alerts');
       return null;
     }
 
@@ -90,7 +89,7 @@ export async function registerForPushNotificationsAsync() {
     
   } catch (error) {
     console.error('Error registering for push notifications:', error);
-    showToast('error', 'Notification Error', 'Failed to setup push notifications');
+    Alert.alert('Notification Error', 'Failed to setup push notifications');
     return null;
   }
 }
@@ -114,11 +113,11 @@ export async function getNotificationSettings() {
 export async function saveNotificationSettings(settings) {
   try {
     await AsyncStorage.setItem(NOTIFICATION_SETTINGS_KEY, JSON.stringify(settings));
-    showToast('success', 'Settings Saved', 'Notification preferences updated');
+    Alert.alert('Settings Saved', 'Notification preferences updated');
     return true;
   } catch (error) {
     console.error('Error saving notification settings:', error);
-    showToast('error', 'Save Failed', 'Could not save notification settings');
+    Alert.alert('Save Failed', 'Could not save notification settings');
     return false;
   }
 }
@@ -227,8 +226,8 @@ export function setupNotificationListeners(onNotificationReceived, onNotificatio
   notificationListener = Notifications.addNotificationReceivedListener(notification => {
     console.log('Notification received:', notification);
     
-    // Show toast for immediate feedback
-    showToast('info', notification.request.content.title, notification.request.content.body);
+    // Show alert for immediate feedback
+    Alert.alert(notification.request.content.title, notification.request.content.body);
     
     if (onNotificationReceived) {
       onNotificationReceived(notification);

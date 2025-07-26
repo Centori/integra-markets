@@ -1,5 +1,4 @@
 import { makeApiRequest, getActiveApiConfig, AI_PROVIDERS } from './apiKeyService';
-import { showToast } from '../utils/toast';
 
 // Chat contexts for different use cases
 export const CHAT_CONTEXTS = {
@@ -93,9 +92,8 @@ export async function sendChatMessage(message, context = CHAT_CONTEXTS.GENERAL, 
       model: config.models[0],
       usage: data.usage,
     };
-  } catch (error) {
+    } catch (error) {
     console.error('Chat message error:', error);
-    showToast('error', 'Chat Error', error.message);
     throw error;
   }
 }

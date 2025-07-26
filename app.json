@@ -1,7 +1,7 @@
 {
   "expo": {
-    "name": "Integra",
-    "slug": "integra",
+    "name": "Integra Markets",
+    "slug": "integra-markets",
     "version": "1.0.0",
     "orientation": "portrait",
     "icon": "./assets/icon.png",
@@ -15,19 +15,23 @@
       "**/*"
     ],
     "ios": {
-      "bundleIdentifier": "com.centori.integra",
-      "buildNumber": "4",
+      "bundleIdentifier": "com.centori.integramarkets",
+      "buildNumber": "7",
       "supportsTablet": true,
       "requireFullScreen": false,
       "infoPlist": {
         "ITSAppUsesNonExemptEncryption": false,
         "NSCameraUsageDescription": "This app uses the camera to capture financial documents and receipts.",
         "NSPhotoLibraryUsageDescription": "This app accesses your photo library to select financial documents and receipts.",
-        "NSFaceIDUsageDescription": "This app uses Face ID for secure authentication."
+        "NSFaceIDUsageDescription": "This app uses Face ID for secure authentication.",
+        "NSAppTransportSecurity": {
+          "NSAllowsArbitraryLoads": false,
+          "NSExceptionDomains": {}
+        }
       }
     },
     "android": {
-      "package": "com.centori.integra",
+      "package": "com.centori.integramarkets",
       "versionCode": 1,
       "compileSdkVersion": 34,
       "targetSdkVersion": 34,
@@ -46,7 +50,6 @@
       "favicon": "./assets/favicon.png"
     },
     "plugins": [
-      "expo-dev-client",
       "expo-web-browser"
     ],
     "extra": {
