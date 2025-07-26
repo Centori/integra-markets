@@ -1,7 +1,7 @@
 import React from 'react';
 import { View, Text, StyleSheet, TouchableOpacity, Linking, Alert } from 'react-native';
 import { MaterialIcons } from '@expo/vector-icons';
-import Colors from '@/constants/colors';
+import Colors from '../constants/colors';
 
 interface NewsItem {
   id?: number;

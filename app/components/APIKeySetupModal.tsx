@@ -10,7 +10,7 @@ import {
   Alert,
 } from 'react-native';
 import { X } from 'lucide-react-native';
-import Colors from '@/constants/colors';
+import Colors from '../constants/colors';
 import { useAPIKeys, AIProvider } from '@/providers/APIKeyProvider';
 
 interface APIKeySetupModalProps {

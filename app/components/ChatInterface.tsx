@@ -8,7 +8,7 @@ import {
   StyleSheet,
 } from 'react-native';
 import { Send } from 'lucide-react-native';
-import Colors from '@/constants/colors';
+import Colors from '../constants/colors';
 import { useAPIKeys } from '@/providers/APIKeyProvider';
 
 interface Message {
