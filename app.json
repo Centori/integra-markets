@@ -1,7 +1,7 @@
 {
   "expo": {
     "name": "Integra Markets",
-    "slug": "integra-markets",
+    "slug": "integra",
     "version": "1.0.0",
     "orientation": "portrait",
     "icon": "./assets/icon.png",
@@ -16,7 +16,7 @@
     ],
     "ios": {
       "bundleIdentifier": "com.centori.integramarkets",
-      "buildNumber": "7",
+      "buildNumber": "9",
       "supportsTablet": true,
       "requireFullScreen": false,
       "infoPlist": {
@@ -33,8 +33,6 @@
     "android": {
       "package": "com.centori.integramarkets",
       "versionCode": 1,
-      "compileSdkVersion": 34,
-      "targetSdkVersion": 34,
       "adaptiveIcon": {
         "foregroundImage": "./assets/adaptive-icon.png",
         "backgroundColor": "#ffffff"
@@ -56,6 +54,7 @@
       "eas": {
         "projectId": "66e09114-71af-4b29-82c9-d0ef24a97098"
       }
-    }
+    },
+    "newArchEnabled": true
   }
 }

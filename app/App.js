@@ -41,39 +41,39 @@ const colors = {
 const sampleNewsData = [
   {
     id: '1',
-    title: 'Oil Prices Surge as OPEC Announces Production Cuts',
-    summary: 'Major oil producers agree to reduce output by 2 million barrels per day, sending crude prices up 5% in early trading.',
+    title: 'US Natural Gas Storage Exceeds Expectations',
+    summary: 'Weekly natural gas storage report shows higher than expected inventory build, indicating potential oversupply conditions in key markets. This could signal bearish pressure on natural gas prices in the near term.',
     source: 'Bloomberg',
-    timestamp: '2 hours ago',
-    sentiment: 'BULLISH',
-    sentimentScore: 0.82,
-    keyDrivers: ['OPEC production cuts', 'Supply constraints', 'Strong demand outlook'],
+    timeAgo: '2 hours ago',
+    sentiment: 'BEARISH',
+    sentimentScore: '0.83',
+    keyDrivers: ['Storage build', 'Oversupply conditions', 'Price pressure'],
     marketImpact: 'HIGH',
-    commodities: ['Crude Oil', 'Natural Gas'],
+    commodities: ['Natural Gas'],
   },
   {
     id: '2',
-    title: 'Wheat Futures Fall on Improved Weather Conditions',
-    summary: 'Better than expected rainfall in key growing regions eases drought concerns, pushing wheat prices lower.',
-    source: 'Reuters',
-    timestamp: '4 hours ago',
-    sentiment: 'BEARISH',
-    sentimentScore: 0.65,
-    keyDrivers: ['Improved weather', 'Higher yield expectations', 'Reduced supply concerns'],
+    title: 'Gold Prices Rally on Fed Policy Uncertainty',
+    summary: 'Precious metals gain momentum as investors seek safe haven assets amid monetary policy shifts...',
+    source: 'MarketWatch',
+    timeAgo: '1 hour ago',
+    sentiment: 'BULLISH',
+    sentimentScore: '0.72',
+    keyDrivers: ['Fed policy', 'Safe haven demand', 'Monetary shifts'],
     marketImpact: 'MEDIUM',
-    commodities: ['Wheat', 'Corn'],
+    commodities: ['Gold', 'Silver'],
   },
   {
     id: '3',
-    title: 'Gold Holds Steady Amid Mixed Economic Signals',
-    summary: 'Precious metal trades in tight range as investors weigh inflation concerns against dollar strength.',
-    source: 'Financial Times',
-    timestamp: '6 hours ago',
+    title: 'Oil Demand Forecasts Remain Steady',
+    summary: 'International Energy Agency maintains stable outlook for global oil consumption through Q4...',
+    source: 'IEA',
+    timeAgo: '30 minutes ago',
     sentiment: 'NEUTRAL',
-    sentimentScore: 0.50,
-    keyDrivers: ['Dollar strength', 'Inflation hedge demand', 'Central bank policies'],
+    sentimentScore: '0.45',
+    keyDrivers: ['IEA forecasts', 'Global consumption', 'Q4 outlook'],
     marketImpact: 'LOW',
-    commodities: ['Gold', 'Silver'],
+    commodities: ['Crude Oil'],
   },
 ];
 
@@ -275,6 +275,28 @@ const App = () => {
     return sampleNewsData.filter(item => item.sentiment === activeFilter.toUpperCase());
   };
 
+  const getFilterChipColor = (filter) => {
+    if (activeFilter !== filter) return colors.bgSecondary;
+    
+    switch (filter) {
+      case 'Bullish': return '#4ade80';
+      case 'Bearish': return '#ff6b6b';
+      case 'Neutral': return '#fbbf24';
+      default: return colors.accentPositive;
+    }
+  };
+
+  const getFilterBorderColor = (filter) => {
+    if (activeFilter !== filter) return colors.cardBorder;
+    
+    switch (filter) {
+      case 'Bullish': return '#4ade80';
+      case 'Bearish': return '#ff6b6b';
+      case 'Neutral': return '#fbbf24';
+      default: return colors.accentPositive;
+    }
+  };
+
   // Render bottom navigation
   const renderBottomNav = () => (
     <View style={styles.bottomNav}>
@@ -413,10 +435,16 @@ const App = () => {
           {['All', 'Bullish', 'Neutral', 'Bearish'].map((filter) => (
             <TouchableOpacity
               key={filter}
-              style={[styles.filterChip, activeFilter === filter && styles.activeFilterChip]}
+              style={[
+                styles.filterChip,
+                {
+                  backgroundColor: getFilterChipColor(filter),
+                  borderColor: getFilterBorderColor(filter)
+                }
+              ]}
               onPress={() => setActiveFilter(filter)}
             >
-              {filter === 'Bullish' && <MaterialIcons name="trending-up" size={14} color={activeFilter === filter ? colors.bgPrimary : colors.textSecondary} />}
+{filter === 'Bullish' && <MaterialIcons name="trending-up" size={14} color={activeFilter === filter ? colors.bgPrimary : colors.textSecondary} />}
               {filter === 'Bearish' && <MaterialIcons name="trending-down" size={14} color={activeFilter === filter ? colors.bgPrimary : colors.textSecondary} />}
               {filter === 'Neutral' && <MaterialIcons name="trending-flat" size={14} color={activeFilter === filter ? colors.bgPrimary : colors.textSecondary} />}
               <Text style={[styles.filterText, activeFilter === filter && styles.activeFilterText]}>
@@ -428,9 +456,7 @@ const App = () => {
 
         <ScrollView style={styles.feed} showsVerticalScrollIndicator={false}>
           {getFilteredNews().map((item) => (
-            <TouchableOpacity key={item.id} onPress={() => handleArticlePress(item)}>
-              <NewsCard item={item} />
-            </TouchableOpacity>
+            <NewsCard key={item.id} item={item} onAIClick={handleArticlePress} />
           ))}
           
           <View style={styles.endOfFeed}>
@@ -450,8 +476,15 @@ const App = () => {
 
       {showAIAnalysis && selectedArticle && (
         <AIAnalysisOverlay
-          article={selectedArticle}
-          visible={showAIAnalysis}
+          newsData={{
+            title: selectedArticle.title,
+            summary: selectedArticle.summary || selectedArticle.content || '',
+            source: selectedArticle.source || 'Unknown',
+            timeAgo: selectedArticle.timeAgo || selectedArticle.date || '2 hours ago',
+            sentiment: selectedArticle.sentiment || 'NEUTRAL',
+            sentimentScore: parseFloat(selectedArticle.sentimentScore) || 0.5
+          }}
+          isVisible={showAIAnalysis}
           onClose={() => {
             setShowAIAnalysis(false);
             setSelectedArticle(null);
