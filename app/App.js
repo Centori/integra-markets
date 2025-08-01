@@ -167,6 +167,13 @@ const App = () => {
 
   const checkAppState = async () => {
     try {
+      // For web, skip onboarding and go directly to main app
+      if (typeof window !== 'undefined') {
+        // We're on web, skip all onboarding
+        setUserData({ name: 'Demo User', email: 'demo@integramarkets.com' });
+        return;
+      }
+      
       const onboardingCompleted = await AsyncStorage.getItem('onboarding_completed');
       const alertsCompleted = await AsyncStorage.getItem('alerts_completed');
       const storedUserData = await AsyncStorage.getItem('user_data');
@@ -525,21 +532,77 @@ class ErrorBoundary extends React.Component {
   }
 }
 
+// Web Container Component for Desktop Layout
+const WebContainer = ({ children }) => {
+  if (typeof window === 'undefined') {
+    // Not on web, return children as-is
+    return children;
+  }
+  
+  return (
+    <View style={webStyles.webWrapper}>
+      <View style={webStyles.webContainer}>
+        {children}
+      </View>
+    </View>
+  );
+};
+
 // Wrapped App
 const WrappedApp = () => (
   <ErrorBoundary>
-    <App />
+    <WebContainer>
+      <App />
+    </WebContainer>
   </ErrorBoundary>
 );
+
+// Web-specific styles
+const webStyles = StyleSheet.create({
+  webWrapper: {
+    flex: 1,
+    backgroundColor: '#0a0a0a', // Darker background for web
+    justifyContent: 'center',
+    alignItems: 'center',
+    minHeight: '100vh',
+  },
+  webContainer: {
+    width: 414, // iPhone Pro Max width
+    height: '100vh',
+    maxHeight: 896, // iPhone Pro Max height
+    backgroundColor: colors.bgPrimary,
+    borderRadius: 0,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 0 },
+    shadowOpacity: 0.5,
+    shadowRadius: 30,
+    elevation: 30,
+    overflow: 'hidden',
+  },
+});
 
 const styles = StyleSheet.create({
   safeArea: {
     flex: 1,
     backgroundColor: colors.bgPrimary,
+    ...(typeof window !== 'undefined' && {
+      justifyContent: 'center',
+      alignItems: 'center',
+    }),
   },
   container: {
     flex: 1,
     backgroundColor: colors.bgPrimary,
+    ...(typeof window !== 'undefined' && {
+      maxWidth: 414, // iPhone Pro Max width
+      width: '100%',
+      alignSelf: 'center',
+      shadowColor: '#000',
+      shadowOffset: { width: 0, height: 0 },
+      shadowOpacity: 0.3,
+      shadowRadius: 20,
+      elevation: 20,
+    }),
   },
   header: {
     flexDirection: 'row',
@@ -570,9 +633,9 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     paddingHorizontal: 16,
-    paddingVertical: 8,
-    marginRight: 10,
-    borderRadius: 20,
+    paddingVertical: 6,
+    marginRight: 8,
+    borderRadius: 999,
     backgroundColor: colors.bgSecondary,
     borderWidth: 1,
     borderColor: colors.cardBorder,
@@ -584,6 +647,7 @@ const styles = StyleSheet.create({
   filterText: {
     color: colors.textSecondary,
     fontSize: 14,
+    fontWeight: '500',
     marginLeft: 4,
   },
   activeFilterText: {

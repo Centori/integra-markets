@@ -70,8 +70,9 @@ const AIAnalysisOverlay: React.FC<AIAnalysisOverlayProps> = ({ newsData, isVisib
             onRequestClose={onClose}
         >
             <View style={styles.overlayContainer}>
-                <View style={styles.contentContainer}>
-                    <ScrollView showsVerticalScrollIndicator={false}>
+                <View style={styles.webWrapper}>
+                    <View style={styles.contentContainer}>
+                        <ScrollView showsVerticalScrollIndicator={false}>
                         {/* Header */}
                         <View style={styles.header}>
                             <Text style={styles.title}>Integra Analysis</Text>
@@ -178,7 +179,8 @@ const AIAnalysisOverlay: React.FC<AIAnalysisOverlayProps> = ({ newsData, isVisib
                                 </View>
                             ))}
                         </View>
-                    </ScrollView>
+                        </ScrollView>
+                    </View>
                 </View>
             </View>
         </Modal>
@@ -190,6 +192,20 @@ const styles = StyleSheet.create({
         flex: 1,
         backgroundColor: 'rgba(0, 0, 0, 0.8)',
         paddingTop: 50,
+        ...(typeof window !== 'undefined' && {
+            justifyContent: 'center',
+            alignItems: 'center',
+        }),
+    },
+    webWrapper: {
+        ...(typeof window !== 'undefined' ? {
+            width: 414, // iPhone Pro Max width
+            height: '85vh', // Slightly shorter than full height
+            maxHeight: 750,
+            alignSelf: 'center',
+        } : {
+            flex: 1,
+        }),
     },
     contentContainer: {
         flex: 1,
@@ -198,6 +214,13 @@ const styles = StyleSheet.create({
         borderTopRightRadius: 20,
         paddingHorizontal: 20,
         paddingTop: 20,
+        ...(typeof window !== 'undefined' && {
+            shadowColor: '#000',
+            shadowOffset: { width: 0, height: 0 },
+            shadowOpacity: 0.5,
+            shadowRadius: 30,
+            elevation: 30,
+        }),
     },
     header: {
         flexDirection: 'row',
