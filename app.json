@@ -55,7 +55,8 @@
     "web": {
       "favicon": "./assets/favicon.png",
       "bundler": "metro",
-      "output": "single"
+      "output": "single",
+      "baseUrl": "/integra-markets"
     },
     "plugins": [],
     "extra": {
