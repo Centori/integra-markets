@@ -53,7 +53,10 @@
       "runtimeVersion": "1.0.0"
     },
     "web": {
-      "favicon": "./assets/favicon.png"
+      "favicon": "./assets/favicon.png",
+      "bundler": "webpack",
+      "output": "static",
+      "baseUrl": "/integra-markets"
     },
     "plugins": [],
     "extra": {
