@@ -36,7 +36,7 @@ jobs:
         run: npm install --legacy-peer-deps
         
       - name: Export Expo web app
-        run: npx expo export --platform web
+        run: NODE_ENV=production npx expo export --platform web
         
       - name: Setup Pages
         uses: actions/configure-pages@v4
