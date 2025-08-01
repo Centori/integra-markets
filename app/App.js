@@ -19,8 +19,8 @@ import IntegraLoadingPage from './components/IntegraLoadingPage';
 import AuthLoadingScreen from './components/AuthLoadingScreen';
 import OnboardingForm from './components/OnboardingForm';
 import AlertPreferencesForm from './components/AlertPreferencesForm';
-import NewsCard from './components/NewsCard';
-import AIAnalysisOverlay from './components/AIAnalysisOverlay';
+import NewsCard from './components/NewsCard.tsx';
+import AIAnalysisOverlay from './components/AIAnalysisOverlay.tsx';
 
 // Color Palette
 const colors = {
