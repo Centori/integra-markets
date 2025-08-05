@@ -15,7 +15,7 @@ import {
     BlurView,
 } from 'react-native';
 import { BlurView as ExpoBlurView } from 'expo-blur';
-import { MaterialIcons, MaterialCommunityIcons } from '@expo/vector-icons';
+import { MaterialIcons, MaterialCommunityIcons, FontAwesome } from '@expo/vector-icons';
 import IntegraIcon from './IntegraIcon';
 import AuthOptionsComponent from './AuthButtons';
 import * as AuthSession from 'expo-auth-session';
@@ -155,6 +155,25 @@ const AuthLoadingScreen = ({ onAuthComplete, onSkip }) => {
         }, 2000);
     };
 
+    const handleSocialAuth = async (provider) => {
+        setIsLoading(true);
+        
+        // For now, simulate Social Sign-In with a mock user
+        // TODO: Implement actual OAuth flows with expo-auth-session
+        setTimeout(() => {
+            setIsLoading(false);
+            const mockUser = {
+                id: `${provider}_` + Date.now().toString(),
+                email: provider === 'apple' ? 'user@icloud.com' : 'user@gmail.com',
+                fullName: provider === 'apple' ? 'Apple User' : 'Google User',
+                username: provider === 'apple' ? 'appleuser' : 'googleuser',
+                authMethod: provider,
+                isNewUser: false,
+            };
+            onAuthComplete(mockUser);
+        }, 1500);
+    };
+
     const handleGoogleAuth = async () => {
         setIsLoading(true);
         
@@ -258,28 +277,12 @@ const AuthLoadingScreen = ({ onAuthComplete, onSkip }) => {
                 
                 {/* Animated Background */}
                 <View style={styles.animatedBackground}>
-                    <View style={styles.backgroundIconContainer}>
-                        <View style={styles.backgroundIconSquare}>
-                            <View style={styles.backgroundIconDot} />
-                            <View style={styles.backgroundIconLine} />
-                        </View>
-                    </View>
-                    <View style={styles.backgroundTextContainer}>
-                        <View style={styles.brandTextRow}>
-                            <ShinyText 
-                                text="integra" 
-                                speed={3} 
-                                style={styles.backgroundBrandTextMain}
-                                disabled={false}
-                            />
-                            <ShinyText 
-                                text="Markets" 
-                                speed={3} 
-                                style={styles.backgroundBrandTextSub}
-                                disabled={false}
-                            />
-                        </View>
-                    </View>
+                    <IntegraIcon 
+                        size={320} 
+                        animated={false} 
+                        variant="static"
+                        style={styles.backgroundIcon}
+                    />
                 </View>
 
                 {/* Blurred Glass Overlay */}
@@ -296,12 +299,27 @@ const AuthLoadingScreen = ({ onAuthComplete, onSkip }) => {
                             </Text>
                         </View>
 
-                        <AuthOptionsComponent 
-                            onAuthComplete={onAuthComplete} 
-                            disabled={isLoading}
-                        />
-                        
                         <View style={styles.authOptions}>
+                            <TouchableOpacity 
+                                style={[styles.socialButton, styles.appleButton]}
+                                onPress={() => handleSocialAuth('apple')}
+                                disabled={isLoading}
+                            >
+                                <MaterialCommunityIcons name="apple" size={24} color="#FFFFFF" />
+                                <Text style={styles.socialButtonText}>Continue with Apple</Text>
+                            </TouchableOpacity>
+
+                            <TouchableOpacity 
+                                style={[styles.socialButton, styles.googleButton]}
+                                onPress={() => handleSocialAuth('google')}
+                                disabled={isLoading}
+                            >
+                                <FontAwesome name="google" size={24} color="#FFFFFF" />
+                                <Text style={styles.socialButtonText}>Continue with Google</Text>
+                            </TouchableOpacity>
+                        </View>
+                        
+                        <View style={styles.emailOptions}>
                             <View style={styles.dividerContainer}>
                                 <View style={styles.divider} />
                                 <Text style={styles.dividerText}>or continue with email</Text>
@@ -313,7 +331,7 @@ const AuthLoadingScreen = ({ onAuthComplete, onSkip }) => {
                                 onPress={() => setCurrentScreen('login')}
                                 disabled={isLoading}
                             >
-                                <MaterialIcons name="email" size={24} color={colors.accentPositive} />
+                                <MaterialCommunityIcons name="email-outline" size={24} color={colors.accentPositive} />
                                 <Text style={styles.emailButtonText}>Sign in with Email</Text>
                             </TouchableOpacity>
 
@@ -550,17 +568,33 @@ const styles = StyleSheet.create({
         paddingHorizontal: 30,
         marginBottom: 40,
     },
-    googleButton: {
+    emailOptions: {
+        paddingHorizontal: 30,
+        marginBottom: 40,
+    },
+    socialButton: {
         flexDirection: 'row',
         alignItems: 'center',
         justifyContent: 'center',
+        borderRadius: 12,
+        paddingVertical: 16,
+        marginBottom: 12,
+        gap: 12,
+    },
+    appleButton: {
+        backgroundColor: '#000000',
+        borderWidth: 1,
+        borderColor: '#FFFFFF',
+    },
+    socialButtonText: {
+        color: '#FFFFFF',
+        fontSize: 16,
+        fontWeight: '600',
+    },
+    googleButton: {
         backgroundColor: colors.bgSecondary,
         borderWidth: 1,
         borderColor: colors.divider,
-        borderRadius: 12,
-        paddingVertical: 16,
-        marginBottom: 20,
-        gap: 12,
     },
     googleButtonText: {
         color: colors.textPrimary,
@@ -728,6 +762,9 @@ const styles = StyleSheet.create({
         justifyContent: 'center',
         alignItems: 'center',
         zIndex: 1,
+    },
+    backgroundIcon: {
+        opacity: 0.1,
     },
     backgroundIconContainer: {
         marginBottom: 40,

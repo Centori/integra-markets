@@ -1,6 +1,7 @@
 import React, { useState } from "react";
 import { StyleSheet, Text, View, ScrollView, TouchableOpacity, Alert, SafeAreaView, StatusBar } from "react-native";
 import { MaterialIcons } from '@expo/vector-icons';
+import { useAuth } from '../../contexts/AuthContext';
 
 // Color constants adapted for the current app
 const Colors = {
@@ -49,6 +50,33 @@ export default function ComprehensiveProfileScreen({
 }) {
   const [showAPIKeySetup, setShowAPIKeySetup] = useState(false);
   const [showAlertPreferences, setShowAlertPreferences] = useState(false);
+
+  const { deleteAccount } = useAuth();
+
+  const handleAccountDeletion = () => {
+    Alert.alert(
+      'Delete Account',
+      'Are you sure you want to permanently delete your account? This action cannot be undone.',
+      [
+        {
+          text: 'Cancel',
+          style: 'cancel',
+        },
+        {
+          text: 'Delete',
+          style: 'destructive',
+          onPress: async () => {
+            const { error } = await deleteAccount();
+            if (error) {
+              Alert.alert('Error', 'There was a problem deleting your account.');
+            } else {
+              Alert.alert('Account Deleted', 'Your account has been deleted.');
+            }
+          },
+        },
+      ],
+    );
+  };
 
   const handleDeleteKey = (keyId, keyName) => {
     Alert.alert(
@@ -296,11 +324,21 @@ export default function ComprehensiveProfileScreen({
               <Text style={styles.settingText}>Privacy</Text>
               <MaterialIcons name="chevron-right" color={Colors.textSecondary} size={16} />
             </TouchableOpacity>
-            <TouchableOpacity style={styles.settingItem}>
+            <TouchableOpacity style={styles.settingItem} onPress={() => {}}>
               <Text style={styles.settingText}>About</Text>
               <MaterialIcons name="chevron-right" color={Colors.textSecondary} size={16} />
             </TouchableOpacity>
           </View>
+        </View>
+        
+        {/* Delete Account Section */}
+        <View style={styles.section}>
+          <TouchableOpacity style={styles.deleteAccountButton} onPress={handleAccountDeletion}>
+            <Text style={styles.deleteAccountText}>Delete Account</Text>
+          </TouchableOpacity>
+          <Text style={styles.deleteAccountDescription}>
+            Permanently delete your account and all associated data. This action cannot be undone.
+          </Text>
         </View>
       </ScrollView>
 
@@ -676,5 +714,24 @@ const styles = StyleSheet.create({
     color: '#000',
     fontSize: 16,
     fontWeight: '500',
+  },
+  // Delete Account Section
+  deleteAccountButton: {
+    backgroundColor: Colors.bearish,
+    borderRadius: 12,
+    padding: 16,
+    alignItems: 'center',
+    marginBottom: 12,
+  },
+  deleteAccountText: {
+    color: '#FFFFFF',
+    fontSize: 16,
+    fontWeight: '600',
+  },
+  deleteAccountDescription: {
+    color: Colors.textSecondary,
+    fontSize: 14,
+    textAlign: 'center',
+    lineHeight: 20,
   },
 });

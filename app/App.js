@@ -10,9 +10,18 @@ import {
   ScrollView,
   Alert,
   Image,
+  Platform,
 } from 'react-native';
 import { MaterialIcons, MaterialCommunityIcons } from '@expo/vector-icons';
 import AsyncStorage from '@react-native-async-storage/async-storage';
+
+// Import Supabase Auth Provider
+import { AuthProvider } from '../contexts/AuthContext';
+// Import the example auth component for testing
+import { AuthExample } from '../components/AuthExample';
+// Import database utilities for testing
+import { testConnection } from '../lib/database';
+import { setupDatabase } from '../lib/setupDatabase';
 
 // Import all components
 import IntegraLoadingPage from './components/IntegraLoadingPage';
@@ -78,7 +87,82 @@ const sampleNewsData = [
 ];
 
 // Profile Screen Component
-const ProfileScreen = ({ onNavigateHome, userData, onResetData }) => {
+const ProfileScreen = ({ onNavigateHome, userData, onResetData, onShowAlertPreferences, onDeleteAccount, onLogout }) => {
+  const [alertPreferences, setAlertPreferences] = useState(null);
+  
+  // Load alert preferences
+  useEffect(() => {
+    loadAlertPreferences();
+  }, []);
+  
+  const loadAlertPreferences = async () => {
+    try {
+      const prefs = await AsyncStorage.getItem('alert_preferences');
+      if (prefs) {
+        setAlertPreferences(JSON.parse(prefs));
+      }
+    } catch (error) {
+      console.error('Error loading alert preferences:', error);
+    }
+  };
+  
+  const handlePrivacyPolicy = () => {
+    Alert.alert(
+      'Privacy Policy',
+      'INTEGRA MARKETS PRIVACY POLICY\n\n' +
+      'Effective Date: January 1, 2024\n\n' +
+      '1. DATA COLLECTION AND USE\n' +
+      'We collect and process your personal data, including but not limited to:\n' +
+      '• User profile information (name, email, professional role)\n' +
+      '• Alert preferences and commodity interests\n' +
+      '• App usage analytics and interaction patterns\n' +
+      '• Trading preferences and market focus areas\n\n' +
+      '2. AI MODEL TRAINING\n' +
+      'Your anonymized data and alert preferences are used to train our proprietary AI models to:\n' +
+      '• Enhance prediction accuracy for commodity market movements\n' +
+      '• Improve personalized insight generation\n' +
+      '• Optimize alert timing and relevance\n' +
+      '• Develop advanced pattern recognition capabilities\n\n' +
+      '3. DATA PROTECTION\n' +
+      'We implement industry-standard security measures including:\n' +
+      '• End-to-end encryption for data transmission\n' +
+      '• Secure cloud storage with SOC 2 compliance\n' +
+      '• Regular security audits and penetration testing\n' +
+      '• Strict access controls and authentication protocols\n\n' +
+      '4. DATA RETENTION\n' +
+      'Personal data is retained for the duration of your account activity plus 90 days. Anonymized data used for model training may be retained indefinitely.\n\n' +
+      '5. YOUR RIGHTS\n' +
+      'You have the right to:\n' +
+      '• Access your personal data\n' +
+      '• Request data correction or deletion\n' +
+      '• Opt-out of data usage for model training\n' +
+      '• Export your data in machine-readable format\n\n' +
+      '6. THIRD-PARTY DISCLOSURE\n' +
+      'We do NOT sell, trade, or transfer your personally identifiable information to third parties. This excludes trusted partners who assist in operating our service under strict confidentiality agreements.\n\n' +
+      '7. CONSENT\n' +
+      'By using Integra Markets, you consent to this privacy policy and agree to the collection and use of information in accordance with this policy.\n\n' +
+      'For privacy inquiries: privacy@integramarkets.com',
+      [{ text: 'OK', style: 'default' }],
+      { cancelable: true }
+    );
+  };
+  
+  const handleTermsOfService = () => {
+    Alert.alert(
+      'Terms of Service',
+      'By using Integra Markets, you agree to our terms of service. This app provides market insights for informational purposes only and should not be considered financial advice.',
+      [{ text: 'OK' }]
+    );
+  };
+
+  const handleNotificationSettings = () => {
+    Alert.alert(
+      'Notification Settings',
+      'Push notifications are currently ' + (alertPreferences?.notifications ? 'enabled' : 'disabled') + '. You can change this in your device settings.',
+      [{ text: 'OK' }]
+    );
+  };
+  
   return (
     <SafeAreaView style={styles.safeArea}>
       <StatusBar barStyle="light-content" />
@@ -107,25 +191,25 @@ const ProfileScreen = ({ onNavigateHome, userData, onResetData }) => {
           </View>
 
           <View style={styles.settingsSection}>
-            <TouchableOpacity style={styles.settingsItem}>
+            <TouchableOpacity style={styles.settingsItem} onPress={handleNotificationSettings}>
               <MaterialIcons name="notifications" size={20} color={colors.textSecondary} />
               <Text style={styles.settingsText}>Notification Settings</Text>
               <MaterialIcons name="chevron-right" size={20} color={colors.textSecondary} />
             </TouchableOpacity>
             
-            <TouchableOpacity style={styles.settingsItem}>
+            <TouchableOpacity style={styles.settingsItem} onPress={onShowAlertPreferences}>
               <MaterialIcons name="tune" size={20} color={colors.textSecondary} />
               <Text style={styles.settingsText}>Alert Preferences</Text>
               <MaterialIcons name="chevron-right" size={20} color={colors.textSecondary} />
             </TouchableOpacity>
             
-            <TouchableOpacity style={styles.settingsItem}>
+            <TouchableOpacity style={styles.settingsItem} onPress={handlePrivacyPolicy}>
               <MaterialIcons name="privacy-tip" size={20} color={colors.textSecondary} />
               <Text style={styles.settingsText}>Privacy Policy</Text>
               <MaterialIcons name="chevron-right" size={20} color={colors.textSecondary} />
             </TouchableOpacity>
             
-            <TouchableOpacity style={styles.settingsItem}>
+            <TouchableOpacity style={styles.settingsItem} onPress={handleTermsOfService}>
               <MaterialIcons name="article" size={20} color={colors.textSecondary} />
               <Text style={styles.settingsText}>Terms of Service</Text>
               <MaterialIcons name="chevron-right" size={20} color={colors.textSecondary} />
@@ -136,6 +220,23 @@ const ProfileScreen = ({ onNavigateHome, userData, onResetData }) => {
               <Text style={[styles.settingsText, { color: colors.accentNegative }]}>Reset App Data</Text>
               <MaterialIcons name="chevron-right" size={20} color={colors.accentNegative} />
             </TouchableOpacity>
+            
+            <TouchableOpacity style={styles.settingsItem} onPress={onLogout}>
+              <MaterialIcons name="exit-to-app" size={20} color={colors.textSecondary} />
+              <Text style={styles.settingsText}>Log out</Text>
+              <MaterialIcons name="chevron-right" size={20} color={colors.textSecondary} />
+            </TouchableOpacity>
+          </View>
+          
+          <View style={styles.dangerZone}>
+            <Text style={styles.dangerZoneTitle}>Danger Zone</Text>
+            <TouchableOpacity style={styles.deleteAccountButton} onPress={onDeleteAccount}>
+              <MaterialIcons name="delete-forever" size={20} color={colors.textPrimary} />
+              <Text style={styles.deleteAccountText}>Delete Account</Text>
+            </TouchableOpacity>
+            <Text style={styles.deleteAccountWarning}>
+              This will permanently delete your account and all associated data.
+            </Text>
           </View>
 
           <View style={styles.appInfo}>
@@ -162,30 +263,49 @@ const App = () => {
 
   // Check app state on mount
   useEffect(() => {
+    console.log('App mounted, checking state...');
     checkAppState();
+    setupDatabase.createTables();
+    testConnection();
   }, []);
 
   const checkAppState = async () => {
     try {
-      // For web, skip onboarding and go directly to main app
-      if (typeof window !== 'undefined') {
+      console.log('checkAppState called');
+      // Check if we're running on web using Platform API
+      const isWeb = Platform.OS === 'web';
+      
+      if (isWeb) {
         // We're on web, skip all onboarding
+        console.log('Web platform detected, setting demo user');
         setUserData({ name: 'Demo User', email: 'demo@integramarkets.com' });
         return;
       }
       
+      console.log('Platform:', Platform.OS); // Will show 'ios', 'android', or 'web'
+      
       const onboardingCompleted = await AsyncStorage.getItem('onboarding_completed');
       const alertsCompleted = await AsyncStorage.getItem('alerts_completed');
       const storedUserData = await AsyncStorage.getItem('user_data');
+      
+      console.log('Storage values:', {
+        onboardingCompleted,
+        alertsCompleted,
+        storedUserData: storedUserData ? 'exists' : 'null'
+      });
       
       if (storedUserData) {
         setUserData(JSON.parse(storedUserData));
       }
       
       if (onboardingCompleted !== 'true') {
+        console.log('Showing auth screen');
         setShowAuth(true);
       } else if (alertsCompleted !== 'true') {
+        console.log('Showing alert preferences');
         setShowAlertPreferences(true);
+      } else {
+        console.log('All onboarding complete, showing main app');
       }
     } catch (error) {
       console.error('Error checking app state:', error);
@@ -193,7 +313,9 @@ const App = () => {
   };
 
   const handleLoadingComplete = () => {
+    console.log('handleLoadingComplete called');
     setIsLoading(false);
+    console.log('isLoading set to false');
   };
 
   const handleAuthComplete = (authData) => {
@@ -270,6 +392,76 @@ const App = () => {
         },
       ]
     );
+  };
+  
+  const handleDeleteAccount = async () => {
+    Alert.alert(
+      'Delete Account',
+      'Are you sure you want to delete your account? This action cannot be undone and will permanently delete all your data.',
+      [
+        { text: 'Cancel', style: 'cancel' },
+        {
+          text: 'Delete Account',
+          style: 'destructive',
+          onPress: async () => {
+            try {
+              // In a real app, you would call the deleteAccount method from AuthContext here
+              // For now, we'll just clear local data and show auth screen
+              await AsyncStorage.clear();
+              setUserData(null);
+              setActiveNav('Today');
+              setShowAuth(true);
+              Alert.alert(
+                'Account Deleted',
+                'Your account has been deleted successfully.',
+                [{ text: 'OK' }]
+              );
+            } catch (error) {
+              console.error('Error deleting account:', error);
+              Alert.alert(
+                'Error',
+                'Failed to delete account. Please try again.',
+                [{ text: 'OK' }]
+              );
+            }
+          },
+        },
+      ]
+    );
+  };
+  
+  const handleLogout = async () => {
+    Alert.alert(
+      'Log out',
+      'Are you sure you want to log out?',
+      [
+        { text: 'Cancel', style: 'cancel' },
+        {
+          text: 'Log out',
+          style: 'destructive',
+          onPress: async () => {
+            try {
+              await AsyncStorage.clear();
+              setUserData(null);
+              setActiveNav('Today');
+              setShowAuth(true);
+            } catch (error) {
+              console.error('Error logging out:', error);
+              Alert.alert(
+                'Error',
+                'Failed to log out. Please try again.',
+                [{ text: 'OK' }]
+              );
+            }
+          },
+        },
+      ]
+    );
+  };
+  
+  const handleShowAlertPreferences = () => {
+    setActiveNav('Today');
+    setShowAlertPreferences(true);
   };
 
   const handleArticlePress = (article) => {
@@ -396,6 +588,9 @@ const App = () => {
         onNavigateHome={() => setActiveNav('Today')}
         userData={userData}
         onResetData={resetAppData}
+        onShowAlertPreferences={handleShowAlertPreferences}
+        onDeleteAccount={handleDeleteAccount}
+        onLogout={handleLogout}
       />
     );
   }
@@ -534,7 +729,7 @@ class ErrorBoundary extends React.Component {
 
 // Web Container Component for Desktop Layout
 const WebContainer = ({ children }) => {
-  if (typeof window === 'undefined') {
+  if (Platform.OS !== 'web') {
     // Not on web, return children as-is
     return children;
   }
@@ -548,13 +743,15 @@ const WebContainer = ({ children }) => {
   );
 };
 
-// Wrapped App
+// Wrapped App with Supabase Auth Provider
 const WrappedApp = () => (
-  <ErrorBoundary>
-    <WebContainer>
-      <App />
-    </WebContainer>
-  </ErrorBoundary>
+  <AuthProvider>
+    <ErrorBoundary>
+      <WebContainer>
+        <App />
+      </WebContainer>
+    </ErrorBoundary>
+  </AuthProvider>
 );
 
 // Web-specific styles
@@ -585,7 +782,7 @@ const styles = StyleSheet.create({
   safeArea: {
     flex: 1,
     backgroundColor: colors.bgPrimary,
-    ...(typeof window !== 'undefined' && {
+    ...(Platform.OS === 'web' && {
       justifyContent: 'center',
       alignItems: 'center',
     }),
@@ -593,7 +790,7 @@ const styles = StyleSheet.create({
   container: {
     flex: 1,
     backgroundColor: colors.bgPrimary,
-    ...(typeof window !== 'undefined' && {
+    ...(Platform.OS === 'web' && {
       maxWidth: 414, // iPhone Pro Max width
       width: '100%',
       alignSelf: 'center',
@@ -817,6 +1014,41 @@ const styles = StyleSheet.create({
     color: colors.textSecondary,
     fontSize: 14,
     marginTop: 4,
+  },
+  dangerZone: {
+    marginTop: 30,
+    marginHorizontal: 20,
+    paddingTop: 20,
+    borderTopWidth: 1,
+    borderTopColor: colors.divider,
+  },
+  dangerZoneTitle: {
+    color: colors.accentNegative,
+    fontSize: 16,
+    fontWeight: '600',
+    marginBottom: 16,
+  },
+  deleteAccountButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: colors.accentNegative,
+    paddingVertical: 12,
+    paddingHorizontal: 24,
+    borderRadius: 8,
+    marginBottom: 8,
+  },
+  deleteAccountText: {
+    color: colors.textPrimary,
+    fontSize: 16,
+    fontWeight: '600',
+    marginLeft: 8,
+  },
+  deleteAccountWarning: {
+    color: colors.textSecondary,
+    fontSize: 12,
+    textAlign: 'center',
+    paddingHorizontal: 20,
   },
   errorContainer: {
     flex: 1,

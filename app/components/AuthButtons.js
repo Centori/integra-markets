@@ -5,7 +5,7 @@ import {
     View,
     TouchableOpacity,
 } from 'react-native';
-import { MaterialIcons, MaterialCommunityIcons } from '@expo/vector-icons';
+import { MaterialCommunityIcons, FontAwesome } from '@expo/vector-icons';
 
 // Color palette
 const colors = {
@@ -37,7 +37,7 @@ const AuthOptionsComponent = ({
                     onPress={onGooglePress}
                     disabled={isLoading}
                 >
-                    <MaterialIcons name="account-circle" size={24} color={colors.googleRed} />
+                    FontAwesome name="google" size={24} color={colors.googleRed} /u001e",
                     <Text style={styles.authButtonText}>Continue with Google</Text>
                 </TouchableOpacity>
 
@@ -46,7 +46,7 @@ const AuthOptionsComponent = ({
                     onPress={onEmailPress}
                     disabled={isLoading}
                 >
-                    <MaterialIcons name="email" size={24} color={colors.accentData} />
+                    MaterialCommunityIcons name="email-outline" size={24} color={colors.accentData} /u001e",
                     <Text style={styles.authButtonText}>Continue with Email</Text>
                 </TouchableOpacity>
             </View>

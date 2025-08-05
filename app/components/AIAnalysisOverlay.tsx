@@ -1,7 +1,7 @@
-import React from 'react';
-import { View, Text, StyleSheet, Modal, TouchableOpacity, ScrollView } from 'react-native';
-import Colors from '../constants/colors';
+import React, { useState } from 'react';
+import { View, Text, StyleSheet, Modal, TouchableOpacity, ScrollView, Platform } from 'react-native';
 import { MaterialIcons } from '@expo/vector-icons';
+import ChatInterface from './ChatInterface';
 
 interface NewsData {
     title: string;
@@ -19,6 +19,8 @@ interface AIAnalysisOverlayProps {
 }
 
 const AIAnalysisOverlay: React.FC<AIAnalysisOverlayProps> = ({ newsData, isVisible, onClose }) => {
+    const [showChat, setShowChat] = useState(false);
+    
     if (!newsData) return null;
 
     // Mock data for the comprehensive analysis
@@ -78,10 +80,10 @@ const AIAnalysisOverlay: React.FC<AIAnalysisOverlayProps> = ({ newsData, isVisib
                             <Text style={styles.title}>Integra Analysis</Text>
                             <View style={styles.headerActions}>
                                 <TouchableOpacity style={styles.bookmarkButton}>
-                                    <MaterialIcons name="bookmark-border" size={24} color={Colors.text} />
+                                    <MaterialIcons name="bookmark-border" size={24} color="#ECECEC" />
                                 </TouchableOpacity>
                                 <TouchableOpacity style={styles.closeButton} onPress={onClose}>
-                                    <MaterialIcons name="close" size={24} color={Colors.text} />
+                                    <MaterialIcons name="close" size={24} color="#ECECEC" />
                                 </TouchableOpacity>
                             </View>
                         </View>
@@ -101,11 +103,11 @@ const AIAnalysisOverlay: React.FC<AIAnalysisOverlayProps> = ({ newsData, isVisib
                             <Text style={styles.summaryText}>{analysisData.summary}</Text>
                         </View>
 
-                        {/* FinBERT Sentiment Section */}
+                        {/* Sentiment Section */}
                         <View style={styles.section}>
                             <View style={styles.sectionHeader}>
                                 <View style={styles.sectionIndicator} />
-                                <Text style={styles.sectionTitle}>FinBERT Sentiment</Text>
+                                <Text style={styles.sectionTitle}>Sentiment</Text>
                             </View>
                             
                             <View style={styles.sentimentItem}>
@@ -179,8 +181,48 @@ const AIAnalysisOverlay: React.FC<AIAnalysisOverlayProps> = ({ newsData, isVisib
                                 </View>
                             ))}
                         </View>
+                        
+                        {/* Chat Button */}
+                        <TouchableOpacity 
+                            style={styles.chatButton}
+                            onPress={() => setShowChat(true)}
+                        >
+                            <MaterialIcons name="chat" size={20} color="#000000" />
+                            <Text style={styles.chatButtonText}>Ask Integra AI</Text>
+                        </TouchableOpacity>
                         </ScrollView>
                     </View>
+                    
+                    {/* Chat Interface Modal */}
+                    {showChat && (
+                        <Modal
+                            animationType="slide"
+                            transparent={true}
+                            visible={showChat}
+                            onRequestClose={() => setShowChat(false)}
+                        >
+                            <View style={styles.chatModalContainer}>
+                                <View style={styles.chatContainer}>
+                                    <View style={styles.chatHeader}>
+                                        <Text style={styles.chatTitle}>Integra AI Assistant</Text>
+                                        <TouchableOpacity 
+                                            style={styles.chatCloseButton}
+                                            onPress={() => setShowChat(false)}
+                                        >
+                                            <MaterialIcons name="close" size={24} color="#ECECEC" />
+                                        </TouchableOpacity>
+                                    </View>
+                                    <ChatInterface 
+                                        newsContext={{
+                                            title: newsData.title,
+                                            summary: newsData.summary,
+                                            source: newsData.source
+                                        }}
+                                    />
+                                </View>
+                            </View>
+                        </Modal>
+                    )}
                 </View>
             </View>
         </Modal>
@@ -192,13 +234,13 @@ const styles = StyleSheet.create({
         flex: 1,
         backgroundColor: 'rgba(0, 0, 0, 0.8)',
         paddingTop: 50,
-        ...(typeof window !== 'undefined' && {
+        ...(Platform.OS === 'web' && {
             justifyContent: 'center',
             alignItems: 'center',
         }),
     },
     webWrapper: {
-        ...(typeof window !== 'undefined' ? {
+        ...(Platform.OS === 'web' ? {
             width: 414, // iPhone Pro Max width
             height: '85vh', // Slightly shorter than full height
             maxHeight: 750,
@@ -214,7 +256,7 @@ const styles = StyleSheet.create({
         borderTopRightRadius: 20,
         paddingHorizontal: 20,
         paddingTop: 20,
-        ...(typeof window !== 'undefined' && {
+        ...(Platform.OS === 'web' && {
             shadowColor: '#000',
             shadowOffset: { width: 0, height: 0 },
             shadowOpacity: 0.5,
@@ -366,6 +408,55 @@ const styles = StyleSheet.create({
         fontSize: 15,
         color: '#A0A0A0',
         lineHeight: 22,
+    },
+    chatButton: {
+        backgroundColor: '#4ECCA3',
+        flexDirection: 'row',
+        alignItems: 'center',
+        justifyContent: 'center',
+        padding: 16,
+        borderRadius: 12,
+        marginBottom: 30,
+        marginTop: 10,
+        gap: 8,
+    },
+    chatButtonText: {
+        color: '#000000',
+        fontSize: 16,
+        fontWeight: '600',
+    },
+    chatModalContainer: {
+        flex: 1,
+        backgroundColor: 'rgba(0, 0, 0, 0.9)',
+        paddingTop: Platform.OS === 'ios' ? 50 : 30,
+    },
+    chatContainer: {
+        flex: 1,
+        backgroundColor: '#121212',
+        borderTopLeftRadius: 20,
+        borderTopRightRadius: 20,
+        overflow: 'hidden',
+        ...(Platform.OS === 'web' && {
+            maxWidth: 414,
+            alignSelf: 'center',
+            width: '100%',
+        }),
+    },
+    chatHeader: {
+        flexDirection: 'row',
+        justifyContent: 'space-between',
+        alignItems: 'center',
+        padding: 20,
+        borderBottomWidth: 1,
+        borderBottomColor: '#333333',
+    },
+    chatTitle: {
+        fontSize: 20,
+        fontWeight: '600',
+        color: '#ECECEC',
+    },
+    chatCloseButton: {
+        padding: 2,
     },
 });
 

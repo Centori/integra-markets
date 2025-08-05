@@ -486,7 +486,7 @@ const AlertPreferencesForm = ({ onComplete, onSkip, showSkipOption = false }) =>
 
       {/* Enhanced Header with skip option */}
       <View style={styles.header}>
-        <TouchableOpacity onPress={() => onComplete && onComplete()}>
+        <TouchableOpacity onPress={handleSkipPreferences}>
           <MaterialIcons name="arrow-back" size={24} color={colors.accentData} />
         </TouchableOpacity>
         <Text style={styles.headerTitle}>Alert Preferences</Text>

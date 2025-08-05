@@ -433,7 +433,8 @@ const ProgressIndicator = ({ currentStep, totalSteps }) => (
 
 // Main Onboarding Component
 const OnboardingForm = ({ onComplete, onSkip, showSkipOption = false, userData = null }) => {
-    const [currentStep, setCurrentStep] = useState(0);
+    // Start at step 1 to skip the welcome screen
+    const [currentStep, setCurrentStep] = useState(1);
     const [formData, setFormData] = useState({
         role: '',
         experience: '',
@@ -448,7 +449,7 @@ const OnboardingForm = ({ onComplete, onSkip, showSkipOption = false, userData =
         email: userData?.email || '',
     });
 
-    const totalSteps = 5;
+    const totalSteps = 5;  // Keep totalSteps as 5 for progress calculation
 
     const handleNext = () => {
         if (currentStep < totalSteps - 1) {
@@ -457,7 +458,8 @@ const OnboardingForm = ({ onComplete, onSkip, showSkipOption = false, userData =
     };
 
     const handlePrevious = () => {
-        if (currentStep > 0) {
+        // Don't go back to step 0 (welcome screen)
+        if (currentStep > 1) {
             setCurrentStep(currentStep - 1);
         }
     };

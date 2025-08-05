@@ -51,7 +51,7 @@ const getRoleLabel = (role) => {
   return roleMap[role] || role;
 };
 
-export default function ProfileScreen({ userProfile, alertPreferences, apiKeys, bookmarks, onBack, onNavigateToSettings }) {
+export default function ProfileScreen({ userProfile, alertPreferences, apiKeys, bookmarks, onBack, onNavigateToSettings, onLogout }) {
   const [selectedProvider, setSelectedProvider] = useState(null);
   const [showAPIKeySetup, setShowAPIKeySetup] = useState(false);
   const [showAlertPreferences, setShowAlertPreferences] = useState(false);
@@ -336,6 +336,16 @@ export default function ProfileScreen({ userProfile, alertPreferences, apiKeys, 
             </TouchableOpacity>
             <TouchableOpacity style={styles.settingItem} onPress={() => navigateToScreen('About')}>
               <Text style={styles.settingText}>About</Text>
+              <MaterialIcons name="chevron-right" color={colors.textSecondary} size={16} />
+            </TouchableOpacity>
+            <TouchableOpacity 
+              style={[styles.settingItem, { borderBottomWidth: 0 }]} 
+              onPress={onLogout}
+            >
+              <View style={styles.logoutContainer}>
+                <MaterialIcons name="exit-to-app" color={colors.accentNegative} size={20} />
+                <Text style={[styles.settingText, { color: colors.accentNegative, marginLeft: 8 }]}>Log out</Text>
+              </View>
               <MaterialIcons name="chevron-right" color={colors.textSecondary} size={16} />
             </TouchableOpacity>
           </View>
@@ -648,5 +658,9 @@ const styles = StyleSheet.create({
   settingText: {
     color: colors.textPrimary,
     fontSize: 16,
+  },
+  logoutContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
   },
 });
