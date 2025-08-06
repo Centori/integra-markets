@@ -7,7 +7,7 @@ import * as AuthSession from 'expo-auth-session';
 import * as AppleAuthentication from 'expo-apple-authentication';
 import { Platform } from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import { supabase } from '../lib/supabase';
+import { supabase } from '../../lib/supabase';
 import { api } from './apiClient';
 
 // Complete auth session for web
