@@ -1,0 +1,70 @@
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+env/
+venv/
+ENV/
+.venv
+pip-log.txt
+pip-delete-this-directory.txt
+.pytest_cache/
+*.egg-info/
+dist/
+build/
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# OS
+.DS_Store
+*.log
+Thumbs.db
+
+# Git
+.git/
+.gitignore
+
+# Docker
+Dockerfile
+docker-compose*.yml
+.dockerignore
+
+# Documentation
+README.md
+docs/
+
+# React Native / Expo
+app/node_modules/
+app/.expo/
+app/.expo-shared/
+app/build/
+app/dist/
+app/web-build/
+*.apk
+*.ipa
+
+# Environment files (we'll pass these as Docker env vars)
+.env
+.env.*
+
+# Development
+*.sqlite
+*.db
+integra.db
+
+# Model files (will be downloaded in container)
+models/
+*.bin
+*.safetensors
+
+# Temporary files
+tmp/
+temp/
+*.tmp

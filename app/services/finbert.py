@@ -1,12 +1,12 @@
 """
 FinBERT implementation for financial sentiment analysis.
-This module provides a financial domain-specific sentiment analyzer using the ProsusAI/finbert model.
+This module uses Hugging Face Inference API for serverless sentiment analysis.
 """
 import os
 import logging
-import torch
+import requests
 from typing import Dict, Any, Optional
-from transformers import AutoTokenizer, AutoModelForSequenceClassification
+from functools import lru_cache
 from app.core.config import settings
 
 # Configure logging
@@ -15,79 +15,117 @@ logger = logging.getLogger(__name__)
 
 class FinBERTAnalyzer:
     """
-    Financial sentiment analyzer using the ProsusAI/finbert model.
-    This class handles model loading, caching, and inference for financial text.
+    Financial sentiment analyzer using Hugging Face Inference API.
+    This serverless approach requires no model hosting.
     """
     
     _instance = None  # Singleton instance
     
     def __new__(cls):
-        """Implement singleton pattern for model reuse"""
+        """Implement singleton pattern"""
         if cls._instance is None:
             cls._instance = super(FinBERTAnalyzer, cls).__new__(cls)
             cls._instance._initialized = False
         return cls._instance
     
     def __init__(self):
-        """Initialize the FinBERT model and tokenizer"""
+        """Initialize the FinBERT API client"""
         if self._initialized:
             return
             
         self._initialized = True
-        self.device = "cuda" if torch.cuda.is_available() else "cpu"
-        logger.info(f"Using device: {self.device} for FinBERT")
         
         # Get settings from config
         self.model_name = settings.FINBERT_MODEL
-        self.cache_dir = settings.FINBERT_CACHE_DIR
         self.hf_token = settings.HUGGING_FACE_TOKEN
         
+        # API endpoint for FinBERT
+        self.api_url = f"https://api-inference.huggingface.co/models/{self.model_name}"
+        
         if not self.hf_token:
-            logger.warning("No Hugging Face token found in environment. Some models may be rate-limited.")
+            logger.warning("No Hugging Face token found. API calls will be limited.")
         
-        # Create cache directory if it doesn't exist
-        os.makedirs(self.cache_dir, exist_ok=True)
+        # Headers for API requests
+        self.headers = {"Authorization": f"Bearer {self.hf_token}"} if self.hf_token else {}
         
-        # Default sentiment labels mapping
-        self.labels = ["positive", "negative", "neutral"]
-        self.market_labels = ["bullish", "bearish", "neutral"]
-        
-        # Load model and tokenizer
-        try:
-            self._load_model_and_tokenizer()
-        except Exception as e:
-            logger.error(f"Error loading FinBERT model: {str(e)}")
-            self.model = None
-            self.tokenizer = None
-            self._initialized = False
+        logger.info("FinBERT API client initialized")
     
-    def _load_model_and_tokenizer(self):
-        """Load the FinBERT model and tokenizer"""
+    @lru_cache(maxsize=100)
+    def _cached_analyze(self, text_hash: int, text: str) -> Dict[str, Any]:
+        """Cached analysis to avoid repeated API calls"""
+        return self._call_api(text)
+    
+    def _call_api(self, text: str) -> Dict[str, Any]:
+        """Make API call to Hugging Face Inference API"""
         try:
-            # Load tokenizer with auth token if available
-            logger.info(f"Loading FinBERT tokenizer: {self.model_name}")
-            self.tokenizer = AutoTokenizer.from_pretrained(
-                self.model_name, 
-                use_auth_token=self.hf_token,
-                cache_dir=self.cache_dir
+            # Truncate text if too long
+            if len(text) > 2048:
+                text = text[:2048]
+                logger.warning("Text truncated for API call")
+            
+            response = requests.post(
+                self.api_url,
+                headers=self.headers,
+                json={"inputs": text},
+                timeout=30
             )
             
-            # Load model with auth token if available and move to device
-            logger.info(f"Loading FinBERT model: {self.model_name}")
-            self.model = AutoModelForSequenceClassification.from_pretrained(
-                self.model_name,
-                use_auth_token=self.hf_token,
-                cache_dir=self.cache_dir
-            ).to(self.device)
+            if response.status_code == 503:
+                # Model is loading, retry after a delay
+                logger.info("Model is loading, retrying in 20 seconds...")
+                import time
+                time.sleep(20)
+                response = requests.post(
+                    self.api_url,
+                    headers=self.headers,
+                    json={"inputs": text},
+                    timeout=30
+                )
             
-            logger.info("FinBERT model and tokenizer loaded successfully")
+            response.raise_for_status()
+            result = response.json()
+            
+            # Parse the API response
+            if isinstance(result, list) and len(result) > 0:
+                # FinBERT returns: [{'label': 'positive', 'score': 0.9}, ...]
+                scores_dict = {item['label'].lower(): item['score'] for item in result[0] if 'label' in item and 'score' in item}
+                
+                # Map to our format
+                results = {
+                    "bullish": scores_dict.get('positive', 0.0),
+                    "bearish": scores_dict.get('negative', 0.0),
+                    "neutral": scores_dict.get('neutral', 0.0)
+                }
+                
+                # Get the most likely sentiment
+                max_sentiment = max(results, key=results.get)
+                sentiment_map = {
+                    "bullish": "BULLISH",
+                    "bearish": "BEARISH",
+                    "neutral": "NEUTRAL"
+                }
+                
+                results["sentiment"] = sentiment_map[max_sentiment]
+                results["confidence"] = results[max_sentiment]
+                
+                return results
+            else:
+                logger.error(f"Unexpected API response format: {result}")
+                raise ValueError("Invalid API response")
+                
+        except requests.exceptions.Timeout:
+            logger.error("API request timed out")
+            raise
+        except requests.exceptions.RequestException as e:
+            logger.error(f"API request failed: {str(e)}")
+            raise
         except Exception as e:
-            logger.error(f"Error loading model: {str(e)}")
+            logger.error(f"Error in API call: {str(e)}")
             raise
     
     def analyze(self, text: str) -> Dict[str, Any]:
         """
-        Analyze the sentiment of a financial text.
+        Analyze the sentiment of a financial text using HF Inference API.
         
         Args:
             text (str): The financial text to analyze
@@ -95,10 +133,9 @@ class FinBERTAnalyzer:
         Returns:
             Dict containing sentiment analysis results with confidence scores
         """
-        if not self._initialized or self.model is None or self.tokenizer is None:
-            logger.error("FinBERT model not properly initialized")
+        if not text or not text.strip():
             return {
-                "error": "Model not initialized",
+                "error": "Empty text",
                 "bullish": 0.33,
                 "bearish": 0.33,
                 "neutral": 0.34,
@@ -107,53 +144,15 @@ class FinBERTAnalyzer:
             }
         
         try:
-            # Preprocess text (truncate if needed)
-            if len(text) > 512 * 4:  # Approximate token limit
-                text = text[:2048]  # Truncate very long texts
-                logger.warning("Text truncated for FinBERT analysis")
+            # Use hash for caching (to avoid repeated API calls for same text)
+            text_hash = hash(text[:500])  # Hash first 500 chars
             
-            # Tokenize input
-            inputs = self.tokenizer(
-                text,
-                return_tensors="pt",
-                padding=True,
-                truncation=True,
-                max_length=512
-            ).to(self.device)
-            
-            # Get predictions
-            with torch.no_grad():
-                outputs = self.model(**inputs)
-            
-            # Convert to probabilities
-            probabilities = torch.nn.functional.softmax(outputs.logits, dim=-1)
-            
-            # Convert to Python floats
-            scores = probabilities[0].cpu().numpy().tolist()
-            
-            # Map to sentiment labels (finbert is [positive, negative, neutral])
-            results = {
-                "bullish": scores[0],  # positive maps to bullish
-                "bearish": scores[1],  # negative maps to bearish
-                "neutral": scores[2]   # neutral stays neutral
-            }
-            
-            # Get the most likely sentiment
-            max_sentiment = max(results, key=results.get)
-            sentiment_map = {
-                "bullish": "BULLISH",
-                "bearish": "BEARISH",
-                "neutral": "NEUTRAL"
-            }
-            
-            # Add the sentiment label and confidence
-            results["sentiment"] = sentiment_map[max_sentiment]
-            results["confidence"] = results[max_sentiment]
-            
-            return results
+            # Call the cached analysis function
+            return self._cached_analyze(text_hash, text)
             
         except Exception as e:
-            logger.error(f"Error analyzing text with FinBERT: {str(e)}")
+            logger.error(f"Error analyzing text: {str(e)}")
+            # Return neutral sentiment as fallback
             return {
                 "error": str(e),
                 "bullish": 0.33,

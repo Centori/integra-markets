@@ -2,6 +2,7 @@ import uvicorn
 from fastapi import FastAPI, Depends
 from fastapi.middleware.cors import CORSMiddleware
 from api.routes import router
+from api.ai_alerts import router as ai_alerts_router
 from core.config import settings
 from core.database import create_db_and_tables
 from core.initialize import initialize_app
@@ -23,6 +24,7 @@ app.add_middleware(
 
 # Include API routes
 app.include_router(router, prefix="/api")
+app.include_router(ai_alerts_router)
 
 @app.on_event("startup")
 async def startup_event():

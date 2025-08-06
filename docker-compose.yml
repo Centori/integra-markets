@@ -1,0 +1,56 @@
+version: '3.8'
+
+services:
+  integra-backend:
+    build: .
+    container_name: integra-markets-backend
+    ports:
+      - "8000:8000"
+    environment:
+      # Database
+      - DATABASE_URL=sqlite:///./integra.db
+      
+      # API Keys (replace with your actual keys or use .env file)
+      - OPENAI_API_KEY=${OPENAI_API_KEY}
+      - OPENWEATHERMAP_API_KEY=${OPENWEATHERMAP_API_KEY}
+      - ALPHA_VANTAGE_API_KEY=${ALPHA_VANTAGE_API_KEY}
+      - HUGGING_FACE_TOKEN=${HUGGING_FACE_TOKEN}
+      
+      # Supabase
+      - SUPABASE_URL=${SUPABASE_URL}
+      - SUPABASE_KEY=${SUPABASE_KEY}
+      
+      # Model Configuration
+      - FINBERT_MODEL=ProsusAI/finbert
+      - AUTO_DOWNLOAD_MODELS=true
+      - OFFLINE_MODE=false
+      
+      # Feature Flags
+      - ENABLE_LLM_FEATURES=true
+      - FREE_TIER_DAILY_LLM_LIMIT=2
+      
+      # Environment
+      - ENVIRONMENT=production
+      - DEBUG=false
+      - LOG_LEVEL=INFO
+    
+    volumes:
+      # Persist model cache between restarts
+      - finbert-models:/app/models/finbert
+      - nltk-data:/app/models/nltk_data
+      - transformers-cache:/app/cache
+      - ./integra.db:/app/integra.db
+    
+    restart: unless-stopped
+    
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8000/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
+
+volumes:
+  finbert-models:
+  nltk-data:
+  transformers-cache:

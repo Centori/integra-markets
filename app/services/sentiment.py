@@ -8,8 +8,13 @@ from typing import Dict, Any, List, Optional
 import nltk
 from nltk.sentiment.vader import SentimentIntensityAnalyzer
 
-# Import our dedicated FinBERT implementation
-from app.services.finbert import finbert_analyzer, analyze_financial_text
+# Import our smart sentiment analyzer (preprocessing + VADER + ML)
+try:
+    from app.services.smart_sentiment import analyze_financial_text as smart_analyze
+    SMART_SENTIMENT_AVAILABLE = True
+except ImportError:
+    SMART_SENTIMENT_AVAILABLE = False
+    logger.warning("Smart sentiment not available, using basic VADER only")
 
 # Configure logging
 logging.basicConfig(level=logging.INFO)
@@ -102,13 +107,19 @@ class SentimentAnalyzer:
         except Exception as e:
             logger.error(f"Error in VADER analysis: {str(e)}")
         
-        # Run FinBERT analysis
+        # Run Smart Sentiment analysis (or FinBERT if available)
         try:
-            # Use our dedicated FinBERT analyzer
-            finbert_result = analyze_financial_text(text)
-            results["finbert"] = finbert_result
+            if SMART_SENTIMENT_AVAILABLE:
+                # Use our smart analyzer (preprocessing + VADER + ML)
+                smart_result = smart_analyze(text)
+                results["finbert"] = smart_result
+                logger.info(f"Using smart sentiment: {smart_result.get('method', 'unknown')}")
+            else:
+                # Fallback to basic VADER-based analysis
+                logger.info("Using VADER-only fallback")
+                results["finbert"] = None
         except Exception as e:
-            logger.error(f"Error in FinBERT analysis: {str(e)}")
+            logger.error(f"Error in sentiment analysis: {str(e)}")
         
         # Calculate ensemble result (combine VADER and FinBERT)
         results["ensemble"] = self._calculate_ensemble(results["vader"], results["finbert"])
