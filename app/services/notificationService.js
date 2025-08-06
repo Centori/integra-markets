@@ -84,6 +84,22 @@ export async function registerForPushNotificationsAsync() {
     // Store the token locally
     await AsyncStorage.setItem(PUSH_TOKEN_KEY, token.data);
     
+    // Register token with backend if user is authenticated
+    try {
+        const authToken = await AsyncStorage.getItem('@auth_token');
+        if (authToken) {
+            const { api } = require('./api');
+            api.setAuthToken(authToken);
+            await api.post('/notifications/register-token', {
+                token: token.data,
+                device_type: Platform.OS
+            });
+            console.log('Push token registered with backend');
+        }
+    } catch (error) {
+        console.error('Error registering token with backend:', error);
+    }
+    
     console.log('Push notification token obtained:', token.data);
     return token.data;
     

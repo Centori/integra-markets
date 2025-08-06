@@ -120,8 +120,9 @@ export const preprocessNews = async (rawText) => {
   try {
     const response = await fetch(`${API_URL}/preprocess-news`, {
       method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
+        headers: {
+            'Content-Type': 'application/json',
+            ...(this.authToken && { 'Authorization': `Bearer ${this.authToken}` }),
       },
       body: JSON.stringify({ text: rawText }),
     });

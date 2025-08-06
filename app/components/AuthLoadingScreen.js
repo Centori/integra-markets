@@ -21,6 +21,7 @@ import AuthOptionsComponent from './AuthButtons';
 import * as AuthSession from 'expo-auth-session';
 import * as WebBrowser from 'expo-web-browser';
 import * as Crypto from 'expo-crypto';
+import { authService } from '../services/authService';
 
 WebBrowser.maybeCompleteAuthSession();
 
@@ -158,20 +159,34 @@ const AuthLoadingScreen = ({ onAuthComplete, onSkip }) => {
     const handleSocialAuth = async (provider) => {
         setIsLoading(true);
         
-        // For now, simulate Social Sign-In with a mock user
-        // TODO: Implement actual OAuth flows with expo-auth-session
-        setTimeout(() => {
+        try {
+            let result;
+            if (provider === 'apple') {
+                result = await authService.signInWithApple();
+            } else if (provider === 'google') {
+                result = await authService.signInWithGoogle();
+            }
+            
             setIsLoading(false);
-            const mockUser = {
-                id: `${provider}_` + Date.now().toString(),
-                email: provider === 'apple' ? 'user@icloud.com' : 'user@gmail.com',
-                fullName: provider === 'apple' ? 'Apple User' : 'Google User',
-                username: provider === 'apple' ? 'appleuser' : 'googleuser',
-                authMethod: provider,
-                isNewUser: false,
-            };
-            onAuthComplete(mockUser);
-        }, 1500);
+            
+            if (result.success) {
+                const userData = {
+                    id: result.user.id,
+                    email: result.user.email,
+                    fullName: result.user.fullName,
+                    username: result.user.email.split('@')[0],
+                    authMethod: provider,
+                    isNewUser: false,
+                };
+                onAuthComplete(userData);
+            } else {
+                Alert.alert('Authentication Failed', result.error || 'Unable to sign in');
+            }
+        } catch (error) {
+            setIsLoading(false);
+            Alert.alert('Error', 'An unexpected error occurred');
+            console.error('Social auth error:', error);
+        }
     };
 
     const handleGoogleAuth = async () => {

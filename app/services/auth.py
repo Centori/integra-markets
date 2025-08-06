@@ -10,7 +10,6 @@ from sqlalchemy.orm import Session
 from app.core.config import settings
 from app.core.database import get_db
 from app.models.users import User, UserSubscription, SubscriptionTier, LLMUsage
-from app.schemas.users import TokenData, UserCreate, UserUpdate, SubscriptionTierCreate
 
 # Configure logging
 logger = logging.getLogger(__name__)

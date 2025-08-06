@@ -9,6 +9,7 @@ from datetime import datetime, timedelta
 from typing import Dict, List, Optional, Any, Tuple
 import numpy as np
 from collections import defaultdict
+import httpx
 
 # Import our existing services
 from app.services.news_preprocessing import preprocess_news
@@ -119,6 +120,9 @@ class AIAlertService:
                 
                 # Update user behavior stats
                 self._update_user_stats(user_id, "sent")
+                
+                # Send push notification
+                asyncio.create_task(self._send_push_notification(alert_data))
             
             return alert_data
             
@@ -401,6 +405,69 @@ class AIAlertService:
             },
             "commodity_interests": dict(behavior["commodity_clicks"])
         }
+    
+    async def _send_push_notification(self, alert_data: Dict[str, Any]) -> None:
+        """
+        Send push notification via the notification API.
+        """
+        try:
+            # Extract key information
+            commodity = alert_data["preprocessing"].get("commodity", "Market")
+            action = alert_data["recommendation"]["recommended_action"]
+            confidence = alert_data["recommendation"]["confidence"]
+            
+            # Create notification payload
+            notification_data = {
+                "commodity": commodity,
+                "action": action,
+                "confidence": confidence,
+                "message": self._create_alert_message(alert_data)
+            }
+            
+            # Call the notification API endpoint
+            async with httpx.AsyncClient() as client:
+                response = await client.post(
+                    "http://localhost:8000/api/notifications/ai-alert",
+                    json=notification_data,
+                    headers={"Content-Type": "application/json"}
+                )
+                
+                if response.status_code == 200:
+                    logger.info(f"Push notification sent for {commodity}")
+                else:
+                    logger.error(f"Failed to send notification: {response.text}")
+                    
+        except Exception as e:
+            logger.error(f"Error sending push notification: {str(e)}")
+    
+    def _create_alert_message(self, alert_data: Dict[str, Any]) -> str:
+        """
+        Create a user-friendly alert message.
+        """
+        commodity = alert_data["preprocessing"].get("commodity", "Market")
+        sentiment = alert_data["sentiment"]
+        severity = alert_data["preprocessing"].get("severity", "medium")
+        action = alert_data["recommendation"]["recommended_action"]
+        
+        # Determine sentiment direction
+        if sentiment.get("positive", 0) > sentiment.get("negative", 0):
+            direction = "bullish"
+        elif sentiment.get("negative", 0) > sentiment.get("positive", 0):
+            direction = "bearish"
+        else:
+            direction = "mixed"
+        
+        # Create message based on action
+        if action == "buy":
+            message = f"🟢 {commodity} showing {direction} signals. Consider buying positions."
+        elif action == "sell":
+            message = f"🔴 {commodity} showing {direction} signals. Consider reducing exposure."
+        elif action == "hold":
+            message = f"🟡 {commodity} showing {direction} signals. Monitor closely."
+        else:
+            message = f"ℹ️ {commodity} update: {severity} severity {direction} signals detected."
+        
+        return message
 
 # Global service instance
 ai_alert_service = AIAlertService()
