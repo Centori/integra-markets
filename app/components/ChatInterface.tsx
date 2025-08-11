@@ -165,7 +165,7 @@ const ChatInterface: React.FC<ChatInterfaceProps> = ({ newsContext }) => {
       
       // Check if this is a numbered list paragraph
       const lines = trimmed.split('\n');
-      const isNumberedList = lines.some(line => /^\d+[.)]/\.test(line.trim()));
+      const isNumberedList = lines.some(line => /^\d+[.)]/.test(line.trim()));
       
       if (isNumberedList) {
         // Render as numbered list
