@@ -17,15 +17,7 @@ import { BlurView } from '@react-native-community/blur';
 import { BlurView as ExpoBlurView } from 'expo-blur';
 import { MaterialIcons, MaterialCommunityIcons, FontAwesome } from '@expo/vector-icons';
 import IntegraIcon from './IntegraIcon';
-import AuthOptionsComponent from './AuthButtons';
-// import * as AuthSession from 'expo-auth-session';
-// import * as WebBrowser from 'expo-web-browser';
-// import * as Crypto from 'expo-crypto';
 import { authService } from '../services/authService';
-
-// WebBrowser.maybeCompleteAuthSession();
-
-const { width: screenWidth, height: screenHeight } = Dimensions.get('window');
 
 // Color palette
 const colors = {

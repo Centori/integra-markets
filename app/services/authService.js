@@ -54,7 +54,7 @@ try {
     const apiImport = require('./apiClient');
     api = apiImport.api;
 } catch (e) {
-    console.warn('API client not available');
+    console.log('API client not available (expected in development)');
     api = { get: () => Promise.reject(new Error('API not available')) };
 }
 
