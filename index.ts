@@ -1,7 +1,10 @@
-import { registerRootComponent } from 'expo';
-import App from './App';
+// Import iOS 18.6 crash fixes FIRST before any other imports
+import './patches/ios-18-6-crash-fix';
 
-// registerRootComponent calls AppRegistry.registerComponent('main', () => App);
+import { registerRootComponent } from 'expo';
+import SafeAppWrapper from './SafeAppWrapper';
+
+// registerRootComponent calls AppRegistry.registerComponent('main', () => SafeAppWrapper);
 // It also ensures that whether you load the app in Expo Go or in a native build,
 // the environment is set up appropriately
-registerRootComponent(App);
+registerRootComponent(SafeAppWrapper);

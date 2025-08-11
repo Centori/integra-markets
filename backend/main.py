@@ -1,12 +1,15 @@
 from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 import os
+from pathlib import Path
 from dotenv import load_dotenv
 from supabase import create_client, Client
 from pydantic import BaseModel
 
-# Load environment variables from .env file
-load_dotenv()
+# Load environment variables from parent directory's .env file
+parent_dir = Path(__file__).parent.parent
+env_path = parent_dir / '.env'
+load_dotenv(env_path)
 
 app = FastAPI(title="Integra AI Backend", description="Financial AI Analysis API")
 
@@ -21,10 +24,10 @@ app.add_middleware(
 
 # Get Supabase URL and Key from environment variables
 supabase_url: str = os.getenv("SUPABASE_URL")
-supabase_key: str = os.getenv("SUPABASE_ANON_KEY")
+supabase_key: str = os.getenv("SUPABASE_KEY")
 
 if not supabase_url or not supabase_key:
-    raise ValueError("Missing SUPABASE_URL or SUPABASE_ANON_KEY environment variables")
+    raise ValueError("Missing SUPABASE_URL or SUPABASE_KEY environment variables")
 
 supabase: Client = create_client(supabase_url, supabase_key)
 

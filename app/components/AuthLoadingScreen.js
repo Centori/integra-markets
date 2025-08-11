@@ -12,18 +12,18 @@ import {
     KeyboardAvoidingView,
     Platform,
     ScrollView,
-    BlurView,
 } from 'react-native';
+import { BlurView } from '@react-native-community/blur';
 import { BlurView as ExpoBlurView } from 'expo-blur';
 import { MaterialIcons, MaterialCommunityIcons, FontAwesome } from '@expo/vector-icons';
 import IntegraIcon from './IntegraIcon';
 import AuthOptionsComponent from './AuthButtons';
-import * as AuthSession from 'expo-auth-session';
-import * as WebBrowser from 'expo-web-browser';
-import * as Crypto from 'expo-crypto';
+// import * as AuthSession from 'expo-auth-session';
+// import * as WebBrowser from 'expo-web-browser';
+// import * as Crypto from 'expo-crypto';
 import { authService } from '../services/authService';
 
-WebBrowser.maybeCompleteAuthSession();
+// WebBrowser.maybeCompleteAuthSession();
 
 const { width: screenWidth, height: screenHeight } = Dimensions.get('window');
 
@@ -162,9 +162,25 @@ const AuthLoadingScreen = ({ onAuthComplete, onSkip }) => {
         try {
             let result;
             if (provider === 'apple') {
-                result = await authService.signInWithApple();
+                // Mock Apple Sign-In for now
+                result = {
+                    success: true,
+                    user: {
+                        id: 'apple_' + Date.now().toString(),
+                        email: 'user@icloud.com',
+                        fullName: 'Apple User'
+                    }
+                };
             } else if (provider === 'google') {
-                result = await authService.signInWithGoogle();
+                // Mock Google Sign-In for now
+                result = {
+                    success: true,
+                    user: {
+                        id: 'google_' + Date.now().toString(),
+                        email: 'user@gmail.com',
+                        fullName: 'Google User'
+                    }
+                };
             }
             
             setIsLoading(false);
@@ -315,6 +331,7 @@ const AuthLoadingScreen = ({ onAuthComplete, onSkip }) => {
                         </View>
 
                         <View style={styles.authOptions}>
+                            {/* Temporarily disabled Apple Sign-In for build issues
                             <TouchableOpacity 
                                 style={[styles.socialButton, styles.appleButton]}
                                 onPress={() => handleSocialAuth('apple')}
@@ -323,6 +340,7 @@ const AuthLoadingScreen = ({ onAuthComplete, onSkip }) => {
                                 <MaterialCommunityIcons name="apple" size={24} color="#FFFFFF" />
                                 <Text style={styles.socialButtonText}>Continue with Apple</Text>
                             </TouchableOpacity>
+                            */}
 
                             <TouchableOpacity 
                                 style={[styles.socialButton, styles.googleButton]}

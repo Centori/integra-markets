@@ -1,5 +1,5 @@
-// Import the main app
-import App from './app/App';
+// Import the safe app wrapper instead of the main app directly
+import SafeAppWrapper from './SafeAppWrapper';
 
-// Export as the default export for Expo to register
-export default App;
+// Export the safe wrapper as the default export for Expo to register
+export default SafeAppWrapper;

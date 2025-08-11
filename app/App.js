@@ -16,20 +16,20 @@ import { MaterialIcons, MaterialCommunityIcons } from '@expo/vector-icons';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 
 // Import Supabase Auth Provider
-import { AuthProvider } from '../contexts/AuthContext';
+// import { AuthProvider } from '../contexts/AuthContext';
 // Import the example auth component for testing
-import { AuthExample } from '../components/AuthExample';
+// import { AuthExample } from '../components/AuthExample';
 // Import database utilities for testing
-import { testConnection } from '../lib/database';
-import { setupDatabase } from '../lib/setupDatabase';
+// import { testConnection } from '../lib/database';
+// import { setupDatabase } from '../lib/setupDatabase';
 
 // Import all components
 import IntegraLoadingPage from './components/IntegraLoadingPage';
 import AuthLoadingScreen from './components/AuthLoadingScreen';
 import OnboardingForm from './components/OnboardingForm';
 import AlertPreferencesForm from './components/AlertPreferencesForm';
-import NewsCard from './components/NewsCard.tsx';
-import AIAnalysisOverlay from './components/AIAnalysisOverlay.tsx';
+import NewsCard from './components/NewsCard';
+import AIAnalysisOverlay from './components/AIAnalysisOverlay';
 
 // Color Palette
 const colors = {
@@ -264,29 +264,55 @@ const App = () => {
   // Check app state on mount
   useEffect(() => {
     console.log('App mounted, checking state...');
-    checkAppState();
-    setupDatabase.createTables();
-    testConnection();
+    
+    // Wrap in try-catch to prevent initialization crashes
+    try {
+      checkAppState();
+    } catch (error) {
+      console.error('Error during app initialization:', error);
+      // Continue anyway - don't let initialization errors crash the app
+    }
+    
+    // Database setup removed - these were causing crashes as imports were commented out
+    // setupDatabase.createTables();
+    // testConnection();
   }, []);
 
   const checkAppState = async () => {
     try {
       console.log('checkAppState called');
-      // Check if we're running on web using Platform API
-      const isWeb = Platform.OS === 'web';
       
-      if (isWeb) {
-        // We're on web, skip all onboarding
-        console.log('Web platform detected, setting demo user');
-        setUserData({ name: 'Demo User', email: 'demo@integramarkets.com' });
-        return;
+      // Ensure Platform is available
+      if (!Platform || !Platform.OS) {
+        console.warn('Platform not available, defaulting to mobile');
+        // Default to mobile behavior if Platform is not available
+      } else {
+        // Check if we're running on web using Platform API
+        const isWeb = Platform.OS === 'web';
+        
+        if (isWeb) {
+          // We're on web, skip all onboarding
+          console.log('Web platform detected, setting demo user');
+          setUserData({ name: 'Demo User', email: 'demo@integramarkets.com' });
+          return;
+        }
       }
       
       console.log('Platform:', Platform.OS); // Will show 'ios', 'android', or 'web'
       
-      const onboardingCompleted = await AsyncStorage.getItem('onboarding_completed');
-      const alertsCompleted = await AsyncStorage.getItem('alerts_completed');
-      const storedUserData = await AsyncStorage.getItem('user_data');
+      // Wrap AsyncStorage calls in try-catch to handle potential errors
+      let onboardingCompleted = null;
+      let alertsCompleted = null;
+      let storedUserData = null;
+      
+      try {
+        onboardingCompleted = await AsyncStorage.getItem('onboarding_completed');
+        alertsCompleted = await AsyncStorage.getItem('alerts_completed');
+        storedUserData = await AsyncStorage.getItem('user_data');
+      } catch (storageError) {
+        console.warn('AsyncStorage access failed:', storageError);
+        // Continue with null values - don't crash
+      }
       
       console.log('Storage values:', {
         onboardingCompleted,
@@ -743,15 +769,13 @@ const WebContainer = ({ children }) => {
   );
 };
 
-// Wrapped App with Supabase Auth Provider
+// Wrapped App - AuthProvider removed since import is commented out
 const WrappedApp = () => (
-  <AuthProvider>
-    <ErrorBoundary>
-      <WebContainer>
-        <App />
-      </WebContainer>
-    </ErrorBoundary>
-  </AuthProvider>
+  <ErrorBoundary>
+    <WebContainer>
+      <App />
+    </WebContainer>
+  </ErrorBoundary>
 );
 
 // Web-specific styles

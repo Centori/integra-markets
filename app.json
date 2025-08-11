@@ -16,7 +16,7 @@
     ],
     "ios": {
       "bundleIdentifier": "com.centori.integramarkets",
-      "buildNumber": "11",
+    "buildNumber": "20",
       "supportsTablet": true,
       "requireFullScreen": false,
       "infoPlist": {
@@ -27,12 +27,16 @@
         "NSAppTransportSecurity": {
           "NSAllowsArbitraryLoads": false,
           "NSExceptionDomains": {}
-        }
+        },
+        "UIBackgroundModes": ["fetch", "remote-notification"],
+        "UIRequiresFullScreen": false,
+        "LSRequiresIPhoneOS": true,
+        "UIStatusBarStyle": "UIStatusBarStyleDefault"
       },
       "runtimeVersion": {
         "policy": "appVersion"
       },
-      "usesAppleSignIn": true
+      "jsEngine": "hermes"
     },
     "android": {
       "package": "com.centori.integramarkets",
@@ -42,10 +46,6 @@
         "backgroundColor": "#ffffff"
       },
       "permissions": [
-        "android.permission.CAMERA",
-        "android.permission.READ_EXTERNAL_STORAGE",
-        "android.permission.WRITE_EXTERNAL_STORAGE",
-        "android.permission.USE_FINGERPRINT",
         "android.permission.CAMERA",
         "android.permission.READ_EXTERNAL_STORAGE",
         "android.permission.WRITE_EXTERNAL_STORAGE",
@@ -63,9 +63,11 @@
     "extra": {
       "eas": {
         "projectId": "66e09114-71af-4b29-82c9-d0ef24a97098"
-      }
+      },
+      "supabaseUrl": "https://jcovjmuaysebdfbpbvdh.supabase.co",
+      "apiUrl": "http://localhost:8000"
     },
-    "newArchEnabled": true,
+    "newArchEnabled": false,
     "updates": {
       "url": "https://u.expo.dev/66e09114-71af-4b29-82c9-d0ef24a97098"
     }

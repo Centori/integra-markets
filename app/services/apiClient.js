@@ -3,8 +3,10 @@
  * Handles all API communication with authentication
  */
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import Constants from 'expo-constants';
 
-const API_BASE_URL = process.env.EXPO_PUBLIC_API_URL || 'http://localhost:8000';
+// Safely access environment variables to prevent iOS 18.6 crashes
+const API_BASE_URL = Constants.expoConfig?.extra?.apiUrl || 'http://localhost:8000';
 const API_URL = `${API_BASE_URL}/api`;
 
 class APIClient {
