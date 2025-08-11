@@ -153,17 +153,7 @@ const AuthLoadingScreen = ({ onAuthComplete, onSkip }) => {
         
         try {
             let result;
-            if (provider === 'apple') {
-                // Mock Apple Sign-In for now
-                result = {
-                    success: true,
-                    user: {
-                        id: 'apple_' + Date.now().toString(),
-                        email: 'user@icloud.com',
-                        fullName: 'Apple User'
-                    }
-                };
-            } else if (provider === 'google') {
+            if (provider === 'google') {
                 // Mock Google Sign-In for now
                 result = {
                     success: true,
@@ -352,17 +342,6 @@ const AuthLoadingScreen = ({ onAuthComplete, onSkip }) => {
                         </View>
 
                         <View style={styles.authOptions}>
-                            {/* Temporarily disabled Apple Sign-In for build issues
-                            <TouchableOpacity 
-                                style={[styles.socialButton, styles.appleButton]}
-                                onPress={() => handleSocialAuth('apple')}
-                                disabled={isLoading}
-                            >
-                                <MaterialCommunityIcons name="apple" size={24} color="#FFFFFF" />
-                                <Text style={styles.socialButtonText}>Continue with Apple</Text>
-                            </TouchableOpacity>
-                            */}
-
                             <TouchableOpacity 
                                 style={[styles.socialButton, styles.googleButton]}
                                 onPress={() => handleSocialAuth('google')}

@@ -85,6 +85,16 @@ const ChatInterface: React.FC<ChatInterfaceProps> = ({ newsContext }) => {
     setIsLoading(true);
     setShowSuggestions(false);
 
+    // Create placeholder assistant message for streaming
+    const assistantId = (Date.now() + 1).toString();
+    const placeholderMessage: Message = {
+      id: assistantId,
+      role: 'assistant',
+      content: '',
+      timestamp: new Date()
+    };
+    setMessages(prev => [...prev, placeholderMessage]);
+
     try {
       // Prepare messages for the API
       const apiMessages = messages.map(msg => ({
@@ -98,36 +108,42 @@ const ChatInterface: React.FC<ChatInterfaceProps> = ({ newsContext }) => {
         content: text
       });
 
-      // Call Groq API with Llama 3
-      const response = await groqService.sendMessage(apiMessages, newsContext);
+      // Call Groq API with streaming typewriter effect
+      const response = await groqService.sendMessage(
+        apiMessages, 
+        newsContext,
+        (streamingText: string) => {
+          // Update the assistant message with streaming text
+          setMessages(prev => 
+            prev.map(msg => 
+              msg.id === assistantId 
+                ? { ...msg, content: streamingText }
+                : msg
+            )
+          );
+        }
+      );
 
-      if (response.success) {
-        const assistantMessage: Message = {
-          id: (Date.now() + 1).toString(),
-          role: 'assistant',
-          content: response.data,
-          timestamp: new Date()
-        };
-        setMessages(prev => [...prev, assistantMessage]);
-      } else {
-        // Show error message
-        const errorMessage: Message = {
-          id: (Date.now() + 1).toString(),
-          role: 'assistant',
-          content: `Sorry, I encountered an error: ${response.error}`,
-          timestamp: new Date()
-        };
-        setMessages(prev => [...prev, errorMessage]);
+      if (!response.success) {
+        // Update with error message
+        setMessages(prev => 
+          prev.map(msg => 
+            msg.id === assistantId 
+              ? { ...msg, content: `Sorry, I encountered an error: ${response.error}` }
+              : msg
+          )
+        );
       }
     } catch (error) {
       console.error('Chat error:', error);
-      const errorMessage: Message = {
-        id: (Date.now() + 1).toString(),
-        role: 'assistant',
-        content: 'Sorry, I encountered an unexpected error. Please try again.',
-        timestamp: new Date()
-      };
-      setMessages(prev => [...prev, errorMessage]);
+      // Update with error message
+      setMessages(prev => 
+        prev.map(msg => 
+          msg.id === assistantId 
+            ? { ...msg, content: 'Sorry, I encountered an unexpected error. Please try again.' }
+            : msg
+        )
+      );
     } finally {
       setIsLoading(false);
     }
@@ -198,7 +214,7 @@ const ChatInterface: React.FC<ChatInterfaceProps> = ({ newsContext }) => {
                 message.role === 'user' ? styles.userAvatar : styles.assistantAvatar
               ]}>
                 <MaterialIcons 
-                  name={message.role === 'user' ? 'person' : 'psychology'} 
+                  name={message.role === 'user' ? 'person' : 'chat-bubble'} 
                   size={20} 
                   color={message.role === 'user' ? colors.textPrimary : colors.accentPositive} 
                 />
@@ -217,7 +233,7 @@ const ChatInterface: React.FC<ChatInterfaceProps> = ({ newsContext }) => {
           <View style={[styles.messageWrapper, styles.assistantMessageWrapper]}>
             <View style={styles.messageHeader}>
               <View style={[styles.avatar, styles.assistantAvatar]}>
-                <MaterialIcons name="psychology" size={20} color={colors.accentPositive} />
+                <MaterialIcons name="chat-bubble" size={20} color={colors.accentPositive} />
               </View>
               <Text style={styles.messageRole}>Integra AI</Text>
             </View>

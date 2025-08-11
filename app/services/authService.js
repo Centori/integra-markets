@@ -19,15 +19,7 @@ try {
     AuthSession = { makeRedirectUri: () => '', parseRedirectUrl: () => ({}) };
 }
 
-try {
-    AppleAuthentication = require('expo-apple-authentication');
-} catch (e) {
-    console.warn('expo-apple-authentication not available');
-    AppleAuthentication = { 
-        isAvailableAsync: () => Promise.resolve(false),
-        signInAsync: () => Promise.reject(new Error('Not available'))
-    };
-}
+// Apple Authentication removed to avoid provisioning profile issues
 
 import { Platform } from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
@@ -180,79 +172,7 @@ class AuthService {
         }
     }
 
-    /**
-     * Sign in with Apple (iOS only, with fallback)
-     */
-    async signInWithApple() {
-        if (Platform.OS !== 'ios') {
-            return { success: false, error: 'Apple Sign-In is only available on iOS' };
-        }
-
-        try {
-            // Check if dependencies are available
-            if (!AppleAuthentication || !supabase) {
-                // Return mock success for development
-                const mockUser = {
-                    id: 'apple_mock_' + Date.now(),
-                    email: 'user@privaterelay.appleid.com',
-                    full_name: 'Apple User',
-                    provider: 'apple'
-                };
-                
-                this.currentUser = mockUser;
-                await AsyncStorage.setItem(USER_DATA_KEY, JSON.stringify(mockUser));
-                await AsyncStorage.setItem(AUTH_TOKEN_KEY, 'mock_apple_token');
-                
-                return { success: true, user: mockUser };
-            }
-
-            // Check if Apple Sign-In is available
-            const available = await AppleAuthentication.isAvailableAsync();
-            if (!available) {
-                // Fallback to mock for development
-                const mockUser = {
-                    id: 'apple_fallback_' + Date.now(),
-                    email: 'user@privaterelay.appleid.com',
-                    full_name: 'Apple User',
-                    provider: 'apple'
-                };
-                
-                this.currentUser = mockUser;
-                return { success: true, user: mockUser };
-            }
-
-            // Request Apple authentication
-            const credential = await AppleAuthentication.signInAsync({
-                requestedScopes: [
-                    AppleAuthentication.AppleAuthenticationScope.FULL_NAME,
-                    AppleAuthentication.AppleAuthenticationScope.EMAIL,
-                ],
-            });
-
-            // Sign in with Supabase using Apple ID token
-            const { data, error } = await supabase.auth.signInWithIdToken({
-                provider: 'apple',
-                token: credential.identityToken,
-                nonce: credential.nonce,
-            });
-
-            if (error) throw error;
-
-            if (data?.session) {
-                // Save auth data
-                await this.handleAuthSuccess(data.session);
-                return { success: true, user: this.currentUser };
-            }
-
-            return { success: false, error: 'Failed to authenticate with Apple' };
-        } catch (error) {
-            if (error.code === 'ERR_CANCELED') {
-                return { success: false, error: 'Sign-in cancelled' };
-            }
-            console.error('Apple sign-in error:', error);
-            return { success: false, error: error.message };
-        }
-    }
+    // Apple Sign-In removed to eliminate provisioning profile dependencies
 
     /**
      * Sign in with email and password
@@ -472,7 +392,6 @@ export const authService = new AuthService();
 
 // Export convenience functions
 export const signInWithGoogle = () => authService.signInWithGoogle();
-export const signInWithApple = () => authService.signInWithApple();
 export const signInWithEmail = (email, password) => authService.signInWithEmail(email, password);
 export const signUpWithEmail = (email, password, fullName) => authService.signUpWithEmail(email, password, fullName);
 export const signOut = () => authService.signOut();

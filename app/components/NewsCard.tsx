@@ -1,5 +1,5 @@
 import React from 'react';
-import { View, Text, StyleSheet, TouchableOpacity, Linking, Alert, Share, Platform } from 'react-native';
+import { View, Text, StyleSheet, TouchableOpacity, Linking, Alert, Share, Platform, ActionSheetIOS, Clipboard } from 'react-native';
 import { Feather } from '@expo/vector-icons';
 import { SingleStar } from './CustomStarIcon';
 
@@ -59,34 +59,130 @@ export default function NewsCard({ item, onAIClick }: NewsCardProps) {
   };
 
   const handleShare = async () => {
+    const shareMessage = `${item.title}\n\n${item.summary || item.content || ''}\n\nSource: ${item.source || 'Unknown'}`;
+    const shareUrl = item.sourceUrl && item.sourceUrl !== '#' ? item.sourceUrl : '';
+    const fullShareText = shareUrl ? `${shareMessage}\n\nRead more: ${shareUrl}` : shareMessage;
+    
+    if (Platform.OS === 'ios') {
+      // iOS: Show ActionSheet with specific options
+      const options = [
+        'Cancel',
+        'Share via Email',
+        'Share on Twitter',
+        'Copy Link',
+        'More Options'
+      ];
+      
+      ActionSheetIOS.showActionSheetWithOptions(
+        {
+          options,
+          cancelButtonIndex: 0,
+          title: 'Share Article',
+          message: item.title
+        },
+        async (buttonIndex) => {
+          try {
+            switch (buttonIndex) {
+              case 1: // Email
+                await handleEmailShare(shareMessage, shareUrl);
+                break;
+              case 2: // Twitter
+                await handleTwitterShare(item.title, shareUrl);
+                break;
+              case 3: // Copy Link
+                await handleCopyLink(shareUrl || fullShareText);
+                break;
+              case 4: // More Options (Native Share Sheet)
+                await handleNativeShare(fullShareText, shareUrl);
+                break;
+            }
+          } catch (error) {
+            console.error('Share action error:', error);
+            Alert.alert('Share Error', 'Unable to complete sharing action.');
+          }
+        }
+      );
+    } else {
+      // Android: Use native share directly
+      await handleNativeShare(fullShareText, shareUrl);
+    }
+  };
+  
+  const handleEmailShare = async (message: string, url: string) => {
+    const subject = encodeURIComponent(`Market News: ${item.title}`);
+    const body = encodeURIComponent(`${message}${url ? `\n\nRead more: ${url}` : ''}`);
+    const mailtoUrl = `mailto:?subject=${subject}&body=${body}`;
+    
     try {
-      // Construct a comprehensive share message
-      let shareMessage = `${item.title}\n\n${item.summary || item.content || ''}\n\nSource: ${item.source || 'Unknown'}`;
-      
-      // Add source URL if available
-      if (item.sourceUrl && item.sourceUrl !== '#') {
-        shareMessage += `\n\nRead more: ${item.sourceUrl}`;
+      const canOpen = await Linking.canOpenURL(mailtoUrl);
+      if (canOpen) {
+        await Linking.openURL(mailtoUrl);
+      } else {
+        Alert.alert('Email Not Available', 'No email app is configured on this device.');
       }
+    } catch (error) {
+      console.error('Email share error:', error);
+      Alert.alert('Error', 'Unable to open email app.');
+    }
+  };
+  
+  const handleTwitterShare = async (title: string, url: string) => {
+    const tweetText = encodeURIComponent(`${title}${url ? ` ${url}` : ''}`);
+    const twitterUrl = `https://twitter.com/intent/tweet?text=${tweetText}`;
+    
+    try {
+      // Try Twitter app first, then fall back to web
+      const twitterAppUrl = `twitter://post?message=${tweetText}`;
+      const canOpenApp = await Linking.canOpenURL(twitterAppUrl);
       
-      const shareOptions = {
-        message: shareMessage,
+      if (canOpenApp) {
+        await Linking.openURL(twitterAppUrl);
+      } else {
+        await Linking.openURL(twitterUrl);
+      }
+    } catch (error) {
+      console.error('Twitter share error:', error);
+      Alert.alert('Error', 'Unable to share on Twitter.');
+    }
+  };
+  
+  const handleCopyLink = async (content: string) => {
+    try {
+      if (item.sourceUrl && item.sourceUrl !== '#') {
+        // Copy just the URL if available
+        await Clipboard.setString(item.sourceUrl);
+        Alert.alert('Link Copied', 'Article link copied to clipboard.');
+      } else {
+        // Copy the full text if no URL
+        await Clipboard.setString(content);
+        Alert.alert('Text Copied', 'Article content copied to clipboard.');
+      }
+    } catch (error) {
+      console.error('Copy error:', error);
+      Alert.alert('Error', 'Unable to copy to clipboard.');
+    }
+  };
+  
+  const handleNativeShare = async (message: string, url: string) => {
+    try {
+      const shareOptions: any = {
+        message,
         title: item.title,
       };
       
-      // On iOS, we can also provide a URL separately for better integration
-      if (Platform.OS === 'ios' && item.sourceUrl && item.sourceUrl !== '#') {
-        shareOptions.url = item.sourceUrl;
+      // On iOS, provide URL separately for better app integration
+      if (Platform.OS === 'ios' && url) {
+        shareOptions.url = url;
       }
       
       const result = await Share.share(shareOptions);
       
-      // Log share activity for analytics (optional)
       if (result.action === Share.sharedAction) {
         console.log('Content shared successfully');
       }
     } catch (error) {
-      console.error('Error sharing:', error);
-      Alert.alert('Share Error', 'Unable to share this article. Please try again.');
+      console.error('Native share error:', error);
+      Alert.alert('Share Error', 'Unable to share this article.');
     }
   };
 

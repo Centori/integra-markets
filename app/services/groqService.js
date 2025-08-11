@@ -31,7 +31,7 @@ class GroqService {
         this.model = 'llama3-70b-8192'; // Llama 3 70B with 8k context
     }
 
-    async sendMessage(messages, newsContext = null) {
+    async sendMessage(messages, newsContext = null, onStreamUpdate = null) {
         try {
             // Prepare messages array with system prompt
             const formattedMessages = [
@@ -69,9 +69,22 @@ class GroqService {
                 }
             );
 
+            const rawContent = response.data.choices[0].message.content;
+            const cleanedContent = this.cleanResponse(rawContent);
+
+            // If streaming callback provided, simulate typewriter effect
+            if (onStreamUpdate && typeof onStreamUpdate === 'function') {
+                await this.simulateTypewriter(cleanedContent, onStreamUpdate);
+                return {
+                    success: true,
+                    data: cleanedContent,
+                    streamed: true
+                };
+            }
+
             return {
                 success: true,
-                data: response.data.choices[0].message.content
+                data: cleanedContent
             };
         } catch (error) {
             console.error('Groq API Error:', error);
@@ -137,6 +150,61 @@ class GroqService {
     // Switch model if needed
     setModel(modelId) {
         this.model = modelId;
+    }
+
+    // Clean response text from formatting artifacts
+    cleanResponse(text) {
+        if (!text) return '';
+        
+        return text
+            // Remove excessive asterisks and markdown artifacts
+            .replace(/\*{2,}/g, '') // Remove multiple asterisks
+            .replace(/\*([^*]+)\*/g, '$1') // Remove single asterisk emphasis
+            .replace(/#{1,6}\s*/g, '') // Remove markdown headers
+            .replace(/```[\s\S]*?```/g, '') // Remove code blocks
+            .replace(/`([^`]+)`/g, '$1') // Remove inline code backticks
+            .replace(/\n{3,}/g, '\n\n') // Reduce excessive line breaks
+            .replace(/^\s+|\s+$/g, '') // Trim whitespace
+            .replace(/\s{2,}/g, ' ') // Reduce multiple spaces to single space
+            .replace(/([.!?])\s*([A-Z])/g, '$1 $2') // Ensure proper sentence spacing
+            .trim();
+    }
+
+    // Simulate typewriter effect for smooth text appearance
+    async simulateTypewriter(text, onUpdate) {
+        const words = text.split(' ');
+        let currentText = '';
+        
+        for (let i = 0; i < words.length; i++) {
+            currentText += (i > 0 ? ' ' : '') + words[i];
+            
+            // Call the update callback with current text
+            onUpdate(currentText);
+            
+            // Dynamic delay based on word length and position
+            let delay = 50; // Base delay
+            
+            // Slower for longer words
+            if (words[i].length > 6) delay += 20;
+            
+            // Pause at sentence endings
+            if (words[i].match(/[.!?]$/)) {
+                delay += 200;
+            }
+            // Pause at commas
+            else if (words[i].match(/[,;:]$/)) {
+                delay += 100;
+            }
+            // Faster for short words (articles, prepositions)
+            else if (words[i].length <= 3) {
+                delay = 30;
+            }
+            
+            // Don't delay on the last word
+            if (i < words.length - 1) {
+                await new Promise(resolve => setTimeout(resolve, delay));
+            }
+        }
     }
 }
 
