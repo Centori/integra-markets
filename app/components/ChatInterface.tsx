@@ -13,6 +13,7 @@ import {
 } from 'react-native';
 import { MaterialIcons } from '@expo/vector-icons';
 import groqService from '../services/groqService';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 
 // Color palette
 const colors = {
@@ -49,6 +50,7 @@ const ChatInterface: React.FC<ChatInterfaceProps> = ({ newsContext }) => {
   const [inputText, setInputText] = useState('');
   const [isLoading, setIsLoading] = useState(false);
   const [showSuggestions, setShowSuggestions] = useState(true);
+  const [bookmarkedMessages, setBookmarkedMessages] = useState<Set<string>>(new Set());
   const scrollViewRef = useRef<ScrollView>(null);
 
   // Suggestion chips for quick actions
@@ -149,19 +151,134 @@ const ChatInterface: React.FC<ChatInterfaceProps> = ({ newsContext }) => {
     }
   };
 
-  const generateMockResponse = (query: string, context: any): string => {
-    const lowerQuery = query.toLowerCase();
+  // Format AI response text with proper paragraph and numbering structure
+  const formatMessageContent = (content: string) => {
+    if (!content.trim()) return [];
     
-    if (lowerQuery.includes('impact') || lowerQuery.includes('market')) {
-      return "Based on the natural gas storage report, the higher-than-expected inventory build suggests bearish pressure on prices. Traders should monitor storage injection rates closely and consider the seasonal demand patterns. The oversupply situation could persist if production remains strong.";
-    } else if (lowerQuery.includes('strategy') || lowerQuery.includes('trade')) {
-      return "Given the bearish sentiment, consider: 1) Short positions on natural gas futures with stops above recent highs, 2) Watch for support levels around $2.50-$2.60, 3) Monitor weather forecasts as unexpected cold snaps could reverse the trend, 4) Consider spread trades between different contract months.";
-    } else if (lowerQuery.includes('risk') || lowerQuery.includes('concern')) {
-      return "Key risks to watch: 1) Weather volatility could quickly shift demand, 2) LNG export levels may affect domestic supply, 3) Production cuts from major basins, 4) Geopolitical events affecting global gas markets. Set appropriate stop losses and consider hedging strategies.";
-    } else {
-      return "That's an interesting question about the natural gas market. The current oversupply situation reflected in the storage report suggests downward price pressure. Would you like me to elaborate on any specific aspect of this market development?";
+    // Split by double newlines for paragraphs, then by single newlines for numbered lists
+    const paragraphs = content.split('\n\n').filter(p => p.trim());
+    const formattedBlocks: JSX.Element[] = [];
+    
+    paragraphs.forEach((paragraph, pIndex) => {
+      const trimmed = paragraph.trim();
+      if (!trimmed) return;
+      
+      // Check if this is a numbered list paragraph
+      const lines = trimmed.split('\n');
+      const isNumberedList = lines.some(line => /^\d+[.)]/\.test(line.trim()));
+      
+      if (isNumberedList) {
+        // Render as numbered list
+        lines.forEach((line, lIndex) => {
+          const trimmedLine = line.trim();
+          if (!trimmedLine) return;
+          
+          const numberMatch = trimmedLine.match(/^(\d+[.)])\s*(.*)/);
+          if (numberMatch) {
+            formattedBlocks.push(
+              <View key={`${pIndex}-${lIndex}`} style={styles.numberedItem}>
+                <Text style={styles.numberText}>{numberMatch[1]}</Text>
+                <Text style={styles.numberedText}>{numberMatch[2]}</Text>
+              </View>
+            );
+          } else {
+            formattedBlocks.push(
+              <Text key={`${pIndex}-${lIndex}`} style={styles.messageTextBlock}>
+                {trimmedLine}
+              </Text>
+            );
+          }
+        });
+      } else {
+        // Regular paragraph
+        formattedBlocks.push(
+          <Text key={pIndex} style={styles.messageTextBlock}>
+            {trimmed}
+          </Text>
+        );
+      }
+      
+      // Add spacing between blocks
+      if (pIndex < paragraphs.length - 1) {
+        formattedBlocks.push(
+          <View key={`spacer-${pIndex}`} style={styles.blockSpacer} />
+        );
+      }
+    });
+    
+    return formattedBlocks;
+  };
+
+  // Bookmark functionality
+  const toggleBookmark = async (messageId: string) => {
+    try {
+      const message = messages.find(msg => msg.id === messageId);
+      if (!message || message.role !== 'assistant') return;
+
+      const isCurrentlyBookmarked = bookmarkedMessages.has(messageId);
+      const newBookmarkedSet = new Set(bookmarkedMessages);
+      
+      if (isCurrentlyBookmarked) {
+        newBookmarkedSet.delete(messageId);
+      } else {
+        // Check storage limits before adding
+        const existingBookmarks = await AsyncStorage.getItem('bookmarked_analyses');
+        const bookmarks = existingBookmarks ? JSON.parse(existingBookmarks) : [];
+        
+        // Limit: 50 free bookmarks, suggest subscription beyond that
+        if (bookmarks.length >= 50 && !isCurrentlyBookmarked) {
+          Alert.alert(
+            'Storage Limit Reached',
+            'You\'ve reached the limit of 50 saved analyses. Upgrade to Pro for unlimited storage and advanced features.',
+            [
+              { text: 'Later', style: 'cancel' },
+              { text: 'Upgrade', onPress: () => console.log('Navigate to subscription') }
+            ]
+          );
+          return;
+        }
+        
+        newBookmarkedSet.add(messageId);
+        
+        // Save bookmark to storage
+        const bookmarkData = {
+          id: messageId,
+          content: message.content,
+          newsTitle: newsContext.title,
+          newsSource: newsContext.source,
+          timestamp: message.timestamp,
+          query: messages[messages.findIndex(m => m.id === messageId) - 1]?.content || 'General Analysis'
+        };
+        
+        bookmarks.push(bookmarkData);
+        await AsyncStorage.setItem('bookmarked_analyses', JSON.stringify(bookmarks));
+      }
+      
+      setBookmarkedMessages(newBookmarkedSet);
+      
+    } catch (error) {
+      console.error('Error toggling bookmark:', error);
+      Alert.alert('Error', 'Failed to save bookmark. Please try again.');
     }
   };
+
+  // Load existing bookmarks on component mount
+  useEffect(() => {
+    const loadBookmarks = async () => {
+      try {
+        const existingBookmarks = await AsyncStorage.getItem('bookmarked_analyses');
+        if (existingBookmarks) {
+          const bookmarks = JSON.parse(existingBookmarks);
+          const bookmarkedIds = new Set(bookmarks.map((b: any) => b.id));
+          setBookmarkedMessages(bookmarkedIds);
+        }
+      } catch (error) {
+        console.error('Error loading bookmarks:', error);
+      }
+    };
+    
+    loadBookmarks();
+  }, []);
 
   useEffect(() => {
     // Scroll to bottom when new messages are added
@@ -222,9 +339,27 @@ const ChatInterface: React.FC<ChatInterfaceProps> = ({ newsContext }) => {
               <Text style={styles.messageRole}>
                 {message.role === 'user' ? 'You' : 'Integra AI'}
               </Text>
+              {message.role === 'assistant' && message.content.trim() && (
+                <TouchableOpacity
+                  style={styles.bookmarkButton}
+                  onPress={() => toggleBookmark(message.id)}
+                >
+                  <MaterialIcons
+                    name={bookmarkedMessages.has(message.id) ? 'bookmark' : 'bookmark-border'}
+                    size={18}
+                    color={bookmarkedMessages.has(message.id) ? colors.accentPositive : colors.textSecondary}
+                  />
+                </TouchableOpacity>
+              )}
             </View>
             <View style={styles.messageContent}>
-              <Text style={styles.messageText}>{message.content}</Text>
+              {message.role === 'assistant' ? (
+                <View>
+                  {formatMessageContent(message.content)}
+                </View>
+              ) : (
+                <Text style={styles.messageText}>{message.content}</Text>
+              )}
             </View>
           </View>
         ))}
@@ -413,6 +548,41 @@ const styles = StyleSheet.create({
   },
   disabledSendButton: {
     opacity: 0.5,
+  },
+  // New styles for formatted content
+  messageTextBlock: {
+    color: colors.textPrimary,
+    fontSize: 15,
+    lineHeight: 22,
+    marginBottom: 8,
+  },
+  numberedItem: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    marginBottom: 8,
+  },
+  numberText: {
+    color: colors.accentPositive,
+    fontSize: 15,
+    lineHeight: 22,
+    fontWeight: '600',
+    minWidth: 24,
+    marginRight: 8,
+  },
+  numberedText: {
+    color: colors.textPrimary,
+    fontSize: 15,
+    lineHeight: 22,
+    flex: 1,
+  },
+  blockSpacer: {
+    height: 12,
+  },
+  bookmarkButton: {
+    marginLeft: 'auto',
+    padding: 4,
+    borderRadius: 12,
+    backgroundColor: 'rgba(255, 255, 255, 0.05)',
   },
 });
 
