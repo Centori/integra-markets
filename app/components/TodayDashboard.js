@@ -37,6 +37,7 @@ const [marketData, setMarketData] = useState(null);
           headline: article.title,
           summary: article.summary,
           source: article.source,
+          sourceUrl: article.source_url || article.url || getSourceUrl(article.source),
           timeAgo: formatTimeAgo(article.time_published),
           sentiment: article.ensemble_sentiment || article.sentiment,
           sentimentScore: article.sentiment_score ? article.sentiment_score.toFixed(2) : "0.50",
@@ -79,6 +80,24 @@ const [marketData, setMarketData] = useState(null);
     } catch (e) {
       return "recently";
     }
+  };
+
+  const getSourceUrl = (source) => {
+    // Map common sources to their URLs
+    const sourceUrls = {
+      'Bloomberg': 'https://www.bloomberg.com',
+      'Reuters': 'https://www.reuters.com',
+      'MarketWatch': 'https://www.marketwatch.com',
+      'Financial Times': 'https://www.ft.com',
+      'CNBC': 'https://www.cnbc.com',
+      'Wall Street Journal': 'https://www.wsj.com',
+      'Yahoo Finance': 'https://finance.yahoo.com',
+      'Investing.com': 'https://www.investing.com',
+      'IEA': 'https://www.iea.org',
+      'EIA': 'https://www.eia.gov',
+    };
+    
+    return sourceUrls[source] || null;
   };
 
   const getCategoryFromArticle = (article) => {

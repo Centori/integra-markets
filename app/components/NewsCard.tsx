@@ -1,5 +1,5 @@
 import React from 'react';
-import { View, Text, StyleSheet, TouchableOpacity, Linking, Alert, Share } from 'react-native';
+import { View, Text, StyleSheet, TouchableOpacity, Linking, Alert, Share, Platform } from 'react-native';
 import { Feather } from '@expo/vector-icons';
 import { SingleStar } from './CustomStarIcon';
 
@@ -23,31 +23,70 @@ interface NewsCardProps {
 
 export default function NewsCard({ item, onAIClick }: NewsCardProps) {
   const handleSourcePress = async () => {
+    // First check if we have a valid URL
     if (item.sourceUrl && item.sourceUrl !== '#') {
       try {
-        const supported = await Linking.canOpenURL(item.sourceUrl);
+        // Ensure the URL has a protocol
+        let url = item.sourceUrl;
+        if (!url.startsWith('http://') && !url.startsWith('https://')) {
+          url = 'https://' + url;
+        }
+        
+        const supported = await Linking.canOpenURL(url);
         if (supported) {
-          await Linking.openURL(item.sourceUrl);
+          await Linking.openURL(url);
         } else {
-          Alert.alert('Error', 'Unable to open this link');
+          // Try to open anyway as canOpenURL might return false for valid URLs on some platforms
+          await Linking.openURL(url);
         }
       } catch (error) {
-        Alert.alert('Error', 'Failed to open link');
         console.error('Error opening URL:', error);
+        // Provide a more informative message
+        Alert.alert(
+          'Unable to Open Link',
+          `Could not open the source website. You can search for "${item.title}" on ${item.source || 'the web'} to find the article.`,
+          [{ text: 'OK' }]
+        );
       }
     } else {
-      Alert.alert('Source', `Article from ${item.source || 'Unknown source'}`);
+      // No URL available, just show source info
+      Alert.alert(
+        'Source Information',
+        `This article is from ${item.source || 'an unknown source'}. No direct link is available.`,
+        [{ text: 'OK' }]
+      );
     }
   };
 
   const handleShare = async () => {
     try {
-      const result = await Share.share({
-        message: `${item.title}\n\n${item.summary || item.content || ''}\n\nSource: ${item.source || 'Unknown'}`,
+      // Construct a comprehensive share message
+      let shareMessage = `${item.title}\n\n${item.summary || item.content || ''}\n\nSource: ${item.source || 'Unknown'}`;
+      
+      // Add source URL if available
+      if (item.sourceUrl && item.sourceUrl !== '#') {
+        shareMessage += `\n\nRead more: ${item.sourceUrl}`;
+      }
+      
+      const shareOptions = {
+        message: shareMessage,
         title: item.title,
-      });
+      };
+      
+      // On iOS, we can also provide a URL separately for better integration
+      if (Platform.OS === 'ios' && item.sourceUrl && item.sourceUrl !== '#') {
+        shareOptions.url = item.sourceUrl;
+      }
+      
+      const result = await Share.share(shareOptions);
+      
+      // Log share activity for analytics (optional)
+      if (result.action === Share.sharedAction) {
+        console.log('Content shared successfully');
+      }
     } catch (error) {
       console.error('Error sharing:', error);
+      Alert.alert('Share Error', 'Unable to share this article. Please try again.');
     }
   };
 
@@ -102,8 +141,12 @@ export default function NewsCard({ item, onAIClick }: NewsCardProps) {
         <View style={styles.sourceContainer}>
           {item.source && (
             <TouchableOpacity onPress={handleSourcePress} style={styles.sourceButton}>
-              <Text style={styles.sourceText}>{item.source}</Text>
-              <Feather name="external-link" size={14} color="#4a9eff" style={styles.linkIconFeather} />
+              <Text style={[styles.sourceText, item.sourceUrl && item.sourceUrl !== '#' ? styles.sourceTextLink : null]}>
+                {item.source}
+              </Text>
+              {item.sourceUrl && item.sourceUrl !== '#' && (
+                <Feather name="external-link" size={14} color="#4a9eff" style={styles.linkIcon} />
+              )}
             </TouchableOpacity>
           )}
           <Text style={styles.timeAgo}>{item.timeAgo || item.date || '4 hours ago'}</Text>
@@ -207,14 +250,20 @@ const styles = StyleSheet.create({
     marginRight: 16,
   },
   sourceText: {
-    color: '#3B82F6',
+    color: '#6B7280',
     fontSize: 14,
     fontWeight: '500',
     marginRight: 4,
   },
+  sourceTextLink: {
+    color: '#3B82F6',
+    textDecorationLine: 'underline',
+  },
   linkIcon: {
-    fontSize: 14,
-    color: '#4a9eff',
+    marginLeft: 4,
+  },
+  linkIconFeather: {
+    marginLeft: 4,
   },
   timeAgo: {
     color: '#6B7280',
