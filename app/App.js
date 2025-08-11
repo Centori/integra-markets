@@ -14,6 +14,7 @@ import {
 } from 'react-native';
 import { MaterialIcons, MaterialCommunityIcons } from '@expo/vector-icons';
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import { registerForPushNotificationsAsync, setupNotificationListeners } from './services/notificationService';
 
 // Import Supabase Auth Provider
 // import { AuthProvider } from '../contexts/AuthContext';
@@ -271,6 +272,7 @@ const App = () => {
     // Wrap in try-catch to prevent initialization crashes
     try {
       checkAppState();
+      initializeNotifications();
     } catch (error) {
       console.error('Error during app initialization:', error);
       // Continue anyway - don't let initialization errors crash the app
@@ -280,6 +282,27 @@ const App = () => {
     // setupDatabase.createTables();
     // testConnection();
   }, []);
+
+  // Initialize notifications
+  const initializeNotifications = async () => {
+    try {
+      // Register for push notifications
+      await registerForPushNotificationsAsync();
+      
+      // Set up notification listeners
+      setupNotificationListeners(
+        (notification) => {
+          console.log('Notification received:', notification.request.content.title);
+        },
+        (response) => {
+          console.log('Notification tapped:', response.notification.request.content.title);
+          // Handle notification tap - could navigate to specific screen
+        }
+      );
+    } catch (error) {
+      console.error('Error initializing notifications:', error);
+    }
+  };
 
   const checkAppState = async () => {
     try {

@@ -7,9 +7,46 @@ Notifications.setNotificationHandler({
   handleNotification: async () => ({
     shouldShowAlert: true,
     shouldPlaySound: true,
-    shouldSetBadge: false,
+    shouldSetBadge: true,
   }),
 });
+
+// Set up iOS notification categories for better Settings integration
+if (Platform.OS === 'ios') {
+  Notifications.setNotificationCategoryAsync('MARKET_ALERT', [
+    {
+      identifier: 'VIEW_DETAILS',
+      buttonTitle: 'View Details',
+      options: {
+        opensAppToForeground: true,
+      },
+    },
+    {
+      identifier: 'DISMISS',
+      buttonTitle: 'Dismiss',
+      options: {
+        isDestructive: true,
+      },
+    },
+  ]);
+  
+  Notifications.setNotificationCategoryAsync('BREAKING_NEWS', [
+    {
+      identifier: 'READ_MORE',
+      buttonTitle: 'Read More',
+      options: {
+        opensAppToForeground: true,
+      },
+    },
+    {
+      identifier: 'SHARE',
+      buttonTitle: 'Share',
+      options: {
+        opensAppToForeground: false,
+      },
+    },
+  ]);
+}
 
 // Keys for storing notification preferences
 const NOTIFICATION_SETTINGS_KEY = '@notification_settings';
