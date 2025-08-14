@@ -72,11 +72,7 @@
         {
           "icon": "./assets/notification-icon.png",
           "color": "#4ECCA3",
-          "defaultChannel": "default",
-          "sounds": [
-            "./assets/sounds/market-alert.wav",
-            "./assets/sounds/breaking-news.wav"
-          ]
+          "defaultChannel": "default"
         }
       ]
     ],
