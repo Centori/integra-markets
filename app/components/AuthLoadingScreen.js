@@ -18,6 +18,7 @@ import { BlurView as ExpoBlurView } from 'expo-blur';
 import { MaterialIcons, MaterialCommunityIcons, FontAwesome } from '@expo/vector-icons';
 import IntegraIcon from './IntegraIcon';
 import { authService } from '../services/authService';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 
 // Color palette
 const colors = {
@@ -191,6 +192,10 @@ const AuthLoadingScreen = ({ onAuthComplete, onSkip }) => {
         setIsLoading(true);
         
         try {
+            // Check if onboarding has been completed before
+            const onboardingCompleted = await AsyncStorage.getItem('onboarding_completed');
+            const isReturningUser = onboardingCompleted === 'true';
+            
             // Attempt to use the authService for proper Google OAuth
             const result = await authService.signInWithGoogle();
             
@@ -203,7 +208,8 @@ const AuthLoadingScreen = ({ onAuthComplete, onSkip }) => {
                     fullName: result.user.full_name || result.user.fullName || 'Google User',
                     username: result.user.email ? result.user.email.split('@')[0] : 'googleuser',
                     authMethod: 'google',
-                    isNewUser: false,
+                    isNewUser: !isReturningUser,  // Set based on onboarding status
+                    skipOnboarding: isReturningUser  // Add flag to skip onboarding if already done
                 };
                 onAuthComplete(userData);
             } else {
@@ -215,13 +221,23 @@ const AuthLoadingScreen = ({ onAuthComplete, onSkip }) => {
                     fullName: 'Google User',
                     username: 'googleuser',
                     authMethod: 'google',
-                    isNewUser: false,
+                    isNewUser: !isReturningUser,
+                    skipOnboarding: isReturningUser
                 };
                 onAuthComplete(mockGoogleUser);
             }
         } catch (error) {
             setIsLoading(false);
             console.error('Google auth error:', error);
+            
+            // Check onboarding status even on error
+            let isReturningUser = false;
+            try {
+                const onboardingCompleted = await AsyncStorage.getItem('onboarding_completed');
+                isReturningUser = onboardingCompleted === 'true';
+            } catch (e) {
+                console.error('Error checking onboarding status:', e);
+            }
             
             // Even on error, allow user to proceed with mock account
             const mockGoogleUser = {
@@ -230,7 +246,8 @@ const AuthLoadingScreen = ({ onAuthComplete, onSkip }) => {
                 fullName: 'Google User',
                 username: 'googleuser',
                 authMethod: 'google',
-                isNewUser: false,
+                isNewUser: !isReturningUser,
+                skipOnboarding: isReturningUser
             };
             onAuthComplete(mockGoogleUser);
         }
@@ -344,7 +361,7 @@ const AuthLoadingScreen = ({ onAuthComplete, onSkip }) => {
                         <View style={styles.authOptions}>
                             <TouchableOpacity 
                                 style={[styles.socialButton, styles.googleButton]}
-                                onPress={() => handleSocialAuth('google')}
+                                onPress={handleGoogleAuth}
                                 disabled={isLoading}
                             >
                                 <FontAwesome name="google" size={24} color="#FFFFFF" />

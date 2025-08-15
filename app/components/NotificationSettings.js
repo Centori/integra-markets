@@ -19,6 +19,7 @@ import {
   getScheduledNotifications,
   cancelAllNotifications,
   scheduleLocalNotification,
+  checkNotificationPermissions,
 } from '../services/notificationService';
 
 // Use the same color palette as the main app
@@ -41,11 +42,13 @@ const NotificationSettings = ({ onBack }) => {
   const [loading, setLoading] = useState(true);
   const [pushToken, setPushToken] = useState(null);
   const [scheduledCount, setScheduledCount] = useState(0);
+  const [hasPermission, setHasPermission] = useState(false);
 
   useEffect(() => {
     loadSettings();
     loadPushToken();
     loadScheduledNotifications();
+    checkPermissionStatus();
   }, []);
 
   const loadSettings = async () => {
@@ -77,6 +80,15 @@ const NotificationSettings = ({ onBack }) => {
     }
   };
 
+  const checkPermissionStatus = async () => {
+    try {
+      const permissionGranted = await checkNotificationPermissions();
+      setHasPermission(permissionGranted);
+    } catch (error) {
+      console.error('Error checking permission status:', error);
+    }
+  };
+
   const handleSettingChange = async (key, value) => {
     const newSettings = { ...settings, [key]: value };
     setSettings(newSettings);
@@ -95,7 +107,12 @@ const NotificationSettings = ({ onBack }) => {
             const token = await registerForPushNotificationsAsync();
             if (token) {
               setPushToken(token);
+              setHasPermission(true);
               await handleSettingChange('pushNotifications', true);
+            } else {
+              // Check permission even if token is null
+              const permissionGranted = await checkNotificationPermissions();
+              setHasPermission(permissionGranted);
             }
           },
         },
@@ -176,19 +193,21 @@ const NotificationSettings = ({ onBack }) => {
           <View style={styles.statusCard}>
             <View style={styles.statusRow}>
               <MaterialIcons 
-                name={pushToken ? "check-circle" : "error"} 
+                name={hasPermission ? "check-circle" : "error"} 
                 size={24} 
-                color={pushToken ? colors.accentPositive : colors.accentNegative} 
+                color={hasPermission ? colors.accentPositive : colors.accentNegative} 
               />
               <View style={styles.statusInfo}>
                 <Text style={styles.statusText}>
-                  {pushToken ? 'Push Notifications Enabled' : 'Push Notifications Disabled'}
+                  {hasPermission ? 'Push Notifications Enabled' : 'Push Notifications Disabled'}
                 </Text>
                 <Text style={styles.statusSubtext}>
-                  {pushToken ? 'Ready to receive alerts' : 'Tap to enable notifications'}
+                  {hasPermission 
+                    ? (pushToken ? 'Ready to receive alerts' : 'Registering device...')
+                    : 'Tap to enable notifications'}
                 </Text>
               </View>
-              {!pushToken && (
+              {!hasPermission && (
                 <TouchableOpacity 
                   style={styles.enableButton} 
                   onPress={handleRegisterNotifications}

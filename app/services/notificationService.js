@@ -153,7 +153,20 @@ export async function registerForPushNotificationsAsync() {
 export async function getNotificationSettings() {
   try {
     const settings = await AsyncStorage.getItem(NOTIFICATION_SETTINGS_KEY);
-    return settings ? JSON.parse(settings) : defaultNotificationSettings;
+    const parsedSettings = settings ? JSON.parse(settings) : defaultNotificationSettings;
+    
+    // Check actual iOS permission status and sync with stored settings
+    const { status } = await Notifications.getPermissionsAsync();
+    const hasPermission = status === 'granted';
+    
+    // Update pushNotifications based on actual permission status
+    if (parsedSettings.pushNotifications !== hasPermission) {
+      parsedSettings.pushNotifications = hasPermission;
+      // Save the updated status
+      await AsyncStorage.setItem(NOTIFICATION_SETTINGS_KEY, JSON.stringify(parsedSettings));
+    }
+    
+    return parsedSettings;
   } catch (error) {
     console.error('Error getting notification settings:', error);
     return defaultNotificationSettings;
@@ -351,6 +364,19 @@ export async function sendBreakingNewsAlert(headline, source) {
   });
 }
 
+/**
+ * Check if push notifications are enabled in iOS settings
+ */
+export async function checkNotificationPermissions() {
+  try {
+    const { status } = await Notifications.getPermissionsAsync();
+    return status === 'granted';
+  } catch (error) {
+    console.error('Error checking notification permissions:', error);
+    return false;
+  }
+}
+
 export default {
   registerForPushNotificationsAsync,
   getNotificationSettings,
@@ -364,4 +390,5 @@ export default {
   removeNotificationListeners,
   sendMarketAlert,
   sendBreakingNewsAlert,
+  checkNotificationPermissions,
 };

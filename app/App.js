@@ -370,10 +370,22 @@ const App = () => {
     console.log('isLoading set to false');
   };
 
-  const handleAuthComplete = (authData) => {
+  const handleAuthComplete = async (authData) => {
     setUserData(authData);
     setShowAuth(false);
-    setShowOnboarding(true);
+    
+    // Check if we should skip onboarding (returning user signing in with Google)
+    if (authData.skipOnboarding) {
+      // User has already completed onboarding, go straight to main app
+      const alertsCompleted = await AsyncStorage.getItem('alerts_completed');
+      if (alertsCompleted !== 'true') {
+        setShowAlertPreferences(true);
+      }
+      // Otherwise, show main app (all flags remain false)
+    } else {
+      // New user or user who hasn't completed onboarding
+      setShowOnboarding(true);
+    }
   };
 
   const handleAuthSkip = () => {

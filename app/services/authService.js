@@ -3,7 +3,7 @@
  * Handles Google and Apple Sign-In with Supabase
  */
 // Safe imports with fallbacks to prevent crashes
-let WebBrowser, AuthSession, AppleAuthentication, supabase;
+let WebBrowser, AuthSession, AppleAuthentication, supabase, GoogleSignin;
 
 try {
     WebBrowser = require('expo-web-browser');
@@ -19,10 +19,20 @@ try {
     AuthSession = { makeRedirectUri: () => '', parseRedirectUrl: () => ({}) };
 }
 
+// Native Google Sign-In
+try {
+    const GoogleSignInModule = require('@react-native-google-signin/google-signin');
+    GoogleSignin = GoogleSignInModule.GoogleSignin;
+} catch (e) {
+    console.warn('Native Google Sign-In not available, will use OAuth fallback');
+    GoogleSignin = null;
+}
+
 // Apple Authentication removed to avoid provisioning profile issues
 
 import { Platform } from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import { googleSignInConfig, isGoogleSignInConfigured } from '../config/googleSignIn';
 
 try {
     const supabaseImport = require('../../lib/supabase');
@@ -61,6 +71,7 @@ class AuthService {
     constructor() {
         this.currentUser = null;
         this.authToken = null;
+        this.googleSignInConfigured = false;
     }
 
     /**
@@ -68,6 +79,9 @@ class AuthService {
      */
     async initialize() {
         try {
+            // Configure Google Sign-In if available
+            await this.configureGoogleSignIn();
+            
             // Check for stored auth token
             const storedToken = await AsyncStorage.getItem(AUTH_TOKEN_KEY);
             const storedUser = await AsyncStorage.getItem(USER_DATA_KEY);
@@ -88,84 +102,151 @@ class AuthService {
     }
 
     /**
-     * Sign in with Google using Supabase OAuth (with fallback)
+     * Configure Google Sign-In
+     */
+    async configureGoogleSignIn() {
+        if (!GoogleSignin) return;
+        
+        // Check if config has valid client IDs
+        if (!isGoogleSignInConfigured()) {
+            console.warn('Google Sign-In not configured: Missing client IDs in config/googleSignIn.js');
+            this.googleSignInConfigured = false;
+            return;
+        }
+        
+        try {
+            await GoogleSignin.configure({
+                iosClientId: googleSignInConfig.iosClientId,
+                androidClientId: googleSignInConfig.androidClientId,
+                webClientId: googleSignInConfig.webClientId,
+                offlineAccess: googleSignInConfig.offlineAccess,
+                scopes: googleSignInConfig.scopes,
+                forceCodeForRefreshToken: googleSignInConfig.forceCodeForRefreshToken,
+            });
+            this.googleSignInConfigured = true;
+            console.log('Google Sign-In configured successfully');
+        } catch (error) {
+            console.warn('Failed to configure Google Sign-In:', error);
+            this.googleSignInConfigured = false;
+        }
+    }
+
+    /**
+     * Sign in with Google using native SDK (with OAuth fallback)
      */
     async signInWithGoogle() {
         try {
-            // Check if dependencies are available
-            if (!supabase || !AuthSession || !WebBrowser) {
-                // Return mock success for development
-                const mockUser = {
-                    id: 'google_mock_' + Date.now(),
-                    email: 'user@gmail.com',
-                    full_name: 'Google User',
-                    provider: 'google'
-                };
-                
-                this.currentUser = mockUser;
-                await AsyncStorage.setItem(USER_DATA_KEY, JSON.stringify(mockUser));
-                await AsyncStorage.setItem(AUTH_TOKEN_KEY, 'mock_google_token');
-                
-                return { success: true, user: mockUser };
-            }
-
-            // Use Supabase OAuth for Google
-            const { data, error } = await supabase.auth.signInWithOAuth({
-                provider: 'google',
-                options: {
-                    redirectTo: AuthSession.makeRedirectUri({
-                        scheme: 'integra',
-                        path: 'auth'
-                    }),
-                    queryParams: {
-                        access_type: 'offline',
-                        prompt: 'consent',
+            // Try native Google Sign-In first if configured
+            if (GoogleSignin && this.googleSignInConfigured) {
+                try {
+                    // Check if device has Google Play Services (Android)
+                    if (Platform.OS === 'android') {
+                        await GoogleSignin.hasPlayServices({ showPlayServicesUpdateDialog: true });
                     }
-                }
-            });
 
-            if (error) {
-                console.warn('Supabase OAuth error, using mock:', error);
-                // Fallback to mock
-                const mockUser = {
-                    id: 'google_fallback_' + Date.now(),
-                    email: 'user@gmail.com',
-                    full_name: 'Google User',
-                    provider: 'google'
-                };
-                
-                this.currentUser = mockUser;
-                return { success: true, user: mockUser };
-            }
+                    // Sign in with Google
+                    const userInfo = await GoogleSignin.signIn();
+                    
+                    if (userInfo && userInfo.user) {
+                        // Create user object from Google sign-in
+                        const googleUser = {
+                            id: userInfo.user.id,
+                            email: userInfo.user.email,
+                            full_name: userInfo.user.name || userInfo.user.givenName + ' ' + userInfo.user.familyName,
+                            fullName: userInfo.user.name || userInfo.user.givenName + ' ' + userInfo.user.familyName,
+                            avatar: userInfo.user.photo,
+                            provider: 'google',
+                            idToken: userInfo.idToken,
+                        };
 
-            // Handle the OAuth response
-            if (data?.url) {
-                const result = await WebBrowser.openAuthSessionAsync(
-                    data.url,
-                    AuthSession.makeRedirectUri({
-                        scheme: 'integra',
-                        path: 'auth'
-                    })
-                );
+                        // Try to authenticate with Supabase using the ID token
+                        if (supabase && userInfo.idToken) {
+                            try {
+                                const { data, error } = await supabase.auth.signInWithIdToken({
+                                    provider: 'google',
+                                    token: userInfo.idToken,
+                                });
 
-                if (result.type === 'success' && result.url) {
-                    // Parse the auth response
-                    const params = AuthSession.parseRedirectUrl(result.url);
-                    
-                    // Get the session
-                    const { data: sessionData, error: sessionError } = await supabase.auth.getSession();
-                    
-                    if (sessionError) throw sessionError;
-                    
-                    if (sessionData?.session) {
-                        // Save auth data
-                        await this.handleAuthSuccess(sessionData.session);
-                        return { success: true, user: this.currentUser };
+                                if (data?.session) {
+                                    await this.handleAuthSuccess(data.session);
+                                    return { success: true, user: this.currentUser };
+                                }
+                            } catch (supabaseError) {
+                                console.warn('Supabase authentication failed, using local auth:', supabaseError);
+                            }
+                        }
+
+                        // Store user data locally even if Supabase fails
+                        this.currentUser = googleUser;
+                        await AsyncStorage.setItem(USER_DATA_KEY, JSON.stringify(googleUser));
+                        await AsyncStorage.setItem(AUTH_TOKEN_KEY, userInfo.idToken || 'google_token_' + Date.now());
+                        
+                        return { success: true, user: googleUser };
                     }
+                } catch (nativeError) {
+                    console.warn('Native Google Sign-In failed, trying OAuth fallback:', nativeError);
+                    // Fall through to OAuth method
                 }
             }
 
-            return { success: false, error: 'Authentication cancelled' };
+            // Fallback to OAuth flow if native sign-in is not available
+            if (supabase && AuthSession && WebBrowser) {
+                // Use Supabase OAuth for Google
+                const { data, error } = await supabase.auth.signInWithOAuth({
+                    provider: 'google',
+                    options: {
+                        redirectTo: AuthSession.makeRedirectUri({
+                            scheme: 'integra',
+                            path: 'auth'
+                        }),
+                        queryParams: {
+                            access_type: 'offline',
+                            prompt: 'consent',
+                        }
+                    }
+                });
+
+                if (!error && data?.url) {
+                    const result = await WebBrowser.openAuthSessionAsync(
+                        data.url,
+                        AuthSession.makeRedirectUri({
+                            scheme: 'integra',
+                            path: 'auth'
+                        })
+                    );
+
+                    if (result.type === 'success' && result.url) {
+                        // Parse the auth response
+                        const params = AuthSession.parseRedirectUrl(result.url);
+                        
+                        // Get the session
+                        const { data: sessionData, error: sessionError } = await supabase.auth.getSession();
+                        
+                        if (!sessionError && sessionData?.session) {
+                            // Save auth data
+                            await this.handleAuthSuccess(sessionData.session);
+                            return { success: true, user: this.currentUser };
+                        }
+                    }
+                }
+            }
+
+            // Final fallback to mock for development
+            console.log('Using mock Google sign-in for development');
+            const mockUser = {
+                id: 'google_mock_' + Date.now(),
+                email: 'user@gmail.com',
+                full_name: 'Google User',
+                fullName: 'Google User',
+                provider: 'google'
+            };
+            
+            this.currentUser = mockUser;
+            await AsyncStorage.setItem(USER_DATA_KEY, JSON.stringify(mockUser));
+            await AsyncStorage.setItem(AUTH_TOKEN_KEY, 'mock_google_token');
+            
+            return { success: true, user: mockUser };
+
         } catch (error) {
             console.error('Google sign-in error:', error);
             return { success: false, error: error.message };
@@ -345,8 +426,22 @@ class AuthService {
      */
     async signOut() {
         try {
+            // Sign out from Google if signed in
+            if (GoogleSignin && this.googleSignInConfigured) {
+                try {
+                    const isSignedIn = await GoogleSignin.isSignedIn();
+                    if (isSignedIn) {
+                        await GoogleSignin.signOut();
+                    }
+                } catch (googleError) {
+                    console.warn('Google sign-out error:', googleError);
+                }
+            }
+
             // Sign out from Supabase
-            await supabase.auth.signOut();
+            if (supabase) {
+                await supabase.auth.signOut();
+            }
 
             // Clear stored data
             await AsyncStorage.multiRemove([AUTH_TOKEN_KEY, USER_DATA_KEY]);
@@ -356,7 +451,9 @@ class AuthService {
             this.authToken = null;
 
             // Clear API token
-            api.setAuthToken(null);
+            if (api) {
+                api.setAuthToken(null);
+            }
 
             return { success: true };
         } catch (error) {
