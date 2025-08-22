@@ -31,6 +31,7 @@ import OnboardingForm from './components/OnboardingForm';
 import AlertPreferencesForm from './components/AlertPreferencesForm';
 import NewsCard from './components/NewsCard';
 import AIAnalysisOverlay from './components/AIAnalysisOverlay';
+import AlertsScreen from './components/AlertsScreen';
 
 // Color Palette
 const colors = {
@@ -662,26 +663,12 @@ const App = () => {
   // Render alerts screen
   if (activeNav === 'Alerts') {
     return (
-      <SafeAreaView style={styles.safeArea}>
-        <StatusBar barStyle="light-content" />
-        <View style={styles.container}>
-          <View style={styles.header}>
-            <Text style={styles.headerTitle}>Alerts</Text>
-          </View>
-          <View style={styles.alertsContainer}>
-            <MaterialIcons name="notifications" size={64} color={colors.textSecondary} />
-            <Text style={styles.emptyText}>No alerts yet</Text>
-            <Text style={styles.emptySubtext}>We'll notify you when important market events occur</Text>
-            <TouchableOpacity
-              style={styles.setupAlertsButton}
-              onPress={() => setShowAlertPreferences(true)}
-            >
-              <Text style={styles.setupAlertsText}>Setup Alerts</Text>
-            </TouchableOpacity>
-          </View>
-          {renderBottomNav()}
-        </View>
-      </SafeAreaView>
+      <View style={{ flex: 1 }}>
+        <AlertsScreen 
+          onNavigateToAlertPreferences={() => setShowAlertPreferences(true)}
+        />
+        {renderBottomNav()}
+      </View>
     );
   }
 

@@ -11,6 +11,7 @@ import {
 import { MaterialIcons } from '@expo/vector-icons';
 import Toast from 'react-native-toast-message';
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import { useRouter } from 'expo-router';
 
 const colors = {
   bgPrimary: '#121212',
