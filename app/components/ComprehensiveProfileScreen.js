@@ -320,11 +320,23 @@ export default function ComprehensiveProfileScreen({
               <Text style={styles.settingText}>Notifications</Text>
               <MaterialIcons name="chevron-right" color={Colors.textSecondary} size={16} />
             </TouchableOpacity>
-            <TouchableOpacity style={styles.settingItem}>
+            <TouchableOpacity style={styles.settingItem} onPress={() => {
+              Alert.alert(
+                'Privacy Settings',
+                'Privacy settings will be available in the next update.',
+                [{ text: 'OK' }]
+              );
+            }}>
               <Text style={styles.settingText}>Privacy</Text>
               <MaterialIcons name="chevron-right" color={Colors.textSecondary} size={16} />
             </TouchableOpacity>
-            <TouchableOpacity style={styles.settingItem} onPress={() => {}}>
+            <TouchableOpacity style={styles.settingItem} onPress={() => {
+              Alert.alert(
+                'About Integra Markets',
+                'Integra Markets v1.0.0\n\nA comprehensive financial markets analysis platform.',
+                [{ text: 'OK' }]
+              );
+            }}>
               <Text style={styles.settingText}>About</Text>
               <MaterialIcons name="chevron-right" color={Colors.textSecondary} size={16} />
             </TouchableOpacity>

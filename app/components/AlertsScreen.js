@@ -11,6 +11,7 @@ import {
 } from 'react-native';
 import { MaterialIcons } from '@expo/vector-icons';
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import HollowCircularIcon from './HollowCircularIcon';
 
 // Color Palette
 const colors = {
@@ -279,10 +280,11 @@ const AlertsScreen = ({ onNavigateToAlertPreferences }) => {
               onPress={() => handleAlertTap(alert.id)}
             >
               <View style={styles.alertIcon}>
-                <MaterialIcons
+                <HollowCircularIcon
                   name={getTypeIcon(alert.type)}
                   size={20}
                   color={getSeverityColor(alert.severity)}
+                  padding={4}
                 />
               </View>
               <View style={styles.alertContent}>
@@ -300,17 +302,17 @@ const AlertsScreen = ({ onNavigateToAlertPreferences }) => {
           <Text style={styles.sectionTitle}>Quick Actions</Text>
           
           <TouchableOpacity style={styles.actionButton}>
-            <MaterialIcons name="add" size={20} color={colors.accentData} />
+            <HollowCircularIcon name="add" size={20} color={colors.accentData} padding={4} />
             <Text style={styles.actionText}>Add New Alert</Text>
           </TouchableOpacity>
           
           <TouchableOpacity style={styles.actionButton}>
-            <MaterialIcons name="settings" size={20} color={colors.accentData} />
+            <HollowCircularIcon name="settings" size={20} color={colors.accentData} padding={4} />
             <Text style={styles.actionText}>Manage Alerts</Text>
           </TouchableOpacity>
           
           <TouchableOpacity style={styles.actionButton}>
-            <MaterialIcons name="history" size={20} color={colors.accentData} />
+            <HollowCircularIcon name="history" size={20} color={colors.accentData} padding={4} />
             <Text style={styles.actionText}>View Alert History</Text>
           </TouchableOpacity>
         </View>

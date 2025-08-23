@@ -1,7 +1,8 @@
 import React, { useState } from 'react';
-import { View, Text, StyleSheet, Modal, TouchableOpacity, ScrollView, Platform } from 'react-native';
+import { View, Text, StyleSheet, Modal, TouchableOpacity, ScrollView, Platform, Clipboard, Alert } from 'react-native';
 import { MaterialIcons } from '@expo/vector-icons';
 import ChatInterface from './ChatInterface';
+import { useBookmarks } from '../providers/BookmarkProvider';
 
 interface NewsData {
     title: string;
@@ -20,8 +21,58 @@ interface AIAnalysisOverlayProps {
 
 const AIAnalysisOverlay: React.FC<AIAnalysisOverlayProps> = ({ newsData, isVisible, onClose }) => {
     const [showChat, setShowChat] = useState(false);
+    const { addBookmark, removeBookmark, isBookmarked, bookmarks } = useBookmarks();
+    
+    const isCurrentlyBookmarked = newsData ? isBookmarked(newsData.title) : false;
+    
+    const handleBookmarkToggle = async () => {
+        if (!newsData) return;
+        
+        try {
+            if (isCurrentlyBookmarked) {
+                // Find the bookmark by title and remove it
+                const bookmarkToRemove = bookmarks.find((b: any) => b.title === newsData.title);
+                if (bookmarkToRemove) {
+                    await removeBookmark(bookmarkToRemove.id);
+                    Alert.alert('Removed', 'Analysis removed from bookmarks');
+                }
+            } else {
+                // Add new bookmark with AI analysis data
+                await addBookmark({
+                    title: newsData.title,
+                    summary: analysisData.summary,
+                    source: newsData.source,
+                    sentiment: analysisData.finBertSentiment.bullish > analysisData.finBertSentiment.bearish 
+                        ? (analysisData.finBertSentiment.bullish > analysisData.finBertSentiment.neutral ? 'BULLISH' : 'NEUTRAL')
+                        : (analysisData.finBertSentiment.bearish > analysisData.finBertSentiment.neutral ? 'BEARISH' : 'NEUTRAL'),
+                    sentimentScore: Math.max(
+                        analysisData.finBertSentiment.bullish,
+                        analysisData.finBertSentiment.bearish,
+                        analysisData.finBertSentiment.neutral
+                    ) / 100
+                });
+                Alert.alert('Saved', 'AI Analysis saved to bookmarks');
+            }
+        } catch (error) {
+            console.error('Error toggling bookmark:', error);
+            Alert.alert('Error', 'Failed to update bookmark. Please try again.');
+        }
+    };
     
     if (!newsData) return null;
+
+    const copyToClipboard = (text: string, sectionName: string) => {
+        Clipboard.setString(text);
+        Alert.alert('Copied!', `${sectionName} copied to clipboard`);
+    };
+
+    const formatAnalysisForCopy = () => {
+        const sentiment = `Bullish: ${analysisData.finBertSentiment.bullish}%, Bearish: ${analysisData.finBertSentiment.bearish}%, Neutral: ${analysisData.finBertSentiment.neutral}%`;
+        const drivers = analysisData.keyDrivers.map(d => `${d.text} (${d.score})`).join(', ');
+        const insights = analysisData.traderInsights.map((insight, i) => `${i + 1}. ${insight}`).join('\n');
+        
+        return `INTEGRA AI ANALYSIS\n\nArticle: ${newsData.title}\nSource: ${newsData.source}\n\nSUMMARY:\n${analysisData.summary}\n\nSENTIMENT:\n${sentiment}\n\nKEY DRIVERS:\n${drivers}\n\nMARKET IMPACT:\n${analysisData.marketImpact.level} (Confidence: ${analysisData.marketImpact.confidence})\n\nTRADER INSIGHTS:\n${insights}`;
+    };
 
     // Mock data for the comprehensive analysis
     const analysisData = {
@@ -79,8 +130,18 @@ const AIAnalysisOverlay: React.FC<AIAnalysisOverlayProps> = ({ newsData, isVisib
                         <View style={styles.header}>
                             <Text style={styles.title}>Integra Analysis</Text>
                             <View style={styles.headerActions}>
-                                <TouchableOpacity style={styles.bookmarkButton}>
-                                    <MaterialIcons name="bookmark-border" size={24} color="#ECECEC" />
+                                <TouchableOpacity 
+                                    style={styles.copyButton}
+                                    onPress={() => copyToClipboard(formatAnalysisForCopy(), 'Full Analysis')}
+                                >
+                                    <MaterialIcons name="content-copy" size={20} color="#4ECCA3" />
+                                </TouchableOpacity>
+                                <TouchableOpacity style={styles.bookmarkButton} onPress={handleBookmarkToggle}>
+                                    <MaterialIcons 
+                                        name={isCurrentlyBookmarked ? "bookmark" : "bookmark-border"} 
+                                        size={24} 
+                                        color={isCurrentlyBookmarked ? "#4ECCA3" : "#ECECEC"} 
+                                    />
                                 </TouchableOpacity>
                                 <TouchableOpacity style={styles.closeButton} onPress={onClose}>
                                     <MaterialIcons name="close" size={24} color="#ECECEC" />
@@ -99,6 +160,12 @@ const AIAnalysisOverlay: React.FC<AIAnalysisOverlayProps> = ({ newsData, isVisib
                             <View style={styles.sectionHeader}>
                                 <View style={styles.sectionIndicator} />
                                 <Text style={styles.sectionTitle}>Summary</Text>
+                                <TouchableOpacity 
+                                    style={styles.sectionCopyButton}
+                                    onPress={() => copyToClipboard(analysisData.summary, 'Summary')}
+                                >
+                                    <MaterialIcons name="content-copy" size={16} color="#A0A0A0" />
+                                </TouchableOpacity>
                             </View>
                             <Text style={styles.summaryText}>{analysisData.summary}</Text>
                         </View>
@@ -108,6 +175,15 @@ const AIAnalysisOverlay: React.FC<AIAnalysisOverlayProps> = ({ newsData, isVisib
                             <View style={styles.sectionHeader}>
                                 <View style={styles.sectionIndicator} />
                                 <Text style={styles.sectionTitle}>Sentiment</Text>
+                                <TouchableOpacity 
+                                    style={styles.sectionCopyButton}
+                                    onPress={() => copyToClipboard(
+                                        `Bullish: ${analysisData.finBertSentiment.bullish}%, Bearish: ${analysisData.finBertSentiment.bearish}%, Neutral: ${analysisData.finBertSentiment.neutral}%`,
+                                        'Sentiment Analysis'
+                                    )}
+                                >
+                                    <MaterialIcons name="content-copy" size={16} color="#A0A0A0" />
+                                </TouchableOpacity>
                             </View>
                             
                             <View style={styles.sentimentItem}>
@@ -146,6 +222,15 @@ const AIAnalysisOverlay: React.FC<AIAnalysisOverlayProps> = ({ newsData, isVisib
                             <View style={styles.sectionHeader}>
                                 <View style={styles.sectionIndicator} />
                                 <Text style={styles.sectionTitle}>Key Sentiment Drivers</Text>
+                                <TouchableOpacity 
+                                    style={styles.sectionCopyButton}
+                                    onPress={() => copyToClipboard(
+                                        analysisData.keyDrivers.map(d => `${d.text} (${d.score})`).join(', '),
+                                        'Key Drivers'
+                                    )}
+                                >
+                                    <MaterialIcons name="content-copy" size={16} color="#A0A0A0" />
+                                </TouchableOpacity>
                             </View>
                             <View style={styles.driversContainer}>
                                 {analysisData.keyDrivers.map(renderDriverPill)}
@@ -157,6 +242,15 @@ const AIAnalysisOverlay: React.FC<AIAnalysisOverlayProps> = ({ newsData, isVisib
                             <View style={styles.sectionHeader}>
                                 <View style={styles.sectionIndicator} />
                                 <Text style={styles.sectionTitle}>Market Impact</Text>
+                                <TouchableOpacity 
+                                    style={styles.sectionCopyButton}
+                                    onPress={() => copyToClipboard(
+                                        `${analysisData.marketImpact.level} (Confidence: ${analysisData.marketImpact.confidence})`,
+                                        'Market Impact'
+                                    )}
+                                >
+                                    <MaterialIcons name="content-copy" size={16} color="#A0A0A0" />
+                                </TouchableOpacity>
                             </View>
                             <View style={styles.marketImpactContainer}>
                                 <View style={styles.impactBadge}>
@@ -173,6 +267,15 @@ const AIAnalysisOverlay: React.FC<AIAnalysisOverlayProps> = ({ newsData, isVisib
                             <View style={styles.sectionHeader}>
                                 <View style={styles.sectionIndicator} />
                                 <Text style={styles.sectionTitle}>What this means for Traders</Text>
+                                <TouchableOpacity 
+                                    style={styles.sectionCopyButton}
+                                    onPress={() => copyToClipboard(
+                                        analysisData.traderInsights.map((insight, i) => `${i + 1}. ${insight}`).join('\n'),
+                                        'Trader Insights'
+                                    )}
+                                >
+                                    <MaterialIcons name="content-copy" size={16} color="#A0A0A0" />
+                                </TouchableOpacity>
                             </View>
                             {analysisData.traderInsights.map((insight, index) => (
                                 <View key={index} style={styles.insightRow}>
@@ -187,7 +290,7 @@ const AIAnalysisOverlay: React.FC<AIAnalysisOverlayProps> = ({ newsData, isVisib
                             style={styles.chatButton}
                             onPress={() => setShowChat(true)}
                         >
-                            <MaterialIcons name="chat" size={20} color="#000000" />
+                            <MaterialIcons name="chat-bubble-outline" size={20} color="#000000" />
                             <Text style={styles.chatButtonText}>Ask Integra AI</Text>
                         </TouchableOpacity>
                         </ScrollView>
@@ -242,7 +345,7 @@ const styles = StyleSheet.create({
     webWrapper: {
         ...(Platform.OS === 'web' ? {
             width: 414, // iPhone Pro Max width
-            height: '85vh', // Slightly shorter than full height
+            height: 750,
             maxHeight: 750,
             alignSelf: 'center',
         } : {
@@ -282,8 +385,16 @@ const styles = StyleSheet.create({
         flexDirection: 'row',
         gap: 15,
     },
+    copyButton: {
+        padding: 2,
+        marginRight: 5,
+    },
     bookmarkButton: {
         padding: 2,
+    },
+    sectionCopyButton: {
+        padding: 4,
+        marginLeft: 'auto',
     },
     closeButton: {
         padding: 2,
@@ -307,6 +418,7 @@ const styles = StyleSheet.create({
         flexDirection: 'row',
         alignItems: 'center',
         marginBottom: 12,
+        justifyContent: 'space-between',
     },
     sectionIndicator: {
         width: 3,

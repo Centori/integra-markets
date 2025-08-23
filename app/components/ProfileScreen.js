@@ -10,6 +10,7 @@ import {
   StatusBar 
 } from "react-native";
 import { MaterialIcons } from '@expo/vector-icons';
+import { useBookmarks } from '../providers/BookmarkProvider';
 
 // Use the same color palette as the main app
 const colors = {
@@ -51,10 +52,13 @@ const getRoleLabel = (role) => {
   return roleMap[role] || role;
 };
 
-export default function ProfileScreen({ userProfile, alertPreferences, apiKeys, bookmarks, onBack, onNavigateToSettings, onLogout }) {
+export default function ProfileScreen({ userProfile, alertPreferences, apiKeys, onBack, onNavigateToSettings, onLogout }) {
   const [selectedProvider, setSelectedProvider] = useState(null);
   const [showAPIKeySetup, setShowAPIKeySetup] = useState(false);
   const [showAlertPreferences, setShowAlertPreferences] = useState(false);
+  const [showAllBookmarks, setShowAllBookmarks] = useState(false);
+  
+  const { bookmarks, removeBookmark } = useBookmarks();
 
   const handleDeleteKey = (keyId, keyName) => {
     Alert.alert(
@@ -95,7 +99,33 @@ export default function ProfileScreen({ userProfile, alertPreferences, apiKeys, 
   };
 
   const defaultAPIKeys = apiKeys || [];
-  const defaultBookmarks = bookmarks || [];
+  
+  const handleDeleteBookmark = (bookmarkId, bookmarkTitle) => {
+    Alert.alert(
+      'Delete Bookmark',
+      `Are you sure you want to delete "${bookmarkTitle}"?`,
+      [
+        { text: 'Cancel', style: 'cancel' },
+        {
+          text: 'Delete',
+          style: 'destructive',
+          onPress: async () => {
+            try {
+              await removeBookmark(bookmarkId);
+              Alert.alert('Deleted', 'Bookmark removed successfully');
+            } catch (error) {
+              console.error('Error deleting bookmark:', error);
+              Alert.alert('Error', 'Failed to delete bookmark. Please try again.');
+            }
+          }
+        }
+      ]
+    );
+  };
+  
+  const handleViewAllBookmarks = () => {
+    setShowAllBookmarks(true);
+  };
 
   const navigateToScreen = (screenName) => {
     if (onNavigateToSettings) {
@@ -279,10 +309,10 @@ export default function ProfileScreen({ userProfile, alertPreferences, apiKeys, 
               <MaterialIcons name="bookmark" color={colors.accentPositive} size={20} />
               <Text style={styles.sectionTitle}>Bookmarks</Text>
             </View>
-            <Text style={styles.bookmarkCount}>{defaultBookmarks.length}</Text>
+            <Text style={styles.bookmarkCount}>{bookmarks.length}</Text>
           </View>
 
-          {defaultBookmarks.length === 0 ? (
+          {bookmarks.length === 0 ? (
             <View style={styles.emptyState}>
               <Text style={styles.emptyStateText}>No bookmarks yet</Text>
               <Text style={styles.emptyStateSubtext}>
@@ -291,21 +321,41 @@ export default function ProfileScreen({ userProfile, alertPreferences, apiKeys, 
             </View>
           ) : (
             <View style={styles.bookmarksList}>
-              {defaultBookmarks.slice(0, 3).map((bookmark) => (
-                <View key={bookmark.id} style={styles.bookmarkItem}>
+              {(showAllBookmarks ? bookmarks : bookmarks.slice(0, 3)).map((bookmark) => (
+                <TouchableOpacity key={bookmark.id} style={styles.bookmarkItem}>
                   <View style={styles.bookmarkContent}>
                     <Text style={styles.bookmarkTitle} numberOfLines={2}>
                       {bookmark.title}
                     </Text>
                     <Text style={styles.bookmarkSource}>{bookmark.source}</Text>
+                    {bookmark.sentiment && (
+                      <Text style={[styles.bookmarkSentiment, {
+                        color: bookmark.sentiment === 'BULLISH' ? colors.accentPositive :
+                               bookmark.sentiment === 'BEARISH' ? colors.accentNegative :
+                               colors.accentNeutral
+                      }]}>
+                        {bookmark.sentiment}
+                      </Text>
+                    )}
                   </View>
-                  <MaterialIcons name="chevron-right" color={colors.textSecondary} size={16} />
-                </View>
+                  <TouchableOpacity 
+                    style={styles.deleteBookmarkButton}
+                    onPress={() => handleDeleteBookmark(bookmark.id, bookmark.title)}
+                  >
+                    <MaterialIcons name="delete" color={colors.accentNegative} size={18} />
+                  </TouchableOpacity>
+                </TouchableOpacity>
               ))}
-              {defaultBookmarks.length > 3 && (
-                <TouchableOpacity style={styles.viewAllButton}>
-                  <Text style={styles.viewAllText}>View all {defaultBookmarks.length} bookmarks</Text>
+              {!showAllBookmarks && bookmarks.length > 3 && (
+                <TouchableOpacity style={styles.viewAllButton} onPress={handleViewAllBookmarks}>
+                  <Text style={styles.viewAllText}>View all {bookmarks.length} bookmarks</Text>
                   <MaterialIcons name="chevron-right" color={colors.accentPositive} size={16} />
+                </TouchableOpacity>
+              )}
+              {showAllBookmarks && bookmarks.length > 3 && (
+                <TouchableOpacity style={styles.viewAllButton} onPress={() => setShowAllBookmarks(false)}>
+                  <Text style={styles.viewAllText}>Show less</Text>
+                  <MaterialIcons name="chevron-up" color={colors.accentPositive} size={16} />
                 </TouchableOpacity>
               )}
             </View>
@@ -623,6 +673,15 @@ const styles = StyleSheet.create({
   bookmarkSource: {
     color: colors.textSecondary,
     fontSize: 14,
+    marginBottom: 4,
+  },
+  bookmarkSentiment: {
+    fontSize: 12,
+    fontWeight: '500',
+  },
+  deleteBookmarkButton: {
+    padding: 8,
+    marginLeft: 8,
   },
   viewAllButton: {
     flexDirection: "row",

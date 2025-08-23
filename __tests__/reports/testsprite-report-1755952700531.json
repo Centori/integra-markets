@@ -1,0 +1,245 @@
+{
+  "metadata": {
+    "framework": "TestSprite AI Testing Framework",
+    "version": "1.0.0",
+    "timestamp": "2025-08-23T12:38:20.531Z",
+    "duration": 23,
+    "environment": {
+      "node": "v20.17.0",
+      "platform": "darwin",
+      "arch": "arm64"
+    }
+  },
+  "summary": {
+    "totalTests": 24,
+    "passed": 23,
+    "failed": 1,
+    "skipped": 0,
+    "startTime": "2025-08-23T12:38:20.508Z",
+    "endTime": "2025-08-23T12:38:20.531Z",
+    "duration": 23
+  },
+  "results": {
+    "frontend": [
+      {
+        "component": "ChatInterface",
+        "test": "Renders correctly",
+        "status": "passed",
+        "timestamp": "2025-08-23T12:38:20.508Z"
+      },
+      {
+        "component": "ChatInterface",
+        "test": "Text input works",
+        "status": "passed",
+        "timestamp": "2025-08-23T12:38:20.508Z"
+      },
+      {
+        "component": "ChatInterface",
+        "test": "Suggestion chips render",
+        "status": "passed",
+        "timestamp": "2025-08-23T12:38:20.508Z"
+      },
+      {
+        "component": "NewsCard",
+        "test": "Renders news content",
+        "status": "passed",
+        "timestamp": "2025-08-23T12:38:20.508Z"
+      },
+      {
+        "component": "NewsCard",
+        "test": "Displays sentiment",
+        "status": "passed",
+        "timestamp": "2025-08-23T12:38:20.508Z"
+      },
+      {
+        "component": "AuthButtons",
+        "test": "Renders auth buttons",
+        "status": "passed",
+        "timestamp": "2025-08-23T12:38:20.508Z"
+      },
+      {
+        "component": "AuthButtons",
+        "test": "Component test failed",
+        "status": "failed",
+        "error": "expect(...).toHaveBeenCalled is not a function",
+        "timestamp": "2025-08-23T12:38:20.509Z"
+      },
+      {
+        "component": "TodayDashboard",
+        "test": "Renders dashboard sections",
+        "status": "passed",
+        "timestamp": "2025-08-23T12:38:20.509Z"
+      },
+      {
+        "component": "AIAnalysisOverlay",
+        "test": "Renders overlay content",
+        "status": "passed",
+        "timestamp": "2025-08-23T12:38:20.509Z"
+      },
+      {
+        "component": "OnboardingForm",
+        "test": "Renders onboarding form",
+        "status": "passed",
+        "timestamp": "2025-08-23T12:38:20.509Z"
+      },
+      {
+        "component": "NotificationSettings",
+        "test": "Renders notification settings",
+        "status": "passed",
+        "timestamp": "2025-08-23T12:38:20.509Z"
+      },
+      {
+        "component": "WelcomeScreen",
+        "test": "Renders welcome screen",
+        "status": "passed",
+        "timestamp": "2025-08-23T12:38:20.509Z"
+      }
+    ],
+    "api": [
+      {
+        "endpoint": "Health Check",
+        "test": "Endpoint Availability",
+        "status": "passed",
+        "statusCode": 200,
+        "timestamp": "2025-08-23T12:38:20.513Z"
+      },
+      {
+        "endpoint": "Health Check",
+        "test": "Response Validation",
+        "status": "passed",
+        "responseData": {
+          "status": "healthy",
+          "supabase_connected": true
+        },
+        "timestamp": "2025-08-23T12:38:20.515Z"
+      },
+      {
+        "endpoint": "Health Check",
+        "test": "Error Handling",
+        "status": "passed",
+        "statusCode": 200,
+        "timestamp": "2025-08-23T12:38:20.515Z"
+      },
+      {
+        "endpoint": "Health Check",
+        "test": "Data Integrity",
+        "status": "passed",
+        "timestamp": "2025-08-23T12:38:20.516Z"
+      },
+      {
+        "endpoint": "Root Endpoint",
+        "test": "Endpoint Availability",
+        "status": "passed",
+        "statusCode": 200,
+        "timestamp": "2025-08-23T12:38:20.516Z"
+      },
+      {
+        "endpoint": "Root Endpoint",
+        "test": "Response Validation",
+        "status": "passed",
+        "responseData": {
+          "message": "Integra AI Backend is running!",
+          "version": "1.0.1",
+          "endpoints": [
+            "/analyze-sentiment",
+            "/health"
+          ]
+        },
+        "timestamp": "2025-08-23T12:38:20.517Z"
+      },
+      {
+        "endpoint": "Root Endpoint",
+        "test": "Error Handling",
+        "status": "passed",
+        "statusCode": 200,
+        "timestamp": "2025-08-23T12:38:20.517Z"
+      },
+      {
+        "endpoint": "Root Endpoint",
+        "test": "Data Integrity",
+        "status": "passed",
+        "timestamp": "2025-08-23T12:38:20.518Z"
+      },
+      {
+        "endpoint": "Sentiment Analysis",
+        "test": "Endpoint Availability",
+        "status": "passed",
+        "statusCode": 200,
+        "timestamp": "2025-08-23T12:38:20.524Z"
+      },
+      {
+        "endpoint": "Sentiment Analysis",
+        "test": "Response Validation",
+        "status": "passed",
+        "responseData": {
+          "text": "The market is looking very bullish today with strong gains across commodities.",
+          "sentiment": "positive",
+          "confidence": 0.7,
+          "timestamp": "2025-08-23T13:38:20.525507"
+        },
+        "timestamp": "2025-08-23T12:38:20.526Z"
+      },
+      {
+        "endpoint": "Sentiment Analysis",
+        "test": "Error Handling",
+        "status": "passed",
+        "statusCode": 422,
+        "timestamp": "2025-08-23T12:38:20.529Z"
+      },
+      {
+        "endpoint": "Sentiment Analysis",
+        "test": "Data Integrity",
+        "status": "passed",
+        "timestamp": "2025-08-23T12:38:20.531Z"
+      }
+    ],
+    "authentication": []
+  },
+  "statistics": {
+    "byCategory": {
+      "frontend": {
+        "total": 12,
+        "passed": 11,
+        "failed": 1,
+        "skipped": 0,
+        "successRate": "91.67"
+      },
+      "api": {
+        "total": 12,
+        "passed": 12,
+        "failed": 0,
+        "skipped": 0,
+        "successRate": "100.00"
+      },
+      "authentication": {
+        "total": 0,
+        "passed": 0,
+        "failed": 0,
+        "skipped": 0,
+        "successRate": 0
+      }
+    },
+    "byStatus": {
+      "passed": 23,
+      "failed": 1,
+      "skipped": 0
+    },
+    "successRate": "95.83",
+    "averageTestDuration": 0
+  },
+  "recommendations": [
+    {
+      "category": "Critical Issues",
+      "priority": "high",
+      "description": "1 tests failed and require immediate attention",
+      "actions": [
+        {
+          "test": "Component test failed",
+          "component": "AuthButtons",
+          "error": "expect(...).toHaveBeenCalled is not a function",
+          "suggestion": "Review test implementation and fix the underlying issue"
+        }
+      ]
+    }
+  ]
+}

@@ -1,0 +1,348 @@
+{
+  "metadata": {
+    "framework": "TestSprite AI Testing Framework",
+    "version": "1.0.0",
+    "timestamp": "2025-08-23T12:18:29.065Z",
+    "duration": 53,
+    "environment": {
+      "node": "v20.17.0",
+      "platform": "darwin",
+      "arch": "arm64"
+    }
+  },
+  "summary": {
+    "totalTests": 26,
+    "passed": 13,
+    "failed": 13,
+    "skipped": 0,
+    "startTime": "2025-08-23T12:18:29.012Z",
+    "endTime": "2025-08-23T12:18:29.065Z",
+    "duration": 53
+  },
+  "results": {
+    "frontend": [
+      {
+        "component": "ChatInterface",
+        "test": "Renders correctly",
+        "status": "passed",
+        "timestamp": "2025-08-23T12:18:29.013Z"
+      },
+      {
+        "component": "ChatInterface",
+        "test": "Text input works",
+        "status": "passed",
+        "timestamp": "2025-08-23T12:18:29.013Z"
+      },
+      {
+        "component": "ChatInterface",
+        "test": "Component test failed",
+        "status": "failed",
+        "error": "screen.getAllByText is not a function",
+        "timestamp": "2025-08-23T12:18:29.013Z"
+      },
+      {
+        "component": "NewsCard",
+        "test": "Component test failed",
+        "status": "failed",
+        "error": "expect is not defined",
+        "timestamp": "2025-08-23T12:18:29.013Z"
+      },
+      {
+        "component": "AuthButtons",
+        "test": "Component test failed",
+        "status": "failed",
+        "error": "expect is not defined",
+        "timestamp": "2025-08-23T12:18:29.013Z"
+      },
+      {
+        "component": "TodayDashboard",
+        "test": "Renders dashboard sections",
+        "status": "passed",
+        "timestamp": "2025-08-23T12:18:29.013Z"
+      },
+      {
+        "component": "AIAnalysisOverlay",
+        "test": "Component test failed",
+        "status": "failed",
+        "error": "expect is not defined",
+        "timestamp": "2025-08-23T12:18:29.013Z"
+      },
+      {
+        "component": "OnboardingForm",
+        "test": "Component test failed",
+        "status": "failed",
+        "error": "expect is not defined",
+        "timestamp": "2025-08-23T12:18:29.013Z"
+      },
+      {
+        "component": "NotificationSettings",
+        "test": "Component test failed",
+        "status": "failed",
+        "error": "expect is not defined",
+        "timestamp": "2025-08-23T12:18:29.014Z"
+      },
+      {
+        "component": "WelcomeScreen",
+        "test": "Component test failed",
+        "status": "failed",
+        "error": "expect is not defined",
+        "timestamp": "2025-08-23T12:18:29.014Z"
+      }
+    ],
+    "api": [
+      {
+        "endpoint": "Health Check",
+        "test": "Endpoint Availability",
+        "status": "passed",
+        "statusCode": 200,
+        "timestamp": "2025-08-23T12:18:29.046Z"
+      },
+      {
+        "endpoint": "Health Check",
+        "test": "Response Validation",
+        "status": "passed",
+        "responseData": {
+          "status": "healthy",
+          "supabase_connected": true
+        },
+        "timestamp": "2025-08-23T12:18:29.048Z"
+      },
+      {
+        "endpoint": "Health Check",
+        "test": "Error Handling",
+        "status": "failed",
+        "statusCode": 200,
+        "timestamp": "2025-08-23T12:18:29.049Z"
+      },
+      {
+        "endpoint": "Health Check",
+        "test": "Data Integrity",
+        "status": "passed",
+        "timestamp": "2025-08-23T12:18:29.050Z"
+      },
+      {
+        "endpoint": "Root Endpoint",
+        "test": "Endpoint Availability",
+        "status": "passed",
+        "statusCode": 200,
+        "timestamp": "2025-08-23T12:18:29.051Z"
+      },
+      {
+        "endpoint": "Root Endpoint",
+        "test": "Response Validation",
+        "status": "passed",
+        "responseData": {
+          "message": "Integra AI Backend is running!",
+          "version": "1.0.1",
+          "endpoints": [
+            "/analyze-sentiment",
+            "/health"
+          ]
+        },
+        "timestamp": "2025-08-23T12:18:29.051Z"
+      },
+      {
+        "endpoint": "Root Endpoint",
+        "test": "Error Handling",
+        "status": "failed",
+        "statusCode": 200,
+        "timestamp": "2025-08-23T12:18:29.052Z"
+      },
+      {
+        "endpoint": "Root Endpoint",
+        "test": "Data Integrity",
+        "status": "passed",
+        "timestamp": "2025-08-23T12:18:29.053Z"
+      },
+      {
+        "endpoint": "Sentiment Analysis",
+        "test": "Endpoint Availability",
+        "status": "passed",
+        "statusCode": 200,
+        "timestamp": "2025-08-23T12:18:29.061Z"
+      },
+      {
+        "endpoint": "Sentiment Analysis",
+        "test": "Response Validation",
+        "status": "passed",
+        "responseData": {
+          "text": "The market is looking very bullish today with strong gains across commodities.",
+          "sentiment": "positive",
+          "confidence": 0.7,
+          "timestamp": "2025-08-23T13:18:29.062062"
+        },
+        "timestamp": "2025-08-23T12:18:29.062Z"
+      },
+      {
+        "endpoint": "Sentiment Analysis",
+        "test": "Error Handling",
+        "status": "passed",
+        "statusCode": 422,
+        "timestamp": "2025-08-23T12:18:29.063Z"
+      },
+      {
+        "endpoint": "Sentiment Analysis",
+        "test": "Data Integrity",
+        "status": "passed",
+        "timestamp": "2025-08-23T12:18:29.064Z"
+      }
+    ],
+    "authentication": [
+      {
+        "flow": "Email/Password Login",
+        "test": "Auth Flow Test",
+        "status": "failed",
+        "error": "Cannot read properties of undefined (reading 'find')",
+        "timestamp": "2025-08-23T12:18:29.065Z"
+      },
+      {
+        "flow": "Google OAuth",
+        "test": "Auth Flow Test",
+        "status": "failed",
+        "error": "Cannot read properties of undefined (reading 'find')",
+        "timestamp": "2025-08-23T12:18:29.065Z"
+      },
+      {
+        "flow": "User Registration",
+        "test": "Auth Flow Test",
+        "status": "failed",
+        "error": "Cannot read properties of undefined (reading 'find')",
+        "timestamp": "2025-08-23T12:18:29.065Z"
+      },
+      {
+        "flow": "Session Management",
+        "test": "Auth Flow Test",
+        "status": "failed",
+        "error": "Cannot read properties of undefined (reading 'find')",
+        "timestamp": "2025-08-23T12:18:29.065Z"
+      }
+    ]
+  },
+  "statistics": {
+    "byCategory": {
+      "frontend": {
+        "total": 10,
+        "passed": 3,
+        "failed": 7,
+        "skipped": 0,
+        "successRate": "30.00"
+      },
+      "api": {
+        "total": 12,
+        "passed": 10,
+        "failed": 2,
+        "skipped": 0,
+        "successRate": "83.33"
+      },
+      "authentication": {
+        "total": 4,
+        "passed": 0,
+        "failed": 4,
+        "skipped": 0,
+        "successRate": "0.00"
+      }
+    },
+    "byStatus": {
+      "passed": 13,
+      "failed": 13,
+      "skipped": 0
+    },
+    "successRate": "50.00",
+    "averageTestDuration": 0
+  },
+  "recommendations": [
+    {
+      "category": "Critical Issues",
+      "priority": "high",
+      "description": "13 tests failed and require immediate attention",
+      "actions": [
+        {
+          "test": "Component test failed",
+          "component": "ChatInterface",
+          "error": "screen.getAllByText is not a function",
+          "suggestion": "Review test implementation and fix the underlying issue"
+        },
+        {
+          "test": "Component test failed",
+          "component": "NewsCard",
+          "error": "expect is not defined",
+          "suggestion": "Review test implementation and fix the underlying issue"
+        },
+        {
+          "test": "Component test failed",
+          "component": "AuthButtons",
+          "error": "expect is not defined",
+          "suggestion": "Review test implementation and fix the underlying issue"
+        },
+        {
+          "test": "Component test failed",
+          "component": "AIAnalysisOverlay",
+          "error": "expect is not defined",
+          "suggestion": "Review test implementation and fix the underlying issue"
+        },
+        {
+          "test": "Component test failed",
+          "component": "OnboardingForm",
+          "error": "expect is not defined",
+          "suggestion": "Review test implementation and fix the underlying issue"
+        },
+        {
+          "test": "Component test failed",
+          "component": "NotificationSettings",
+          "error": "expect is not defined",
+          "suggestion": "Review test implementation and fix the underlying issue"
+        },
+        {
+          "test": "Component test failed",
+          "component": "WelcomeScreen",
+          "error": "expect is not defined",
+          "suggestion": "Review test implementation and fix the underlying issue"
+        },
+        {
+          "test": "Error Handling",
+          "component": "Health Check",
+          "suggestion": "Review test implementation and fix the underlying issue"
+        },
+        {
+          "test": "Error Handling",
+          "component": "Root Endpoint",
+          "suggestion": "Review test implementation and fix the underlying issue"
+        },
+        {
+          "test": "Auth Flow Test",
+          "component": "Email/Password Login",
+          "error": "Cannot read properties of undefined (reading 'find')",
+          "suggestion": "Review mock configurations and ensure all dependencies are properly mocked"
+        },
+        {
+          "test": "Auth Flow Test",
+          "component": "Google OAuth",
+          "error": "Cannot read properties of undefined (reading 'find')",
+          "suggestion": "Review mock configurations and ensure all dependencies are properly mocked"
+        },
+        {
+          "test": "Auth Flow Test",
+          "component": "User Registration",
+          "error": "Cannot read properties of undefined (reading 'find')",
+          "suggestion": "Review mock configurations and ensure all dependencies are properly mocked"
+        },
+        {
+          "test": "Auth Flow Test",
+          "component": "Session Management",
+          "error": "Cannot read properties of undefined (reading 'find')",
+          "suggestion": "Review mock configurations and ensure all dependencies are properly mocked"
+        }
+      ]
+    },
+    {
+      "category": "Test Coverage",
+      "priority": "medium",
+      "description": "Success rate is 50.00%, consider improving test reliability",
+      "actions": [
+        "Review failed test cases and fix underlying issues",
+        "Add more comprehensive error handling",
+        "Improve test data and mock configurations"
+      ]
+    }
+  ]
+}

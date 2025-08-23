@@ -4,7 +4,7 @@ import Constants from 'expo-constants';
 // Groq API configuration
 const GROQ_API_URL = 'https://api.groq.com/openai/v1/chat/completions';
 // Use environment variable for API key
-const GROQ_API_KEY = Constants.expoConfig?.extra?.groqApiKey || '';
+const GROQ_API_KEY = process.env.EXPO_PUBLIC_GROQ_API_KEY || Constants.expoConfig?.extra?.groqApiKey || '';
 
 // System prompt optimized for commodities trading analysis
 const COMMODITIES_SYSTEM_PROMPT = `You are an AI assistant specialized in commodities markets analysis. You help traders understand market dynamics, price movements, and news impacts on commodities like crude oil, natural gas, gold, and others.

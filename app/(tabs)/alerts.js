@@ -7,11 +7,14 @@ import {
   TouchableOpacity,
   Switch,
   Alert,
+  SafeAreaView,
+  StatusBar,
 } from 'react-native';
 import { MaterialIcons } from '@expo/vector-icons';
 import Toast from 'react-native-toast-message';
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import { useRouter } from 'expo-router';
+import { router } from 'expo-router';
+import HollowCircularIcon from '../components/HollowCircularIcon';
 
 const colors = {
   bgPrimary: '#121212',
@@ -341,10 +344,11 @@ export default function AlertsScreen() {
             >
               <View style={styles.alertHeader}>
                 <View style={styles.alertIconContainer}>
-                  <MaterialIcons 
+                  <HollowCircularIcon 
                     name={getTypeIcon(alert.type)} 
                     size={20} 
-                    color={getSeverityColor(alert.severity)} 
+                    color={getSeverityColor(alert.severity)}
+                    padding={4}
                   />
                 </View>
                 <View style={styles.alertInfo}>
@@ -368,7 +372,7 @@ export default function AlertsScreen() {
             style={styles.actionButton}
             onPress={() => Toast.show({ type: 'info', text1: 'Add Alert', text2: 'Create new price alert' })}
           >
-            <MaterialIcons name="add-alert" size={24} color={colors.accentPositive} />
+            <HollowCircularIcon name="add-alert" size={24} color={colors.accentPositive} padding={4} />
             <Text style={styles.actionText}>Add Price Alert</Text>
             <MaterialIcons name="chevron-right" size={24} color={colors.textSecondary} />
           </TouchableOpacity>
@@ -377,7 +381,7 @@ export default function AlertsScreen() {
             style={styles.actionButton}
             onPress={() => Toast.show({ type: 'info', text1: 'Manage', text2: 'Manage all alerts' })}
           >
-            <MaterialIcons name="tune" size={24} color={colors.accentData} />
+            <HollowCircularIcon name="tune" size={24} color={colors.accentData} padding={4} />
             <Text style={styles.actionText}>Manage All Alerts</Text>
             <MaterialIcons name="chevron-right" size={24} color={colors.textSecondary} />
           </TouchableOpacity>
@@ -386,7 +390,7 @@ export default function AlertsScreen() {
             style={styles.actionButton}
             onPress={() => Toast.show({ type: 'info', text1: 'History', text2: 'View alert history' })}
           >
-            <MaterialIcons name="history" size={24} color={colors.textSecondary} />
+            <HollowCircularIcon name="history" size={24} color={colors.textSecondary} padding={4} />
             <Text style={styles.actionText}>Alert History</Text>
             <MaterialIcons name="chevron-right" size={24} color={colors.textSecondary} />
           </TouchableOpacity>

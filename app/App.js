@@ -29,9 +29,10 @@ import IntegraLoadingPage from './components/IntegraLoadingPage';
 import AuthLoadingScreen from './components/AuthLoadingScreen';
 import OnboardingForm from './components/OnboardingForm';
 import AlertPreferencesForm from './components/AlertPreferencesForm';
+import AlertsScreen from './components/AlertsScreen';
 import NewsCard from './components/NewsCard';
 import AIAnalysisOverlay from './components/AIAnalysisOverlay';
-import AlertsScreen from './components/AlertsScreen';
+import { BookmarkProvider } from './providers/BookmarkProvider';
 
 // Color Palette
 const colors = {
@@ -372,18 +373,27 @@ const App = () => {
   };
 
   const handleAuthComplete = async (authData) => {
+    console.log('handleAuthComplete called with:', authData);
+    
     setUserData(authData);
     setShowAuth(false);
     
     // Check if we should skip onboarding (returning user signing in with Google)
     if (authData.skipOnboarding) {
+      console.log('User has skipOnboarding=true, checking alerts...');
       // User has already completed onboarding, go straight to main app
       const alertsCompleted = await AsyncStorage.getItem('alerts_completed');
+      console.log('Alerts completed status:', alertsCompleted);
+      
       if (alertsCompleted !== 'true') {
+        console.log('Showing alert preferences');
         setShowAlertPreferences(true);
+      } else {
+        console.log('All onboarding complete, showing main app');
       }
       // Otherwise, show main app (all flags remain false)
     } else {
+      console.log('User needs onboarding, showing onboarding screen');
       // New user or user who hasn't completed onboarding
       setShowOnboarding(true);
     }
@@ -406,9 +416,17 @@ const App = () => {
     }
   };
 
-  const handleOnboardingSkip = () => {
-    setShowOnboarding(false);
-    setShowAlertPreferences(true);
+  const handleOnboardingSkip = async () => {
+    try {
+      await AsyncStorage.setItem('onboarding_completed', 'true');
+      setShowOnboarding(false);
+      setShowAlertPreferences(true);
+    } catch (error) {
+      console.error('Error saving onboarding skip:', error);
+      // Still proceed even if saving fails
+      setShowOnboarding(false);
+      setShowAlertPreferences(true);
+    }
   };
 
   const handleAlertPreferencesComplete = async (preferences) => {
@@ -663,10 +681,8 @@ const App = () => {
   // Render alerts screen
   if (activeNav === 'Alerts') {
     return (
-      <View style={{ flex: 1 }}>
-        <AlertsScreen 
-          onNavigateToAlertPreferences={() => setShowAlertPreferences(true)}
-        />
+      <View style={styles.container}>
+        <AlertsScreen onNavigateToAlertPreferences={() => setShowAlertPreferences(true)} />
         {renderBottomNav()}
       </View>
     );
@@ -679,7 +695,13 @@ const App = () => {
       <View style={styles.container}>
         <View style={styles.header}>
           <Text style={styles.headerTitle}>Today</Text>
-          <TouchableOpacity>
+          <TouchableOpacity onPress={() => {
+            Alert.alert(
+              'Notifications',
+              'Notification settings and alerts will be available in the next update.',
+              [{ text: 'OK' }]
+            );
+          }}>
             <MaterialIcons name="notifications-none" size={24} color={colors.textPrimary} />
           </TouchableOpacity>
         </View>
@@ -797,9 +819,11 @@ const WebContainer = ({ children }) => {
 // Wrapped App - AuthProvider removed since import is commented out
 const WrappedApp = () => (
   <ErrorBoundary>
-    <WebContainer>
-      <App />
-    </WebContainer>
+    <BookmarkProvider>
+      <WebContainer>
+        <App />
+      </WebContainer>
+    </BookmarkProvider>
   </ErrorBoundary>
 );
 

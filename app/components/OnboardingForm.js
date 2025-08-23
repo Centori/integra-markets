@@ -15,6 +15,7 @@ import {
 } from 'react-native';
 import { MaterialIcons, MaterialCommunityIcons } from '@expo/vector-icons';
 import * as ImagePicker from 'expo-image-picker';
+import HollowCircularIcon from './HollowCircularIcon';
 // import * as ImageManipulator from 'expo-image-manipulator'; // Temporarily disabled
 
 // Use the same color palette as App.js
@@ -111,10 +112,11 @@ const RoleSelectionCard = ({ selectedRole, onSelect }) => (
                     ]}
                     onPress={() => onSelect(role.value)}
                 >
-                    <MaterialIcons 
+                    <HollowCircularIcon 
                         name={role.icon} 
                         size={24} 
-                        color={selectedRole === role.value ? colors.bgPrimary : colors.accentPositive} 
+                        color={selectedRole === role.value ? colors.bgPrimary : colors.accentPositive}
+                        padding={6}
                     />
                     <Text style={[
                         styles.optionTitle,
@@ -194,10 +196,11 @@ const MarketFocusCard = ({ selectedMarkets, onToggle, onSkip }) => (
                     ]}
                     onPress={() => onToggle(market.value)}
                 >
-                    <MaterialIcons 
+                    <HollowCircularIcon 
                         name={market.icon} 
                         size={32} 
-                        color={selectedMarkets.includes(market.value) ? colors.bgPrimary : market.color} 
+                        color={selectedMarkets.includes(market.value) ? colors.bgPrimary : market.color}
+                        padding={8} 
                     />
                     <Text style={[
                         styles.marketOptionTitle,

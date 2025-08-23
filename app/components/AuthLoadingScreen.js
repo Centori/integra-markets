@@ -13,7 +13,6 @@ import {
     Platform,
     ScrollView,
 } from 'react-native';
-import { BlurView } from '@react-native-community/blur';
 import { BlurView as ExpoBlurView } from 'expo-blur';
 import { MaterialIcons, MaterialCommunityIcons, FontAwesome } from '@expo/vector-icons';
 import IntegraIcon from './IntegraIcon';
@@ -194,6 +193,15 @@ const AuthLoadingScreen = ({ onAuthComplete, onSkip }) => {
         try {
             // Check if onboarding has been completed before
             const onboardingCompleted = await AsyncStorage.getItem('onboarding_completed');
+            const alertsCompleted = await AsyncStorage.getItem('alerts_completed');
+            const existingUserData = await AsyncStorage.getItem('user_data');
+            
+            console.log('Google Auth - Storage check:', {
+                onboardingCompleted,
+                alertsCompleted,
+                hasUserData: !!existingUserData
+            });
+            
             const isReturningUser = onboardingCompleted === 'true';
             
             // Attempt to use the authService for proper Google OAuth
@@ -208,9 +216,15 @@ const AuthLoadingScreen = ({ onAuthComplete, onSkip }) => {
                     fullName: result.user.full_name || result.user.fullName || 'Google User',
                     username: result.user.email ? result.user.email.split('@')[0] : 'googleuser',
                     authMethod: 'google',
-                    isNewUser: !isReturningUser,  // Set based on onboarding status
-                    skipOnboarding: isReturningUser  // Add flag to skip onboarding if already done
+                    isNewUser: !isReturningUser,
+                    skipOnboarding: isReturningUser
                 };
+                
+                console.log('Google Auth Success - User data:', {
+                    ...userData,
+                    skipOnboarding: userData.skipOnboarding
+                });
+                
                 onAuthComplete(userData);
             } else {
                 // Fallback to a mock if OAuth fails but don't block the user
@@ -224,6 +238,12 @@ const AuthLoadingScreen = ({ onAuthComplete, onSkip }) => {
                     isNewUser: !isReturningUser,
                     skipOnboarding: isReturningUser
                 };
+                
+                console.log('Google Auth Fallback - User data:', {
+                    ...mockGoogleUser,
+                    skipOnboarding: mockGoogleUser.skipOnboarding
+                });
+                
                 onAuthComplete(mockGoogleUser);
             }
         } catch (error) {

@@ -7,9 +7,10 @@ from passlib.context import CryptContext
 from fastapi import Depends, HTTPException, status
 from fastapi.security import OAuth2PasswordBearer
 from sqlalchemy.orm import Session
-from app.core.config import settings
-from app.core.database import get_db
-from app.models.users import User, UserSubscription, SubscriptionTier, LLMUsage
+from core.config import settings
+from core.database import get_db
+from models.users import User, UserSubscription, SubscriptionTier, LLMUsage
+from schemas.users import UserCreate
 
 # Configure logging
 logger = logging.getLogger(__name__)

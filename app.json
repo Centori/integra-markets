@@ -6,6 +6,10 @@
     "orientation": "portrait",
     "icon": "./assets/icon.png",
     "userInterfaceStyle": "light",
+    "description": "Professional financial markets analysis and news aggregation platform with AI-powered sentiment analysis for commodities trading.",
+    "keywords": ["finance", "markets", "trading", "commodities", "news", "analysis", "AI", "sentiment"],
+    "category": "finance",
+    "privacy": "https://integramarkets.com/privacy",
     "splash": {
       "image": "./assets/splash.png",
       "resizeMode": "contain",
@@ -16,9 +20,15 @@
     ],
     "ios": {
       "bundleIdentifier": "com.centori.integramarkets",
-      "buildNumber": "23",
+      "buildNumber": "25",
+      "deploymentTarget": "13.0",
       "supportsTablet": true,
       "requireFullScreen": false,
+      "config": {
+        "usesNonExemptEncryption": false
+      },
+      "appStoreUrl": "https://apps.apple.com/app/integra-markets/id123456789",
+      "category": "finance",
       "infoPlist": {
         "ITSAppUsesNonExemptEncryption": false,
         "NSCameraUsageDescription": "This app uses the camera to capture financial documents and receipts.",
@@ -26,8 +36,13 @@
         "NSFaceIDUsageDescription": "This app uses Face ID for secure authentication.",
         "NSAppTransportSecurity": {
           "NSAllowsArbitraryLoads": false,
+          "NSAllowsLocalNetworking": false,
           "NSExceptionDomains": {}
         },
+        "NSUserNotificationsUsageDescription": "This app sends notifications for market alerts and breaking news.",
+        "NSKeychainAccessGroups": [
+          "$(AppIdentifierPrefix)com.centori.integramarkets"
+        ],
         "UIBackgroundModes": [
           "fetch",
           "remote-notification"
@@ -81,16 +96,16 @@
       [
         "@react-native-google-signin/google-signin",
         {
-          "iosUrlScheme": "com.googleusercontent.apps.YOUR_IOS_CLIENT_ID"
+          "iosUrlScheme": "com.googleusercontent.apps.1039046627332-nk0jejccajfd9u63p5kas0l5ps53nlsq"
         }
       ]
     ],
     "extra": {
       "supabaseUrl": "https://jcovjmuaysebdfbpbvdh.supabase.co",
-      "supabaseAnonKey": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Impjb3ZqbXVheXNlYmRmYnBidmRoIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NTI0OTA3NTEsImV4cCI6MjA2ODA2Njc1MX0.vnIaHcLbQRBz1Q1HgFOT5-KZqghQDKBu-uCanVU2AGQ",
-      "apiUrl": "http://localhost:8000",
-      "groqApiKey": "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",
-      "huggingFaceToken": "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",
+      "supabaseAnonKey": "__SUPABASE_ANON_KEY__",
+      "apiUrl": "__API_URL__",
+      "groqApiKey": "__GROQ_API_KEY__",
+      "huggingFaceToken": "__HUGGING_FACE_TOKEN__",
       "eas": {
         "projectId": "e9868cd6-adaa-422c-be2b-89b6f028e5f6"
       }

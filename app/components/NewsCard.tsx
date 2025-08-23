@@ -2,6 +2,7 @@ import React from 'react';
 import { View, Text, StyleSheet, TouchableOpacity, Linking, Alert, Share, Platform, ActionSheetIOS, Clipboard } from 'react-native';
 import { Feather } from '@expo/vector-icons';
 import { SingleStar } from './CustomStarIcon';
+import { useBookmarks } from '../providers/BookmarkProvider';
 
 interface NewsItem {
   id?: number;
@@ -22,6 +23,32 @@ interface NewsCardProps {
 }
 
 export default function NewsCard({ item, onAIClick }: NewsCardProps) {
+  const { addBookmark, removeBookmark, isBookmarked, bookmarks } = useBookmarks();
+  const isCurrentlyBookmarked = isBookmarked(item.title);
+
+  const handleBookmarkToggle = async () => {
+    try {
+      if (isCurrentlyBookmarked) {
+        // Find the bookmark by title and remove it
+        const bookmark = bookmarks.find(b => b.title === item.title);
+        if (bookmark) {
+          await removeBookmark(bookmark.id);
+        }
+      } else {
+        // Add new bookmark
+        await addBookmark({
+          title: item.title,
+          summary: item.summary || item.content || '',
+          source: item.source || 'Unknown',
+          sentiment: (item.sentiment?.toUpperCase() as "BULLISH" | "BEARISH" | "NEUTRAL") || 'NEUTRAL',
+          sentimentScore: parseFloat(item.sentimentScore || '0.5')
+        });
+      }
+    } catch (error) {
+      console.error('Bookmark error:', error);
+      Alert.alert('Error', 'Failed to update bookmark');
+    }
+  };
   const handleSourcePress = async () => {
     // First check if we have a valid URL
     if (item.sourceUrl && item.sourceUrl !== '#') {
@@ -218,6 +245,14 @@ export default function NewsCard({ item, onAIClick }: NewsCardProps) {
           </View>
         )}
         <View style={styles.actionButtons}>
+          <TouchableOpacity onPress={handleBookmarkToggle} style={styles.bookmarkButton}>
+            <Feather 
+              name={isCurrentlyBookmarked ? "bookmark" : "bookmark"} 
+              size={18} 
+              color={isCurrentlyBookmarked ? "#FFD700" : "#666666"} 
+              fill={isCurrentlyBookmarked ? "#FFD700" : "none"}
+            />
+          </TouchableOpacity>
           <TouchableOpacity onPress={() => onAIClick(item)} style={styles.starButton}>
             <SingleStar size={35} color="#4a9eff" />
           </TouchableOpacity>
@@ -300,6 +335,10 @@ const styles = StyleSheet.create({
   actionButtons: {
     flexDirection: 'row',
     alignItems: 'center',
+  },
+  bookmarkButton: {
+    padding: 8,
+    marginRight: 8,
   },
   starButton: {
     padding: 2,

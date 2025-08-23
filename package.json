@@ -1,6 +1,7 @@
 {
   "name": "integra",
   "version": "1.0.0",
+  "type": "commonjs",
   "private": true,
   "description": "AI-powered commodity trading insights app",
   "main": "index.ts",
@@ -14,7 +15,7 @@
     "@expo/metro-runtime": "^4.0.1",
     "@expo/vector-icons": "~14.0.4",
     "@react-native-async-storage/async-storage": "1.23.1",
-    "@react-native-community/blur": "^4.4.1",
+
     "@react-native-google-signin/google-signin": "^15.0.0",
     "@supabase/supabase-js": "^2.53.0",
     "axios": "^1.11.0",
@@ -54,6 +55,10 @@
     "submit:ios": "eas submit --platform ios --profile production",
     "submit:android": "eas submit --platform android --profile production",
     "test": "jest",
+    "test:testsprite": "node __tests__/testsprite-runner.js",
+    "test:frontend": "node __tests__/testsprite-runner.js frontend",
+    "test:api": "node __tests__/testsprite-runner.js api",
+    "test:auth": "node __tests__/testsprite-runner.js auth",
     "lint": "eslint . --ext .js,.jsx,.ts,.tsx",
     "lint:fix": "eslint . --ext .js,.jsx,.ts,.tsx --fix"
   },

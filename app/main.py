@@ -1,12 +1,12 @@
 import uvicorn
 from fastapi import FastAPI, Depends
 from fastapi.middleware.cors import CORSMiddleware
-from app.api.routes import router
-from app.api.ai_alerts import router as ai_alerts_router
-from app.api.notifications import router as notifications_router
-from app.core.config import settings
-from app.core.database import create_db_and_tables
-from app.core.initialize import initialize_app
+from api.routes import router
+from api.ai_alerts import router as ai_alerts_router
+from api.notifications import router as notifications_router
+from core.config import settings
+from core.database import create_db_and_tables
+from core.initialize import initialize_app
 
 app = FastAPI(
     title="Integra Markets API",
@@ -36,6 +36,10 @@ async def startup_event():
     
     # Initialize NLTK, FinBERT, and check API keys
     initialize_app()
+    
+    # Initialize sentiment analyzer
+    from services.enhanced_sentiment import sentiment_analyzer
+    await sentiment_analyzer.initialize()
 
 @app.get("/")
 async def root():

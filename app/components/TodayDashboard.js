@@ -455,7 +455,10 @@ const renderNewsCard = (item) => {
           >
             <MaterialCommunityIcons name="star-four-points" size={18} color="#30A5FF" />
           </TouchableOpacity>
-          <TouchableOpacity style={styles.moreButton}>
+          <TouchableOpacity 
+            style={styles.moreButton}
+            onPress={() => Alert.alert('More Options', 'Additional article options will be available in the next update')}
+          >
             <MaterialIcons name="more-horiz" size={20} color="#A0A0A0" />
           </TouchableOpacity>
         </View>

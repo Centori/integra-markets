@@ -10,6 +10,7 @@ import {
   KeyboardAvoidingView,
   Platform,
   ActivityIndicator,
+  Clipboard,
 } from 'react-native';
 import { MaterialIcons } from '@expo/vector-icons';
 import groqService from '../services/groqService';
@@ -38,11 +39,11 @@ interface Message {
 }
 
 interface ChatInterfaceProps {
-  newsContext: {
+  newsContext?: {
     title: string;
     summary: string;
     source: string;
-  };
+  } | null;
 }
 
 const ChatInterface: React.FC<ChatInterfaceProps> = ({ newsContext }) => {
@@ -65,6 +66,8 @@ const ChatInterface: React.FC<ChatInterfaceProps> = ({ newsContext }) => {
     // Don't show initial message, just suggestions
     setShowSuggestions(messages.length === 0);
   }, [messages]);
+
+
 
   const handleSuggestionTap = (suggestion: string) => {
     setInputText(suggestion);
@@ -216,7 +219,7 @@ const ChatInterface: React.FC<ChatInterfaceProps> = ({ newsContext }) => {
       if (!message || message.role !== 'assistant') return;
 
       const isCurrentlyBookmarked = bookmarkedMessages.has(messageId);
-      const newBookmarkedSet = new Set(bookmarkedMessages);
+      const newBookmarkedSet = new Set<string>(bookmarkedMessages);
       
       if (isCurrentlyBookmarked) {
         newBookmarkedSet.delete(messageId);
@@ -244,8 +247,8 @@ const ChatInterface: React.FC<ChatInterfaceProps> = ({ newsContext }) => {
         const bookmarkData = {
           id: messageId,
           content: message.content,
-          newsTitle: newsContext.title,
-          newsSource: newsContext.source,
+          newsTitle: newsContext?.title || 'Unknown',
+          newsSource: newsContext?.source || 'Unknown',
           timestamp: message.timestamp,
           query: messages[messages.findIndex(m => m.id === messageId) - 1]?.content || 'General Analysis'
         };
@@ -262,6 +265,17 @@ const ChatInterface: React.FC<ChatInterfaceProps> = ({ newsContext }) => {
     }
   };
 
+  // Copy message content to clipboard
+  const copyToClipboard = async (messageContent: string) => {
+    try {
+      Clipboard.setString(messageContent);
+      Alert.alert('Copied!', 'Analysis copied to clipboard');
+    } catch (error) {
+      console.error('Error copying to clipboard:', error);
+      Alert.alert('Error', 'Failed to copy to clipboard');
+    }
+  };
+
   // Load existing bookmarks on component mount
   useEffect(() => {
     const loadBookmarks = async () => {
@@ -269,7 +283,7 @@ const ChatInterface: React.FC<ChatInterfaceProps> = ({ newsContext }) => {
         const existingBookmarks = await AsyncStorage.getItem('bookmarked_analyses');
         if (existingBookmarks) {
           const bookmarks = JSON.parse(existingBookmarks);
-          const bookmarkedIds = new Set(bookmarks.map((b: any) => b.id));
+          const bookmarkedIds = new Set<string>(bookmarks.map((b: any) => b.id));
           setBookmarkedMessages(bookmarkedIds);
         }
       } catch (error) {
@@ -302,18 +316,21 @@ const ChatInterface: React.FC<ChatInterfaceProps> = ({ newsContext }) => {
         ]}
         showsVerticalScrollIndicator={false}
       >
-        {/* Suggestion Chips */}
+        {/* Suggestion chips */}
         {showSuggestions && (
           <View style={styles.suggestionsContainer}>
-            {suggestions.map((suggestion, index) => (
-              <TouchableOpacity
-                key={index}
-                style={styles.suggestionChip}
-                onPress={() => handleSuggestionTap(suggestion)}
-              >
-                <Text style={styles.suggestionText}>{suggestion}</Text>
-              </TouchableOpacity>
-            ))}
+            <Text style={styles.suggestionsTitle}>Quick Actions</Text>
+            <View style={styles.suggestionsGrid}>
+              {suggestions.map((suggestion, index) => (
+                <TouchableOpacity
+                  key={index}
+                  style={styles.suggestionChip}
+                  onPress={() => handleSuggestionTap(suggestion)}
+                >
+                  <Text style={styles.suggestionText}>{suggestion}</Text>
+                </TouchableOpacity>
+              ))}
+            </View>
           </View>
         )}
         
@@ -340,16 +357,28 @@ const ChatInterface: React.FC<ChatInterfaceProps> = ({ newsContext }) => {
                 {message.role === 'user' ? 'You' : 'Integra AI'}
               </Text>
               {message.role === 'assistant' && message.content.trim() && (
-                <TouchableOpacity
-                  style={styles.bookmarkButton}
-                  onPress={() => toggleBookmark(message.id)}
-                >
-                  <MaterialIcons
-                    name={bookmarkedMessages.has(message.id) ? 'bookmark' : 'bookmark-border'}
-                    size={18}
-                    color={bookmarkedMessages.has(message.id) ? colors.accentPositive : colors.textSecondary}
-                  />
-                </TouchableOpacity>
+                <View style={styles.messageActions}>
+                  <TouchableOpacity
+                    style={styles.actionButton}
+                    onPress={() => copyToClipboard(message.content)}
+                  >
+                    <MaterialIcons
+                      name="content-copy"
+                      size={18}
+                      color={colors.textSecondary}
+                    />
+                  </TouchableOpacity>
+                  <TouchableOpacity
+                    style={styles.actionButton}
+                    onPress={() => toggleBookmark(message.id)}
+                  >
+                    <MaterialIcons
+                      name={bookmarkedMessages.has(message.id) ? 'bookmark' : 'bookmark-border'}
+                      size={18}
+                      color={bookmarkedMessages.has(message.id) ? colors.accentPositive : colors.textSecondary}
+                    />
+                  </TouchableOpacity>
+                </View>
               )}
             </View>
             <View style={styles.messageContent}>
@@ -383,34 +412,31 @@ const ChatInterface: React.FC<ChatInterfaceProps> = ({ newsContext }) => {
       </ScrollView>
 
       <View style={styles.inputContainer}>
-        <View style={styles.inputWrapper}>
-          <TextInput
-            style={styles.textInput}
-            value={inputText}
-            onChangeText={setInputText}
-            placeholder="Ask anything"
-            placeholderTextColor={colors.textSecondary}
-            multiline
-            maxLength={500}
-            onSubmitEditing={() => sendMessage()}
-            blurOnSubmit={false}
+        <TextInput
+          style={styles.textInput}
+          value={inputText}
+          onChangeText={setInputText}
+          placeholder="Ask about market trends, analysis, or any financial topic..."
+          placeholderTextColor={colors.textSecondary}
+          multiline
+          maxLength={1000}
+          onSubmitEditing={() => sendMessage()}
+          blurOnSubmit={false}
+        />
+        <TouchableOpacity
+          style={[
+            styles.sendButton,
+            (!inputText.trim() || isLoading) && styles.disabledSendButton
+          ]}
+          onPress={() => sendMessage()}
+          disabled={!inputText.trim() || isLoading}
+        >
+          <MaterialIcons 
+            name="send" 
+            size={20} 
+            color={inputText.trim() ? colors.accentPositive : colors.textSecondary} 
           />
-          
-          <TouchableOpacity
-            style={[
-              styles.sendButton,
-              (!inputText.trim() || isLoading) && styles.disabledSendButton
-            ]}
-            onPress={() => sendMessage()}
-            disabled={!inputText.trim() || isLoading}
-          >
-            <MaterialIcons 
-              name="send" 
-              size={20} 
-              color={inputText.trim() ? colors.accentPositive : colors.textSecondary} 
-            />
-          </TouchableOpacity>
-        </View>
+        </TouchableOpacity>
       </View>
     </KeyboardAvoidingView>
   );
@@ -435,21 +461,31 @@ const styles = StyleSheet.create({
   },
   suggestionsContainer: {
     paddingHorizontal: 20,
-    gap: 12,
+    paddingVertical: 15,
+  },
+  suggestionsTitle: {
+    fontSize: 16,
+    fontWeight: '600',
+    color: colors.textPrimary,
+    marginBottom: 12,
+  },
+  suggestionsGrid: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 8,
   },
   suggestionChip: {
     backgroundColor: colors.bgTertiary,
-    paddingHorizontal: 20,
-    paddingVertical: 14,
-    borderRadius: 24,
-    marginBottom: 8,
+    paddingHorizontal: 16,
+    paddingVertical: 10,
+    borderRadius: 20,
     borderWidth: 1,
     borderColor: colors.divider,
   },
   suggestionText: {
     color: colors.textPrimary,
-    fontSize: 15,
-    lineHeight: 20,
+    fontSize: 14,
+    fontWeight: '500',
   },
   messageWrapper: {
     paddingHorizontal: 20,
@@ -510,39 +546,30 @@ const styles = StyleSheet.create({
     fontStyle: 'italic',
   },
   inputContainer: {
+    flexDirection: 'row',
+    alignItems: 'flex-end',
     padding: 20,
     paddingBottom: Platform.OS === 'ios' ? 30 : 20,
     backgroundColor: colors.bgPrimary,
   },
-  inputWrapper: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: colors.bgSecondary,
-    borderRadius: 24,
-    paddingHorizontal: 20,
-    paddingVertical: 12,
-    gap: 12,
-    shadowColor: '#000',
-    shadowOffset: {
-      width: 0,
-      height: 2,
-    },
-    shadowOpacity: 0.1,
-    shadowRadius: 3,
-    elevation: 3,
-  },
   textInput: {
     flex: 1,
+    borderWidth: 1,
+    borderColor: colors.divider,
+    borderRadius: 25,
+    paddingHorizontal: 20,
+    paddingVertical: 12,
+    marginRight: 10,
+    backgroundColor: colors.bgSecondary,
     color: colors.textPrimary,
     fontSize: 16,
     maxHeight: 100,
-    padding: 0,
   },
   sendButton: {
-    width: 32,
-    height: 32,
-    borderRadius: 16,
-    backgroundColor: colors.bgTertiary,
+    backgroundColor: colors.accentPositive,
+    borderRadius: 25,
+    width: 50,
+    height: 50,
     justifyContent: 'center',
     alignItems: 'center',
   },
@@ -577,6 +604,16 @@ const styles = StyleSheet.create({
   },
   blockSpacer: {
     height: 12,
+  },
+  messageActions: {
+    marginLeft: 'auto',
+    flexDirection: 'row',
+    gap: 8,
+  },
+  actionButton: {
+    padding: 4,
+    borderRadius: 12,
+    backgroundColor: 'rgba(255, 255, 255, 0.05)',
   },
   bookmarkButton: {
     marginLeft: 'auto',
