@@ -11,10 +11,22 @@ import {
   Alert,
   Image,
   Platform,
+  DevSettings,
 } from 'react-native';
 import { MaterialIcons, MaterialCommunityIcons } from '@expo/vector-icons';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { registerForPushNotificationsAsync, setupNotificationListeners } from './services/notificationService';
+
+// Ensure dev tools are disabled in production
+if (!__DEV__) {
+  console.disableYellowBox = true;
+  console.reportErrorsAsExceptions = false;
+  
+  // Disable React Native Inspector in production
+  if (global && global.__REACT_DEVTOOLS_GLOBAL_HOOK__) {
+    global.__REACT_DEVTOOLS_GLOBAL_HOOK__.isDisabled = true;
+  }
+}
 
 // Import Supabase Auth Provider
 // import { AuthProvider } from '../contexts/AuthContext';
@@ -33,6 +45,8 @@ import AlertsScreen from './components/AlertsScreen';
 import NewsCard from './components/NewsCard';
 import AIAnalysisOverlay from './components/AIAnalysisOverlay';
 import { BookmarkProvider } from './providers/BookmarkProvider';
+import PrivacyPolicyModal from './components/PrivacyPolicyModal';
+import TermsOfServiceModal from './components/TermsOfServiceModal';
 
 // Color Palette
 const colors = {
@@ -93,7 +107,7 @@ const sampleNewsData = [
 ];
 
 // Profile Screen Component
-const ProfileScreen = ({ onNavigateHome, userData, onResetData, onShowAlertPreferences, onDeleteAccount, onLogout }) => {
+const ProfileScreen = ({ onNavigateHome, userData, onResetData, onShowAlertPreferences, onDeleteAccount, onLogout, onShowPrivacyPolicy, onShowTermsOfService }) => {
   const [alertPreferences, setAlertPreferences] = useState(null);
   
   // Load alert preferences
@@ -110,55 +124,6 @@ const ProfileScreen = ({ onNavigateHome, userData, onResetData, onShowAlertPrefe
     } catch (error) {
       console.error('Error loading alert preferences:', error);
     }
-  };
-  
-  const handlePrivacyPolicy = () => {
-    Alert.alert(
-      'Privacy Policy',
-      'INTEGRA MARKETS PRIVACY POLICY\n\n' +
-      'Effective Date: January 1, 2024\n\n' +
-      '1. DATA COLLECTION AND USE\n' +
-      'We collect and process your personal data, including but not limited to:\n' +
-      '• User profile information (name, email, professional role)\n' +
-      '• Alert preferences and commodity interests\n' +
-      '• App usage analytics and interaction patterns\n' +
-      '• Trading preferences and market focus areas\n\n' +
-      '2. AI MODEL TRAINING\n' +
-      'Your anonymized data and alert preferences are used to train our proprietary AI models to:\n' +
-      '• Enhance prediction accuracy for commodity market movements\n' +
-      '• Improve personalized insight generation\n' +
-      '• Optimize alert timing and relevance\n' +
-      '• Develop advanced pattern recognition capabilities\n\n' +
-      '3. DATA PROTECTION\n' +
-      'We implement industry-standard security measures including:\n' +
-      '• End-to-end encryption for data transmission\n' +
-      '• Secure cloud storage with SOC 2 compliance\n' +
-      '• Regular security audits and penetration testing\n' +
-      '• Strict access controls and authentication protocols\n\n' +
-      '4. DATA RETENTION\n' +
-      'Personal data is retained for the duration of your account activity plus 90 days. Anonymized data used for model training may be retained indefinitely.\n\n' +
-      '5. YOUR RIGHTS\n' +
-      'You have the right to:\n' +
-      '• Access your personal data\n' +
-      '• Request data correction or deletion\n' +
-      '• Opt-out of data usage for model training\n' +
-      '• Export your data in machine-readable format\n\n' +
-      '6. THIRD-PARTY DISCLOSURE\n' +
-      'We do NOT sell, trade, or transfer your personally identifiable information to third parties. This excludes trusted partners who assist in operating our service under strict confidentiality agreements.\n\n' +
-      '7. CONSENT\n' +
-      'By using Integra Markets, you consent to this privacy policy and agree to the collection and use of information in accordance with this policy.\n\n' +
-      'For privacy inquiries: privacy@integramarkets.com',
-      [{ text: 'OK', style: 'default' }],
-      { cancelable: true }
-    );
-  };
-  
-  const handleTermsOfService = () => {
-    Alert.alert(
-      'Terms of Service',
-      'By using Integra Markets, you agree to our terms of service. This app provides market insights for informational purposes only and should not be considered financial advice.',
-      [{ text: 'OK' }]
-    );
   };
 
   const handleNotificationSettings = () => {
@@ -209,13 +174,13 @@ const ProfileScreen = ({ onNavigateHome, userData, onResetData, onShowAlertPrefe
               <MaterialIcons name="chevron-right" size={20} color={colors.textSecondary} />
             </TouchableOpacity>
             
-            <TouchableOpacity style={styles.settingsItem} onPress={handlePrivacyPolicy}>
+            <TouchableOpacity style={styles.settingsItem} onPress={onShowPrivacyPolicy}>
               <MaterialIcons name="privacy-tip" size={20} color={colors.textSecondary} />
               <Text style={styles.settingsText}>Privacy Policy</Text>
               <MaterialIcons name="chevron-right" size={20} color={colors.textSecondary} />
             </TouchableOpacity>
             
-            <TouchableOpacity style={styles.settingsItem} onPress={handleTermsOfService}>
+            <TouchableOpacity style={styles.settingsItem} onPress={onShowTermsOfService}>
               <MaterialIcons name="article" size={20} color={colors.textSecondary} />
               <Text style={styles.settingsText}>Terms of Service</Text>
               <MaterialIcons name="chevron-right" size={20} color={colors.textSecondary} />
@@ -266,6 +231,8 @@ const App = () => {
   const [userData, setUserData] = useState(null);
   const [selectedArticle, setSelectedArticle] = useState(null);
   const [showAIAnalysis, setShowAIAnalysis] = useState(false);
+  const [showPrivacyPolicy, setShowPrivacyPolicy] = useState(false);
+  const [showTermsOfService, setShowTermsOfService] = useState(false);
 
   // Check app state on mount
   useEffect(() => {
@@ -667,14 +634,26 @@ const App = () => {
   // Render profile screen
   if (activeNav === 'Profile') {
     return (
-      <ProfileScreen
-        onNavigateHome={() => setActiveNav('Today')}
-        userData={userData}
-        onResetData={resetAppData}
-        onShowAlertPreferences={handleShowAlertPreferences}
-        onDeleteAccount={handleDeleteAccount}
-        onLogout={handleLogout}
-      />
+      <>
+        <ProfileScreen
+          onNavigateHome={() => setActiveNav('Today')}
+          userData={userData}
+          onResetData={resetAppData}
+          onShowAlertPreferences={handleShowAlertPreferences}
+          onDeleteAccount={handleDeleteAccount}
+          onLogout={handleLogout}
+          onShowPrivacyPolicy={() => setShowPrivacyPolicy(true)}
+          onShowTermsOfService={() => setShowTermsOfService(true)}
+        />
+        <PrivacyPolicyModal
+          visible={showPrivacyPolicy}
+          onClose={() => setShowPrivacyPolicy(false)}
+        />
+        <TermsOfServiceModal
+          visible={showTermsOfService}
+          onClose={() => setShowTermsOfService(false)}
+        />
+      </>
     );
   }
 
