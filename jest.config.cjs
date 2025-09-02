@@ -35,6 +35,10 @@ module.exports = {
     }
   },
   transform: {
-    '^.+\.(js|jsx|ts|tsx)$': ['babel-jest', { presets: ['babel-preset-expo'] }]
-  }
+    '^.+\.(js|jsx|ts|tsx)$': ['babel-jest', { 
+      presets: ['babel-preset-expo'],
+      plugins: ['@babel/plugin-transform-react-jsx']
+    }]
+  },
+  testEnvironment: 'node'
 };

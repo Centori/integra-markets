@@ -110,6 +110,16 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
+# Include routers for notifications and push verification
+try:
+    from api.notifications import router as notifications_router
+    from api.push_verify import router as push_verify_router
+    app.include_router(notifications_router)
+    app.include_router(push_verify_router)
+    logger.info("Routers included: notifications and push verification")
+except Exception as e:
+    logger.error(f"Failed to include routers: {e}")
+
 # Initialize Supabase
 supabase_url = os.getenv("SUPABASE_URL")
 supabase_key = os.getenv("SUPABASE_KEY")

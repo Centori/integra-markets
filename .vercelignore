@@ -1,0 +1,20 @@
+# Don't upload these to Vercel
+node_modules/
+.git/
+.worktrees/
+venv/
+android/
+ios/
+.expo/
+__pycache__/
+*.pyc
+*.log
+*.zip
+*.tar.gz
+integra-markets-snack/
+IntegraMarkets.app/
+backend/
+__tests__/
+.DS_Store
+.env*
+*.py

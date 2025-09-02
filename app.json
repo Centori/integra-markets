@@ -20,7 +20,7 @@
     ],
     "ios": {
       "bundleIdentifier": "com.centori.integramarkets",
-      "buildNumber": "26",
+      "buildNumber": "27",
       "deploymentTarget": "13.0",
       "supportsTablet": true,
       "requireFullScreen": false,
@@ -33,6 +33,7 @@
         "ITSAppUsesNonExemptEncryption": false,
         "NSCameraUsageDescription": "This app uses the camera to capture financial documents and receipts.",
         "NSPhotoLibraryUsageDescription": "This app accesses your photo library to select financial documents and receipts.",
+        "NSMicrophoneUsageDescription": "This app uses the microphone for voice messages and audio analysis.",
         "NSFaceIDUsageDescription": "This app uses Face ID for secure authentication.",
         "NSAppTransportSecurity": {
           "NSAllowsArbitraryLoads": false,
@@ -74,6 +75,7 @@
         "android.permission.CAMERA",
         "android.permission.READ_EXTERNAL_STORAGE",
         "android.permission.WRITE_EXTERNAL_STORAGE",
+        "android.permission.RECORD_AUDIO",
         "android.permission.USE_FINGERPRINT"
       ],
       "runtimeVersion": "1.0.0"
@@ -82,7 +84,7 @@
       "favicon": "./assets/favicon.png",
       "bundler": "metro",
       "output": "single",
-      "baseUrl": "/integra-markets"
+      "baseUrl": "/"
     },
     "plugins": [
       [

@@ -136,3 +136,4 @@ deployment/
 test_*.py
 -integra-markets/
 -integra-markets-backup/
+.vercel

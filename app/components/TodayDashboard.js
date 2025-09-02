@@ -14,7 +14,7 @@ const TodayDashboard = ({ agentActive }) => {
   const [sentimentModalVisible, setSentimentModalVisible] = useState(false);
   const [sentimentAnalysis, setSentimentAnalysis] = useState(null);
   const [sentimentLoading, setSentimentLoading] = useState(false);
-const [marketData, setMarketData] = useState(null);
+  const [marketData, setMarketData] = useState(null);
   const [aiOverlayVisible, setAiOverlayVisible] = useState(false);
   const [selectedNews, setSelectedNews] = useState(null);
 
@@ -405,7 +405,7 @@ const [marketData, setMarketData] = useState(null);
     </Modal>
   );
 
-const renderNewsCard = (item) => {
+  const renderNewsCard = (item) => {
     
     const openAIOverlay = (article) => {
       setSelectedNews(article);
@@ -641,7 +641,7 @@ const renderNewsCard = (item) => {
       {renderSentimentModal()}
       <AIAnalysisOverlay 
         isVisible={aiOverlayVisible} 
-        onClose={() => setAiOverlayVisible(false)}
+        onClose={() => setAiOverlayVisible(false)}
         news={selectedNews}
       />
     </SafeAreaView>

@@ -111,3 +111,80 @@ jest.mock('lucide-react-native', () => ({
   Bookmark: 'Bookmark',
   BookmarkCheck: 'BookmarkCheck',
 }));
+
+// Mock Supabase
+jest.mock('./lib/supabase', () => ({
+  supabase: {
+    auth: {
+      getSession: jest.fn(() => Promise.resolve({ data: { session: null }, error: null })),
+      signInWithIdToken: jest.fn(() => Promise.resolve({ data: null, error: null })),
+      signInWithOAuth: jest.fn(() => Promise.resolve({ data: null, error: null })),
+      signOut: jest.fn(() => Promise.resolve({ error: null })),
+    },
+    from: jest.fn(() => ({
+      select: jest.fn(() => ({
+        eq: jest.fn(() => ({
+          single: jest.fn(() => Promise.resolve({ data: null, error: null })),
+          order: jest.fn(() => Promise.resolve({ data: [], error: null })),
+        })),
+        in: jest.fn(() => Promise.resolve({ data: [], error: null })),
+        order: jest.fn(() => ({
+          limit: jest.fn(() => Promise.resolve({ data: [], error: null })),
+        })),
+      })),
+      insert: jest.fn(() => ({
+        select: jest.fn(() => ({
+          single: jest.fn(() => Promise.resolve({ data: null, error: null })),
+        })),
+      })),
+      update: jest.fn(() => ({
+        eq: jest.fn(() => ({
+          select: jest.fn(() => Promise.resolve({ data: [], error: null })),
+        })),
+        in: jest.fn(() => Promise.resolve({ error: null })),
+      })),
+      delete: jest.fn(() => ({
+        eq: jest.fn(() => Promise.resolve({ error: null })),
+      })),
+      upsert: jest.fn(() => ({
+        select: jest.fn(() => Promise.resolve({ data: [], error: null })),
+      })),
+    })),
+    rpc: jest.fn(() => Promise.resolve({ data: null, error: null })),
+    channel: jest.fn(() => ({
+      on: jest.fn(() => ({
+        subscribe: jest.fn(() => ({})),
+      })),
+      subscribe: jest.fn(() => ({})),
+    })),
+    storage: {
+      from: jest.fn(() => ({
+        upload: jest.fn(() => Promise.resolve({ data: null, error: null })),
+        getPublicUrl: jest.fn(() => ({ data: { publicUrl: '' } })),
+      })),
+    },
+  },
+}));
+
+// Mock expo-auth-session
+jest.mock('expo-auth-session/providers/google', () => ({
+  useAuthRequest: jest.fn(() => [null, null, jest.fn()]),
+}));
+
+
+// Global fetch mock
+global.fetch = jest.fn(() => Promise.resolve({
+  ok: true,
+  json: () => Promise.resolve({}),
+}));
+
+// Mock React Native's Platform
+jest.mock('react-native/Libraries/Utilities/Platform', () => ({
+  OS: 'ios',
+  Version: '14.0',
+  select: jest.fn((obj) => obj.ios),
+}));
+
+// Add React import for test files
+global.React = require('react');
+

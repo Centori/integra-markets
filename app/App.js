@@ -45,8 +45,13 @@ import AlertsScreen from './components/AlertsScreen';
 import NewsCard from './components/NewsCard';
 import AIAnalysisOverlay from './components/AIAnalysisOverlay';
 import { BookmarkProvider } from './providers/BookmarkProvider';
+import TodayDashboard from './components/TodayDashboard';
+import BookmarksScreen from './components/BookmarksScreen';
 import PrivacyPolicyModal from './components/PrivacyPolicyModal';
 import TermsOfServiceModal from './components/TermsOfServiceModal';
+import NotificationBadge from '../components/mediakit/NotificationBadge';
+import { api } from './services/api';
+import { realtimeNotificationService } from './services/realtimeNotificationService';
 
 // Color Palette
 const colors = {
@@ -233,6 +238,7 @@ const App = () => {
   const [showAIAnalysis, setShowAIAnalysis] = useState(false);
   const [showPrivacyPolicy, setShowPrivacyPolicy] = useState(false);
   const [showTermsOfService, setShowTermsOfService] = useState(false);
+  const [unreadNotificationCount, setUnreadNotificationCount] = useState(0);
 
   // Check app state on mount
   useEffect(() => {
@@ -242,6 +248,10 @@ const App = () => {
     try {
       checkAppState();
       initializeNotifications();
+      fetchUnreadCount();
+      
+      // Start real-time notification polling
+      startRealtimeNotifications();
     } catch (error) {
       console.error('Error during app initialization:', error);
       // Continue anyway - don't let initialization errors crash the app
@@ -250,7 +260,48 @@ const App = () => {
     // Database setup removed - these were causing crashes as imports were commented out
     // setupDatabase.createTables();
     // testConnection();
+    
+    // Cleanup on unmount
+    return () => {
+      realtimeNotificationService.stopPolling();
+    };
   }, []);
+  
+  // Fetch unread notification count
+  const fetchUnreadCount = async () => {
+    try {
+      const response = await api.get('/notifications/unread-count');
+      if (response.data) {
+        setUnreadNotificationCount(response.data.unread_count || 0);
+      }
+    } catch (error) {
+      console.error('Error fetching unread count:', error);
+    }
+  };
+  
+  // Start real-time notification updates
+  const startRealtimeNotifications = () => {
+    // Add listener for notification updates
+    const unsubscribe = realtimeNotificationService.addListener((data) => {
+      if (data.type === 'unread_count_update') {
+        setUnreadNotificationCount(data.unreadCount);
+        
+        // Show in-app notification for new notifications if not on Alerts screen
+        if (data.hasNewNotifications && activeNav !== 'Alerts') {
+          // Could show a toast or banner here
+          console.log('New notifications received!');
+        }
+      } else if (data.type === 'new_notifications') {
+        // Handle new notifications (could show toast/banner)
+        console.log(`${data.notifications.length} new notifications`);
+      }
+    });
+    
+    // Start polling (every 30 seconds)
+    realtimeNotificationService.startPolling(30000);
+    
+    return unsubscribe;
+  };
 
   // Initialize notifications
   const initializeNotifications = async () => {
@@ -565,13 +616,30 @@ const App = () => {
       
       <TouchableOpacity
         style={styles.navItem}
-        onPress={() => setActiveNav('Alerts')}
+        onPress={() => {
+          setActiveNav('Alerts');
+          // Reset unread count when navigating to alerts
+          if (unreadNotificationCount > 0) {
+            setUnreadNotificationCount(0);
+          }
+        }}
       >
-        <MaterialIcons
-          name="notifications"
-          size={24}
-          color={activeNav === 'Alerts' ? colors.accentPositive : colors.textSecondary}
-        />
+        <View style={styles.navIconContainer}>
+          <MaterialIcons
+            name="notifications"
+            size={24}
+            color={activeNav === 'Alerts' ? colors.accentPositive : colors.textSecondary}
+          />
+          {unreadNotificationCount > 0 && (
+            <View style={styles.navBadgeContainer}>
+              <NotificationBadge
+                count={unreadNotificationCount}
+                size="small"
+                variant="alert"
+              />
+            </View>
+          )}
+        </View>
         <Text style={[styles.navLabel, activeNav === 'Alerts' && styles.activeNavLabel]}>
           Alerts
         </Text>
@@ -661,7 +729,10 @@ const App = () => {
   if (activeNav === 'Alerts') {
     return (
       <View style={styles.container}>
-        <AlertsScreen onNavigateToAlertPreferences={() => setShowAlertPreferences(true)} />
+        <AlertsScreen 
+          onNavigateToAlertPreferences={() => setShowAlertPreferences(true)}
+          onUnreadCountChange={(count) => setUnreadNotificationCount(count)}
+        />
         {renderBottomNav()}
       </View>
     );
@@ -675,13 +746,23 @@ const App = () => {
         <View style={styles.header}>
           <Text style={styles.headerTitle}>Today</Text>
           <TouchableOpacity onPress={() => {
-            Alert.alert(
-              'Notifications',
-              'Notification settings and alerts will be available in the next update.',
-              [{ text: 'OK' }]
-            );
+            setActiveNav('Alerts');
+            if (unreadNotificationCount > 0) {
+              setUnreadNotificationCount(0);
+            }
           }}>
-            <MaterialIcons name="notifications-none" size={24} color={colors.textPrimary} />
+            <View>
+              <MaterialIcons name="notifications-none" size={24} color={colors.textPrimary} />
+              {unreadNotificationCount > 0 && (
+                <View style={styles.headerBadgeContainer}>
+                  <NotificationBadge
+                    count={unreadNotificationCount}
+                    size="small"
+                    variant="alert"
+                  />
+                </View>
+              )}
+            </View>
           </TouchableOpacity>
         </View>
 
@@ -1126,6 +1207,19 @@ const styles = StyleSheet.create({
     color: colors.bgPrimary,
     fontSize: 16,
     fontWeight: '600',
+  },
+  navIconContainer: {
+    position: 'relative',
+  },
+  navBadgeContainer: {
+    position: 'absolute',
+    top: -8,
+    right: -12,
+  },
+  headerBadgeContainer: {
+    position: 'absolute',
+    top: -4,
+    right: -8,
   },
 });
 
