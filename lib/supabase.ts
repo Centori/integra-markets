@@ -1,41 +1,66 @@
-import { createClient } from '@supabase/supabase-js';
-import AsyncStorage from '@react-native-async-storage/async-storage';
-import Constants from 'expo-constants';
-import { Platform } from 'react-native';
+import { createClient } from "@supabase/supabase-js"
 
-// Get Supabase credentials from environment variables
-const getSupabaseConfig = () => {
-  // For web platform, use process.env directly
-  if (Platform.OS === 'web') {
-    return {
-      url: process.env.EXPO_PUBLIC_SUPABASE_URL || '',
-      key: process.env.EXPO_PUBLIC_SUPABASE_ANON_KEY || ''
-    };
+// Provide fallback values for build time
+const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL || "https://placeholder.supabase.co"
+const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || "placeholder-key"
+
+// Only create the client if we have real credentials
+export const supabase = supabaseUrl.includes("placeholder") ? null : createClient(supabaseUrl, supabaseAnonKey)
+
+// Auth helper functions with null checks
+export const signUp = async (email: string, password: string, userData?: any) => {
+  if (!supabase) {
+    throw new Error("Supabase not configured")
   }
-  
-  // For mobile platforms, use expo constants
-  return {
-    url: Constants.expoConfig?.extra?.supabaseUrl || process.env.EXPO_PUBLIC_SUPABASE_URL || '',
-    key: Constants.expoConfig?.extra?.supabaseAnonKey || process.env.EXPO_PUBLIC_SUPABASE_ANON_KEY || ''
-  };
-};
-
-const { url: supabaseUrl, key: supabaseAnonKey } = getSupabaseConfig();
-
-if (!supabaseUrl || !supabaseAnonKey) {
-  console.warn('Supabase URL or Anonymous Key is missing. Please check your environment variables.');
+  const { data, error } = await supabase.auth.signUp({
+    email,
+    password,
+    options: {
+      data: userData,
+    },
+  })
+  return { data, error }
 }
 
-// Only create the client if we have valid credentials
-// This prevents build-time errors when environment variables are not yet available
-export const supabase = supabaseUrl && supabaseAnonKey 
-  ? createClient(supabaseUrl, supabaseAnonKey, {
-      auth: {
-        storage: AsyncStorage,
-        autoRefreshToken: true,
-        persistSession: true,
-        detectSessionInUrl: Platform.OS === 'web', // Enable for web, disable for mobile
-        flowType: 'pkce', // Use PKCE flow for better security
-      },
-    })
-  : null as any; // Return null if credentials are missing, but typed as any to maintain compatibility
+export const signIn = async (email: string, password: string) => {
+  if (!supabase) {
+    throw new Error("Supabase not configured")
+  }
+  const { data, error } = await supabase.auth.signInWithPassword({
+    email,
+    password,
+  })
+  return { data, error }
+}
+
+export const signInWithGoogle = async () => {
+  if (!supabase) {
+    throw new Error("Supabase not configured")
+  }
+  const { data, error } = await supabase.auth.signInWithOAuth({
+    provider: "google",
+    options: {
+      redirectTo: `${window.location.origin}/auth/callback`,
+    },
+  })
+  return { data, error }
+}
+
+export const signOut = async () => {
+  if (!supabase) {
+    throw new Error("Supabase not configured")
+  }
+  const { error } = await supabase.auth.signOut()
+  return { error }
+}
+
+export const getCurrentUser = async () => {
+  if (!supabase) {
+    return { user: null, error: new Error("Supabase not configured") }
+  }
+  const {
+    data: { user },
+    error,
+  } = await supabase.auth.getUser()
+  return { user, error }
+}
