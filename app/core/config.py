@@ -23,6 +23,7 @@ class Settings(BaseSettings):
     OPENWEATHERMAP_API_KEY: Optional[str] = Field(None, env="OPENWEATHERMAP_API_KEY")
     ALPHA_VANTAGE_API_KEY: Optional[str] = Field(None, env="ALPHA_VANTAGE_API_KEY")
     HUGGING_FACE_TOKEN: Optional[str] = Field(None, env="HUGGING_FACE_TOKEN")
+    GROQ_API_KEY: Optional[str] = Field(None, env="GROQ_API_KEY")
     
     # Supabase
     SUPABASE_URL: Optional[str] = Field(None, env="SUPABASE_URL")

@@ -102,10 +102,10 @@
     ],
     "extra": {
       "supabaseUrl": "https://jcovjmuaysebdfbpbvdh.supabase.co",
-      "supabaseAnonKey": "__SUPABASE_ANON_KEY__",
-      "apiUrl": "__API_URL__",
-      "groqApiKey": "__GROQ_API_KEY__",
-      "huggingFaceToken": "__HUGGING_FACE_TOKEN__",
+      "supabaseAnonKey": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Impjb3ZqbXVheXNlYmRmYnBidmRoIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NTI0OTA3NTEsImV4cCI6MjA2ODA2Njc1MX0.vnIaHcLbQRBz1Q1HgFOT5-KZqghQDKBu-uCanVU2AGQ",
+      "apiUrl": "http://localhost:8000",
+      "groqApiKey": "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",
+      "huggingFaceToken": "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",
       "eas": {
         "projectId": "e9868cd6-adaa-422c-be2b-89b6f028e5f6"
       }

@@ -1,0 +1,16 @@
+{
+  "projectId": "prj_8zATNlSxtA1HzH1WFkGY5Rk4qDnC",
+  "orgId": "team_LsYoEVnTJHrvmYtZ8Bw5Br9r",
+  "projectName": "v0-recreate-ui-from-screenshot",
+  "settings": {
+    "createdAt": 1751703872041,
+    "framework": "nextjs",
+    "devCommand": null,
+    "installCommand": null,
+    "buildCommand": null,
+    "outputDirectory": null,
+    "rootDirectory": null,
+    "directoryListing": false,
+    "nodeVersion": "22.x"
+  }
+}
