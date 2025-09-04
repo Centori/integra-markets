@@ -1,0 +1,31 @@
+{
+  "new_dependencies": {
+    "recharts": "^2.8.0",
+    "react-query": "^3.39.0", 
+    "@tanstack/react-query": "^4.35.0",
+    "framer-motion": "^10.16.0",
+    "react-window": "^1.8.8",
+    "date-fns": "^2.30.0",
+    "lodash.debounce": "^4.0.8",
+    "react-intersection-observer": "^9.5.2"
+  },
+  "existing_dependencies_to_update": {
+    "react": "^18.3.1",
+    "react-native": "^0.76.9",
+    "react-native-svg": "^15.8.0",
+    "lucide-react-native": "^0.525.0"
+  },
+  "dev_dependencies": {
+    "@types/lodash.debounce": "^4.0.7",
+    "@types/react-window": "^1.8.5"
+  },
+  "scripts_to_add": {
+    "dev:desktop": "npx expo start --web --port 3000",
+    "build:desktop": "npx expo export --platform web",
+    "preview:desktop": "npx serve dist"
+  },
+  "installation_commands": [
+    "npm install recharts react-query @tanstack/react-query framer-motion react-window date-fns lodash.debounce react-intersection-observer",
+    "npm install -D @types/lodash.debounce @types/react-window"
+  ]
+}

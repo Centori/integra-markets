@@ -5,18 +5,18 @@ import { Platform } from 'react-native';
 
 // Get Supabase credentials from environment variables
 const getSupabaseConfig = () => {
-  // For web platform, use process.env directly
+  // For web platform, use hardcoded values as fallback
   if (Platform.OS === 'web') {
     return {
-      url: process.env.EXPO_PUBLIC_SUPABASE_URL || '',
-      key: process.env.EXPO_PUBLIC_SUPABASE_ANON_KEY || ''
+      url: process.env.EXPO_PUBLIC_SUPABASE_URL || 'https://jcovjmuaysebdfbpbvdh.supabase.co',
+      key: process.env.EXPO_PUBLIC_SUPABASE_ANON_KEY || 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Impjb3ZqbXVheXNlYmRmYnBidmRoIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NTI0OTA3NTEsImV4cCI6MjA2ODA2Njc1MX0.vnIaHcLbQRBz1Q1HgFOT5-KZqghQDKBu-uCanVU2AGQ'
     };
   }
   
   // For mobile platforms, use expo constants
   return {
-    url: Constants.expoConfig?.extra?.supabaseUrl || process.env.EXPO_PUBLIC_SUPABASE_URL || '',
-    key: Constants.expoConfig?.extra?.supabaseAnonKey || process.env.EXPO_PUBLIC_SUPABASE_ANON_KEY || ''
+    url: Constants.expoConfig?.extra?.supabaseUrl || process.env.EXPO_PUBLIC_SUPABASE_URL || 'https://jcovjmuaysebdfbpbvdh.supabase.co',
+    key: Constants.expoConfig?.extra?.supabaseAnonKey || process.env.EXPO_PUBLIC_SUPABASE_ANON_KEY || 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Impjb3ZqbXVheXNlYmRmYnBidmRoIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NTI0OTA3NTEsImV4cCI6MjA2ODA2Njc1MX0.vnIaHcLbQRBz1Q1HgFOT5-KZqghQDKBu-uCanVU2AGQ'
   };
 };
 
