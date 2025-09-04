@@ -3,7 +3,10 @@
  * Handles communication with the Python FastAPI backend
  */
 
-const API_BASE_URL = 'http://172.20.10.7:8000';
+// Use your local IP for development - iOS simulator/device cannot access localhost
+const API_BASE_URL = __DEV__ 
+  ? 'http://192.168.0.208:8000'  // Your local IP for iOS development
+  : 'http://192.168.0.208:8000';  // Update this with your production URL
 const API_URL = `${API_BASE_URL}/api`;
 
 /**
