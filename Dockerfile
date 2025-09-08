@@ -11,8 +11,17 @@ RUN apt-get update && apt-get install -y \
     curl \
     && rm -rf /var/lib/apt/lists/*
 
-# Copy requirements first for better caching
-COPY app/requirements.txt .
+# Create requirements file for backend
+RUN echo "fastapi==0.104.1" > requirements.txt && \
+    echo "uvicorn==0.24.0" >> requirements.txt && \
+    echo "supabase==2.0.0" >> requirements.txt && \
+    echo "nltk==3.8.1" >> requirements.txt && \
+    echo "groq==0.9.0" >> requirements.txt && \
+    echo "httpx==0.24.1" >> requirements.txt && \
+    echo "beautifulsoup4==4.12.2" >> requirements.txt && \
+    echo "feedparser==6.0.10" >> requirements.txt && \
+    echo "python-dotenv==1.0.0" >> requirements.txt && \
+    echo "pydantic==2.5.0" >> requirements.txt
 
 # Install Python dependencies
 RUN pip install --no-cache-dir --user -r requirements.txt
@@ -42,9 +51,7 @@ ENV PATH=/root/.local/bin:$PATH
 ENV NLTK_DATA=/root/nltk_data
 
 # Copy application code
-COPY app/ ./app/
-COPY services/ ./services/
-COPY main.py .
+COPY backend/ ./backend/
 
 # Create directories for model caching
 RUN mkdir -p /app/models/finbert /app/models/nltk_data /app/cache
@@ -65,4 +72,4 @@ HEALTHCHECK --interval=30s --timeout=10s --start-period=40s --retries=3 \
     CMD curl -f http://localhost:8000/health || exit 1
 
 # Run the application
-CMD ["uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8000"]
+CMD ["python", "backend/main_simple_nlp.py"]

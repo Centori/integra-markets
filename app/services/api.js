@@ -3,10 +3,10 @@
  * Handles communication with the Python FastAPI backend
  */
 
-// Use your local IP for development - iOS simulator/device cannot access localhost
+// iOS Simulator can access localhost, physical devices need your machine's IP
 const API_BASE_URL = __DEV__ 
-  ? 'http://192.168.0.208:8000'  // Your local IP for iOS development
-  : 'http://192.168.0.208:8000';  // Update this with your production URL
+  ? 'http://localhost:8000'  // localhost works for iOS simulator
+  : 'https://integra-markets-backend.fly.dev';  // Fly.io production URL
 const API_URL = `${API_BASE_URL}/api`;
 
 /**
@@ -202,5 +202,110 @@ export const getSentimentAnalysis = async (text, commodity = null) => {
       confidence: 0.5,
       commodity_specific: false
     };
+  }
+};
+
+/**
+ * Dashboard API for TodayDashboard component
+ */
+export const dashboardApi = {
+  getTodayDashboard: async (commodities = []) => {
+    try {
+      // Try to fetch real-time market data
+      const response = await fetch(`${API_URL}/market/realtime`);
+      
+      if (!response.ok) {
+        throw new Error(`API error: ${response.status}`);
+      }
+      
+      const marketData = await response.json();
+      
+      // Also fetch news analysis
+      const newsResponse = await fetch(`${API_URL}/news/analysis`);
+      const newsData = newsResponse.ok ? await newsResponse.json() : [];
+      
+      return {
+        status: 'success',
+        data: marketData.data || {},
+        news: newsData,
+        timestamp: new Date().toISOString()
+      };
+    } catch (error) {
+      console.error('Dashboard API error:', error);
+      // Return empty data structure on error
+      return {
+        status: 'error',
+        data: {},
+        news: [],
+        error: error.message
+      };
+    }
+  }
+};
+
+/**
+ * Sentiment API for enhanced analysis
+ */
+export const sentimentApi = {
+  analyzeEnhanced: async (text, commodity = null) => {
+    try {
+      const response = await fetch(`${API_URL}/sentiment`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ 
+          text, 
+          commodity,
+          enhanced: true
+        }),
+      });
+      
+      if (!response.ok) {
+        throw new Error(`API error: ${response.status}`);
+      }
+      
+      const data = await response.json();
+      
+      // Format response for TodayDashboard
+      return {
+        bullish: data.sentiment === 'BULLISH' ? data.confidence : 0.2,
+        bearish: data.sentiment === 'BEARISH' ? data.confidence : 0.2,
+        neutral: data.sentiment === 'NEUTRAL' ? data.confidence : 0.2,
+        confidence: data.confidence || 0.5,
+        impact: data.sentiment === 'BULLISH' ? 'HIGH' : data.sentiment === 'BEARISH' ? 'HIGH' : 'MEDIUM',
+        keywords: [],
+        method: data.method || 'unknown'
+      };
+    } catch (error) {
+      console.error('Enhanced sentiment analysis error:', error);
+      return {
+        bullish: 0.33,
+        bearish: 0.33,
+        neutral: 0.34,
+        confidence: 0.5,
+        impact: 'MEDIUM',
+        keywords: [],
+        error: error.message
+      };
+    }
+  }
+};
+
+/**
+ * Market Data API
+ */
+export const marketDataApi = {
+  getRealtimeData: fetchMarketSentiment,
+  getTopMovers: fetchTopMovers,
+  getMarketOverview: async () => {
+    try {
+      const response = await fetch(`${API_URL}/market/realtime`);
+      if (!response.ok) throw new Error('Failed to fetch market data');
+      return await response.json();
+    } catch (error) {
+      console.error('Market data error:', error);
+      return { data: {}, status: 'error' };
+    }
   }
 };

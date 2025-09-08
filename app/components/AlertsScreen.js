@@ -28,7 +28,7 @@ const colors = {
   cardBorder: '#2A2A2A',
 };
 
-const AlertsScreen = ({ onNavigateToAlertPreferences }) => {
+const AlertsScreen = ({ onNavigateToAlertPreferences, onNavigateToBookmarks }) => {
   const [alertPreferences, setAlertPreferences] = useState({
     commodities: [],
     regions: [],
@@ -169,6 +169,12 @@ const AlertsScreen = ({ onNavigateToAlertPreferences }) => {
       {/* Header */}
       <View style={styles.header}>
         <Text style={styles.headerTitle}>Alerts</Text>
+        <TouchableOpacity 
+          style={styles.bookmarkButton}
+          onPress={onNavigateToBookmarks}
+        >
+          <MaterialIcons name="bookmark" size={24} color={colors.textPrimary} />
+        </TouchableOpacity>
       </View>
 
       <ScrollView style={styles.content} showsVerticalScrollIndicator={false}>
@@ -339,6 +345,9 @@ const styles = StyleSheet.create({
     fontSize: 24,
     fontWeight: '600',
     color: colors.textPrimary,
+  },
+  bookmarkButton: {
+    padding: 4,
   },
   content: {
     flex: 1,

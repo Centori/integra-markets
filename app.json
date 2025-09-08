@@ -2,7 +2,7 @@
   "expo": {
     "name": "Integra Markets",
     "slug": "integra",
-    "version": "1.0.0",
+    "version": "1.0.1",
     "orientation": "portrait",
     "icon": "./assets/icon.png",
     "userInterfaceStyle": "light",
@@ -20,7 +20,7 @@
     ],
     "ios": {
       "bundleIdentifier": "com.centori.integramarkets",
-      "buildNumber": "28",
+      "buildNumber": "30",
       "deploymentTarget": "13.0",
       "supportsTablet": true,
       "requireFullScreen": false,
@@ -35,9 +35,17 @@
         "NSPhotoLibraryUsageDescription": "This app accesses your photo library to select financial documents and receipts.",
         "NSFaceIDUsageDescription": "This app uses Face ID for secure authentication.",
         "NSAppTransportSecurity": {
-          "NSAllowsArbitraryLoads": false,
-          "NSAllowsLocalNetworking": false,
-          "NSExceptionDomains": {}
+          "NSAllowsArbitraryLoads": true,
+          "NSAllowsLocalNetworking": true,
+          "NSExceptionDomains": {
+            "192.168.0.208": {
+              "NSExceptionAllowsInsecureHTTPLoads": true,
+              "NSIncludesSubdomains": true
+            },
+            "localhost": {
+              "NSExceptionAllowsInsecureHTTPLoads": true
+            }
+          }
         },
         "NSUserNotificationsUsageDescription": "This app sends notifications for market alerts and breaking news.",
         "NSKeychainAccessGroups": [
@@ -65,7 +73,7 @@
     },
     "android": {
       "package": "com.centori.integramarkets",
-      "versionCode": 1,
+      "versionCode": 3,
       "adaptiveIcon": {
         "foregroundImage": "./assets/adaptive-icon.png",
         "backgroundColor": "#000000"
@@ -76,7 +84,7 @@
         "android.permission.WRITE_EXTERNAL_STORAGE",
         "android.permission.USE_FINGERPRINT"
       ],
-      "runtimeVersion": "1.0.0"
+      "runtimeVersion": "1.0.1"
     },
     "web": {
       "favicon": "./assets/favicon.png",
@@ -103,7 +111,7 @@
     "extra": {
       "supabaseUrl": "https://jcovjmuaysebdfbpbvdh.supabase.co",
       "supabaseAnonKey": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Impjb3ZqbXVheXNlYmRmYnBidmRoIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NTI0OTA3NTEsImV4cCI6MjA2ODA2Njc1MX0.vnIaHcLbQRBz1Q1HgFOT5-KZqghQDKBu-uCanVU2AGQ",
-      "apiUrl": "http://localhost:8000",
+      "apiUrl": "http://192.168.0.208:8000",
       "groqApiKey": "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",
       "huggingFaceToken": "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",
       "eas": {

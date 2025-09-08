@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { View, Text, ScrollView, StyleSheet, SafeAreaView, TouchableOpacity, ActivityIndicator, RefreshControl, Modal, Share, Alert } from 'react-native';
 import { Ionicons, MaterialIcons, MaterialCommunityIcons } from '@expo/vector-icons';
 import { dashboardApi, sentimentApi, marketDataApi } from '../services/api';
+import { debugDashboardApi, testConnection } from '../services/apiDebug';
 import IntegraIcon from './IntegraIcon';
 import AIAnalysisOverlay from './AIAnalysisOverlay';
 
@@ -29,7 +30,12 @@ const [marketData, setMarketData] = useState(null);
   const loadDashboardData = async () => {
     setIsLoading(true);
     try {
-      const dashboardData = await dashboardApi.getTodayDashboard(trackedCommodities);
+      // DEBUG: Test connection first
+      console.log('🔍 Starting API debug test...');
+      await testConnection();
+      
+      // DEBUG: Use debug version of dashboard API
+      const dashboardData = await debugDashboardApi.getTodayDashboard(trackedCommodities);
 
       if (dashboardData.news && dashboardData.news.length > 0) {
         const processedNews = dashboardData.news.map((article, index) => ({

@@ -20,6 +20,19 @@ from pydantic import BaseModel, Field, validator
 import subprocess
 import tempfile
 from dataclasses import dataclass
+import sys
+import os
+
+# Add parent directory to path to import from app
+sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+
+# Import NewsDataSources for real news fetching
+try:
+    from app.services.data_sources import NewsDataSources, fetch_latest_news
+    NEWS_SOURCES_AVAILABLE = True
+except ImportError:
+    NEWS_SOURCES_AVAILABLE = False
+    logging.warning("NewsDataSources not available")
 
 # Groq client
 try:
@@ -64,6 +77,7 @@ class CommodityAnalysis(BaseModel):
     opportunities: List[str] = Field(..., description="Potential opportunities")
     technical_analysis: Optional[Dict[str, Any]] = None
     reasoning: Optional[str] = Field(None, description="Step-by-step reasoning")
+    data_sources: Optional[List[str]] = Field(None, description="Sources of information used")
 
 class MarketInsight(BaseModel):
     """Schema for market insights"""
@@ -204,7 +218,8 @@ class GroqAIService:
         use_tools: bool = True,
         search_web: bool = True,
         model: str = None,
-        reasoning_effort: ReasoningEffort = ReasoningEffort.MEDIUM
+        reasoning_effort: ReasoningEffort = ReasoningEffort.MEDIUM,
+        include_sources: bool = True
     ) -> Dict[str, Any]:
         """
         Perform analysis with step-by-step reasoning
@@ -233,14 +248,23 @@ class GroqAIService:
         
         # Step 2: Gather information using tools
         tool_results = []
+        news_sources = []  # Track all sources used
+        
         if use_tools:
             # Determine which tools to use based on reasoning
-            if "news" in query.lower() or "latest" in query.lower():
-                tool_results.append(await self._search_commodity_news(commodity or "commodities"))
+            if "news" in query.lower() or "latest" in query.lower() or include_sources:
+                news_result = await self._search_commodity_news(commodity or "commodities")
+                tool_results.append(news_result)
+                
+                # Extract sources from news results
+                if 'sources_used' in news_result:
+                    news_sources.extend(news_result['sources_used'])
             
             if search_web and self.search_engine:
                 search_results = await self._web_search(query)
                 tool_results.append(ToolResult("web_search", True, search_results))
+                if not news_sources:
+                    news_sources.append("Web Search")
         
         # Step 3: Comprehensive analysis
         analysis_prompt = f"""
@@ -248,7 +272,10 @@ class GroqAIService:
         
         Query: {query}
         Reasoning: {reasoning}
-        Tool Results: {json.dumps([r.__dict__ for r in tool_results], default=str)}
+        Tool Results: {json.dumps([r.__dict__ if hasattr(r, '__dict__') else r for r in tool_results], default=str)}
+        
+        Important: Include source attribution for any facts or data points mentioned.
+        Sources available: {', '.join(news_sources) if news_sources else 'General market knowledge'}
         
         Provide structured analysis following the CommodityAnalysis schema.
         """
@@ -261,11 +288,21 @@ class GroqAIService:
             reasoning_effort=reasoning_effort
         )
         
+        # Prepare sources for frontend
+        formatted_sources = []
+        for source in news_sources:
+            formatted_sources.append({
+                "name": source,
+                "type": "news" if source != "Web Search" else "web",
+                "timestamp": datetime.now().isoformat()
+            })
+        
         return {
             "query": query,
             "reasoning": reasoning,
             "tool_results": tool_results,
             "analysis": analysis,
+            "sources": formatted_sources,  # Add sources for frontend display
             "timestamp": datetime.now().isoformat()
         }
     
@@ -405,31 +442,65 @@ class GroqAIService:
             return ToolResult(tool_name, False, None, str(e))
     
     async def _search_commodity_news(self, commodity: str, timeframe: str = "week") -> Dict[str, Any]:
-        """Search for commodity news"""
-        if not self.search_engine:
-            return {"error": "Search not available"}
+        """Search for commodity news using NewsDataSources and web search"""
+        articles = []
+        sources_used = []
         
-        try:
-            results = self.search_engine.text(
-                f"{commodity} commodity market news {timeframe}",
-                max_results=5
-            )
-            
-            return {
-                "commodity": commodity,
-                "timeframe": timeframe,
-                "articles": [
-                    {
+        # First, try to get news from NewsDataSources (RSS feeds)
+        if NEWS_SOURCES_AVAILABLE:
+            try:
+                async with NewsDataSources() as news_sources:
+                    all_news = await news_sources.fetch_all_sources()
+                    
+                    # Filter for relevant commodity
+                    for article in all_news:
+                        title = article.get('title', '').lower()
+                        summary = article.get('summary', '').lower()
+                        if commodity.lower() in title or commodity.lower() in summary:
+                            articles.append({
+                                "title": article.get('title'),
+                                "snippet": article.get('summary'),
+                                "url": article.get('url'),
+                                "source": article.get('source'),
+                                "published": article.get('published', datetime.now()).isoformat() if isinstance(article.get('published'), datetime) else article.get('published'),
+                                "category": article.get('category', 'news')
+                            })
+                            if article.get('source') not in sources_used:
+                                sources_used.append(article.get('source'))
+                    
+                    logger.info(f"Fetched {len(articles)} articles from NewsDataSources for {commodity}")
+            except Exception as e:
+                logger.error(f"Error fetching from NewsDataSources: {e}")
+        
+        # Supplement with web search if available
+        if self.search_engine and len(articles) < 5:
+            try:
+                results = self.search_engine.text(
+                    f"{commodity} commodity market news {timeframe}",
+                    max_results=5
+                )
+                
+                for r in results:
+                    articles.append({
                         "title": r.get("title"),
                         "snippet": r.get("body"),
-                        "url": r.get("href")
-                    }
-                    for r in results
-                ],
-                "search_timestamp": datetime.now().isoformat()
-            }
-        except Exception as e:
-            return {"error": str(e)}
+                        "url": r.get("href"),
+                        "source": "Web Search",
+                        "published": datetime.now().isoformat(),
+                        "category": "web_search"
+                    })
+                    if "Web Search" not in sources_used:
+                        sources_used.append("Web Search")
+            except Exception as e:
+                logger.error(f"Web search error: {e}")
+        
+        return {
+            "commodity": commodity,
+            "timeframe": timeframe,
+            "articles": articles[:10],  # Limit to 10 most relevant
+            "sources_used": sources_used,
+            "search_timestamp": datetime.now().isoformat()
+        }
     
     async def _analyze_price_data(self, commodity: str, data_points: List[Dict]) -> Dict[str, Any]:
         """Analyze price data and generate predictions"""
@@ -610,15 +681,19 @@ class GroqAIService:
         include_predictions: bool = True,
         include_news: bool = True,
         model: str = "gpt-oss",  # Use GPT-OSS-120B for comprehensive reports
-        reasoning_effort: ReasoningEffort = ReasoningEffort.HIGH
+        reasoning_effort: ReasoningEffort = ReasoningEffort.HIGH,
+        include_sources: bool = True
     ) -> Dict[str, Any]:
         """Generate comprehensive market report"""
         report = {
             "generated_at": datetime.now().isoformat(),
             "commodities": {},
             "market_overview": "",
-            "key_insights": []
+            "key_insights": [],
+            "sources": []  # Aggregate sources
         }
+        
+        all_sources = set()  # Track unique sources
         
         for commodity in commodities:
             # Analyze each commodity
@@ -626,10 +701,16 @@ class GroqAIService:
                 f"Analyze {commodity} market conditions, trends, and outlook",
                 commodity=commodity,
                 use_tools=True,
-                search_web=include_news
+                search_web=include_news,
+                include_sources=include_sources
             )
             
             report["commodities"][commodity] = analysis
+            
+            # Collect sources
+            if 'sources' in analysis:
+                for source in analysis['sources']:
+                    all_sources.add(source['name'])
         
         # Generate overview
         overview_prompt = f"""
@@ -644,6 +725,12 @@ class GroqAIService:
         
         overview = await self._get_completion(overview_prompt, mode=ResponseMode.JSON_OBJECT)
         report.update(overview)
+        
+        # Add aggregated sources to report
+        report["sources"] = [
+            {"name": source, "type": "news"} 
+            for source in all_sources
+        ]
         
         return report
 

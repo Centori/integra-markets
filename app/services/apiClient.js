@@ -6,7 +6,10 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import Constants from 'expo-constants';
 
 // Safely access environment variables to prevent iOS 18.6 crashes
-const API_BASE_URL = Constants.expoConfig?.extra?.apiUrl || 'http://localhost:8000';
+// Use EXPO_PUBLIC_API_URL from environment, fallback to app.json extra.apiUrl, then local dev
+const API_BASE_URL = process.env.EXPO_PUBLIC_API_URL || 
+                     Constants.expoConfig?.extra?.apiUrl || 
+                     'http://192.168.0.208:8000';
 const API_URL = `${API_BASE_URL}/api`;
 
 class APIClient {

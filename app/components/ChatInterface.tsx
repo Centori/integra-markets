@@ -13,8 +13,15 @@ import {
   Clipboard,
 } from 'react-native';
 import { MaterialIcons } from '@expo/vector-icons';
-import groqService from '../services/groqService';
+// import groqService from '../services/groqService';
+import { sentimentApi } from '../services/api';
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import { useBookmarks } from '../providers/BookmarkProvider';
+// @ts-ignore - JavaScript component
+import StructuredAnalysis from './StructuredAnalysis';
+// @ts-ignore - JavaScript component
+import MarkdownMessage from './MarkdownMessage';
+import AIResponseFormatter from './AIResponseFormatter';
 
 // Color palette
 const colors = {
@@ -51,8 +58,12 @@ const ChatInterface: React.FC<ChatInterfaceProps> = ({ newsContext }) => {
   const [inputText, setInputText] = useState('');
   const [isLoading, setIsLoading] = useState(false);
   const [showSuggestions, setShowSuggestions] = useState(true);
-  const [bookmarkedMessages, setBookmarkedMessages] = useState<Set<string>>(new Set());
+  const [isTyping, setIsTyping] = useState(false);
+  const shouldStopTypingRef = useRef(false);
   const scrollViewRef = useRef<ScrollView>(null);
+  
+  // Use the enhanced bookmark provider
+  const { chatBookmarks, addChatBookmark, removeBookmark, isBookmarked } = useBookmarks();
 
   // Suggestion chips for quick actions
   const suggestions = [
@@ -72,6 +83,31 @@ const ChatInterface: React.FC<ChatInterfaceProps> = ({ newsContext }) => {
   const handleSuggestionTap = (suggestion: string) => {
     setInputText(suggestion);
     sendMessage(suggestion);
+  };
+
+  const stopTyping = () => {
+    console.log('Stop button pressed!');
+    shouldStopTypingRef.current = true;
+    setIsTyping(false);
+  };
+
+  // Helper function to safely parse JSON
+  const tryParseJSON = (text: string): any => {
+    try {
+      return JSON.parse(text);
+    } catch {
+      // If it's not JSON, check if it contains analysis keywords
+      if (text.includes('bullish') || text.includes('bearish') || 
+          text.includes('market') || text.includes('price')) {
+        // Return a structured format for analysis display
+        return {
+          summary: text,
+          confidence: 0.7,
+          sources: ['Market Analysis']
+        };
+      }
+      return null;
+    }
   };
 
   const sendMessage = async (messageText?: string) => {
@@ -113,28 +149,89 @@ const ChatInterface: React.FC<ChatInterfaceProps> = ({ newsContext }) => {
         content: text
       });
 
-      // Call Groq API with streaming typewriter effect
-      const response = await groqService.sendMessage(
-        apiMessages, 
-        newsContext,
-        (streamingText: string) => {
-          // Update the assistant message with streaming text
+      // Call backend API instead of direct GROQ
+      const response = await fetch('http://localhost:8000/ai/chat', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          messages: apiMessages,
+          commodity: newsContext?.title || 'general'
+        })
+      });
+
+      const data = await response.json();
+      
+      // Clean and format the response text
+      let cleanedResponse = (data.response || 'Analysis complete')
+        .replace(/\*\*/g, '') // Remove bold markers
+        .replace(/\s{2,}/g, ' ') // Clean extra spaces
+        .trim();
+      
+      // Extract and clean source citations
+      const sourcePattern = /([a-zA-Z]+economics|tradingeconomics|[a-zA-Z]+)\s*\+\d+\s*\./g;
+      const sources = [];
+      cleanedResponse = cleanedResponse.replace(sourcePattern, (match, source) => {
+        sources.push(source.trim());
+        return ''; // Remove inline citations from text
+      }).trim();
+      
+      // Typewriter effect - ChatGPT-like speed (15-20 chars per frame for smooth 600+ chars/sec)
+      const chars = cleanedResponse.split('');
+      const charsPerFrame = 15; // Show 15 characters at once for ChatGPT-like speed
+      const frameDelay = 16; // 60fps (16ms per frame)
+      
+      setIsTyping(true);
+      shouldStopTypingRef.current = false; // Reset the ref
+      
+      console.log('Starting typewriter effect for', chars.length, 'characters');
+      
+      let currentText = '';
+      for (let i = 0; i < chars.length; i += charsPerFrame) {
+        // Check if user wants to stop typing using ref for immediate response
+        if (shouldStopTypingRef.current) {
+          console.log('Stopping typewriter at character', i, 'of', chars.length);
+          // Show complete message immediately
           setMessages(prev => 
             prev.map(msg => 
               msg.id === assistantId 
-                ? { ...msg, content: streamingText }
+                ? { ...msg, content: cleanedResponse }
                 : msg
             )
           );
+          break;
         }
-      );
+        
+        // Add multiple characters at once for faster typing
+        const nextChars = chars.slice(i, i + charsPerFrame).join('');
+        currentText += nextChars;
+        
+        // Update message progressively
+        setMessages(prev => 
+          prev.map(msg => 
+            msg.id === assistantId 
+              ? { ...msg, content: currentText }
+              : msg
+          )
+        );
+        
+        // Very short delay for smooth animation at 60fps
+        await new Promise(resolve => setTimeout(resolve, frameDelay));
+      }
+      
+      console.log('Typewriter effect completed or stopped');
+      setIsTyping(false);
+      shouldStopTypingRef.current = false; // Reset after completion
+      
+      const responseData = { success: response.ok, data: data.response, error: data.error };
 
-      if (!response.success) {
+      if (!responseData.success) {
         // Update with error message
         setMessages(prev => 
           prev.map(msg => 
             msg.id === assistantId 
-              ? { ...msg, content: `Sorry, I encountered an error: ${response.error}` }
+              ? { ...msg, content: `Sorry, I encountered an error: ${responseData.error || 'Backend connection failed'}` }
               : msg
           )
         );
@@ -154,111 +251,94 @@ const ChatInterface: React.FC<ChatInterfaceProps> = ({ newsContext }) => {
     }
   };
 
-  // Format AI response text with proper paragraph and numbering structure
-  const formatMessageContent = (content: string) => {
-    if (!content.trim()) return [];
+  // Format AI response with Perplexity-like formatting
+  const formatMessageContent = (content: string, messageId?: string) => {
+    if (!content.trim()) return null;
     
-    // Split by double newlines for paragraphs, then by single newlines for numbered lists
-    const paragraphs = content.split('\n\n').filter(p => p.trim());
-    const formattedBlocks: JSX.Element[] = [];
+    // Extract sources from the content if they exist
+    const sourcePattern = /([a-zA-Z]+economics|tradingeconomics|Reuters|Bloomberg|[a-zA-Z]+)\s*\+\d+/g;
+    const extractedSources: string[] = [];
+    let cleanContent = content;
     
-    paragraphs.forEach((paragraph, pIndex) => {
-      const trimmed = paragraph.trim();
-      if (!trimmed) return;
-      
-      // Check if this is a numbered list paragraph
-      const lines = trimmed.split('\n');
-      const isNumberedList = lines.some(line => /^\d+[.)]/.test(line.trim()));
-      
-      if (isNumberedList) {
-        // Render as numbered list
-        lines.forEach((line, lIndex) => {
-          const trimmedLine = line.trim();
-          if (!trimmedLine) return;
-          
-          const numberMatch = trimmedLine.match(/^(\d+[.)])\s*(.*)/);
-          if (numberMatch) {
-            formattedBlocks.push(
-              <View key={`${pIndex}-${lIndex}`} style={styles.numberedItem}>
-                <Text style={styles.numberText}>{numberMatch[1]}</Text>
-                <Text style={styles.numberedText}>{numberMatch[2]}</Text>
-              </View>
-            );
-          } else {
-            formattedBlocks.push(
-              <Text key={`${pIndex}-${lIndex}`} style={styles.messageTextBlock}>
-                {trimmedLine}
-              </Text>
-            );
-          }
-        });
-      } else {
-        // Regular paragraph
-        formattedBlocks.push(
-          <Text key={pIndex} style={styles.messageTextBlock}>
-            {trimmed}
-          </Text>
-        );
-      }
-      
-      // Add spacing between blocks
-      if (pIndex < paragraphs.length - 1) {
-        formattedBlocks.push(
-          <View key={`spacer-${pIndex}`} style={styles.blockSpacer} />
-        );
-      }
-    });
+    // Extract sources and clean content
+    const matches = content.match(sourcePattern);
+    if (matches) {
+      matches.forEach(match => {
+        const sourceName = match.replace(/\s*\+\d+/, '').trim();
+        if (!extractedSources.includes(sourceName)) {
+          extractedSources.push(sourceName);
+        }
+      });
+      // Remove inline citations
+      cleanContent = content.replace(sourcePattern, '').replace(/\s+\./g, '.');
+    }
     
-    return formattedBlocks;
+    // Use AIResponseFormatter for clean Perplexity-like display
+    return (
+      <AIResponseFormatter 
+        content={cleanContent}
+        sources={extractedSources}
+        isDarkMode={true}
+      />
+    );
   };
 
-  // Bookmark functionality
+  // Helper function to check if a message is bookmarked
+  const isMessageBookmarked = (message: Message) => {
+    if (message.role !== 'assistant') return false;
+    
+    // Find the user query that preceded this response
+    const messageIndex = messages.findIndex(m => m.id === message.id);
+    const userQuery = messageIndex > 0 ? messages[messageIndex - 1]?.content : '';
+    
+    // Check if this combination of query and response is bookmarked
+    return chatBookmarks.some(b => 
+      b.query === userQuery && b.response === message.content
+    );
+  };
+
+  // Bookmark functionality using enhanced BookmarkProvider
   const toggleBookmark = async (messageId: string) => {
     try {
       const message = messages.find(msg => msg.id === messageId);
       if (!message || message.role !== 'assistant') return;
 
-      const isCurrentlyBookmarked = bookmarkedMessages.has(messageId);
-      const newBookmarkedSet = new Set<string>(bookmarkedMessages);
+      // Find the user query that preceded this response
+      const messageIndex = messages.findIndex(m => m.id === messageId);
+      const userQuery = messageIndex > 0 ? messages[messageIndex - 1]?.content : 'General Analysis';
       
-      if (isCurrentlyBookmarked) {
-        newBookmarkedSet.delete(messageId);
+      // Check if this specific message is already bookmarked
+      const existingBookmark = chatBookmarks.find(b => 
+        b.query === userQuery && b.response === message.content
+      );
+      
+      if (existingBookmark) {
+        // Remove bookmark
+        await removeBookmark(existingBookmark.id);
       } else {
-        // Check storage limits before adding
-        const existingBookmarks = await AsyncStorage.getItem('bookmarked_analyses');
-        const bookmarks = existingBookmarks ? JSON.parse(existingBookmarks) : [];
+        // Extract sources from the response if they exist
+        const sourcePattern = /([a-zA-Z]+economics|tradingeconomics|Reuters|Bloomberg|[a-zA-Z]+)\s*\+\d+/g;
+        const matches = message.content.match(sourcePattern);
+        const sources: Array<{ name: string; url?: string }> = [];
         
-        // Limit: 50 free bookmarks, suggest subscription beyond that
-        if (bookmarks.length >= 50 && !isCurrentlyBookmarked) {
-          Alert.alert(
-            'Storage Limit Reached',
-            'You\'ve reached the limit of 50 saved analyses. Upgrade to Pro for unlimited storage and advanced features.',
-            [
-              { text: 'Later', style: 'cancel' },
-              { text: 'Upgrade', onPress: () => console.log('Navigate to subscription') }
-            ]
-          );
-          return;
+        if (matches) {
+          matches.forEach(match => {
+            const sourceName = match.replace(/\s*\+\d+/, '').trim();
+            if (!sources.find(s => s.name === sourceName)) {
+              sources.push({ name: sourceName });
+            }
+          });
         }
         
-        newBookmarkedSet.add(messageId);
-        
-        // Save bookmark to storage
-        const bookmarkData = {
-          id: messageId,
-          content: message.content,
-          newsTitle: newsContext?.title || 'Unknown',
-          newsSource: newsContext?.source || 'Unknown',
-          timestamp: message.timestamp,
-          query: messages[messages.findIndex(m => m.id === messageId) - 1]?.content || 'General Analysis'
-        };
-        
-        bookmarks.push(bookmarkData);
-        await AsyncStorage.setItem('bookmarked_analyses', JSON.stringify(bookmarks));
+        // Add new chat bookmark
+        await addChatBookmark({
+          title: userQuery.length > 50 ? userQuery.substring(0, 47) + '...' : userQuery,
+          query: userQuery,
+          response: message.content,
+          sources: sources.length > 0 ? sources : undefined,
+          tags: newsContext ? [newsContext.source, 'news-analysis'] : ['general-analysis']
+        });
       }
-      
-      setBookmarkedMessages(newBookmarkedSet);
-      
     } catch (error) {
       console.error('Error toggling bookmark:', error);
       Alert.alert('Error', 'Failed to save bookmark. Please try again.');
@@ -276,23 +356,7 @@ const ChatInterface: React.FC<ChatInterfaceProps> = ({ newsContext }) => {
     }
   };
 
-  // Load existing bookmarks on component mount
-  useEffect(() => {
-    const loadBookmarks = async () => {
-      try {
-        const existingBookmarks = await AsyncStorage.getItem('bookmarked_analyses');
-        if (existingBookmarks) {
-          const bookmarks = JSON.parse(existingBookmarks);
-          const bookmarkedIds = new Set<string>(bookmarks.map((b: any) => b.id));
-          setBookmarkedMessages(bookmarkedIds);
-        }
-      } catch (error) {
-        console.error('Error loading bookmarks:', error);
-      }
-    };
-    
-    loadBookmarks();
-  }, []);
+  // No need to load bookmarks separately as they're provided by BookmarkProvider
 
   useEffect(() => {
     // Scroll to bottom when new messages are added
@@ -348,7 +412,7 @@ const ChatInterface: React.FC<ChatInterfaceProps> = ({ newsContext }) => {
                 message.role === 'user' ? styles.userAvatar : styles.assistantAvatar
               ]}>
                 <MaterialIcons 
-                  name={message.role === 'user' ? 'person' : 'chat-bubble'} 
+                  name={message.role === 'user' ? 'person' : 'auto-awesome'} 
                   size={20} 
                   color={message.role === 'user' ? colors.textPrimary : colors.accentPositive} 
                 />
@@ -373,9 +437,9 @@ const ChatInterface: React.FC<ChatInterfaceProps> = ({ newsContext }) => {
                     onPress={() => toggleBookmark(message.id)}
                   >
                     <MaterialIcons
-                      name={bookmarkedMessages.has(message.id) ? 'bookmark' : 'bookmark-border'}
+                      name={isMessageBookmarked(message) ? 'bookmark' : 'bookmark-border'}
                       size={18}
-                      color={bookmarkedMessages.has(message.id) ? colors.accentPositive : colors.textSecondary}
+                      color={isMessageBookmarked(message) ? colors.accentPositive : colors.textSecondary}
                     />
                   </TouchableOpacity>
                 </View>
@@ -384,7 +448,18 @@ const ChatInterface: React.FC<ChatInterfaceProps> = ({ newsContext }) => {
             <View style={styles.messageContent}>
               {message.role === 'assistant' ? (
                 <View>
-                  {formatMessageContent(message.content)}
+                  {/* Check if message looks like structured analysis data */}
+                  {message.content.includes('price_trends') || 
+                   message.content.includes('supply_demand') ||
+                   message.content.includes('technical_indicators') ? (
+                    <StructuredAnalysis 
+                      analysis={tryParseJSON(message.content) || { summary: message.content }}
+                      isDarkMode={true}
+                      showActions={false}
+                    />
+                  ) : (
+                    formatMessageContent(message.content)
+                  )}
                 </View>
               ) : (
                 <Text style={styles.messageText}>{message.content}</Text>
@@ -397,7 +472,7 @@ const ChatInterface: React.FC<ChatInterfaceProps> = ({ newsContext }) => {
           <View style={[styles.messageWrapper, styles.assistantMessageWrapper]}>
             <View style={styles.messageHeader}>
               <View style={[styles.avatar, styles.assistantAvatar]}>
-                <MaterialIcons name="chat-bubble" size={20} color={colors.accentPositive} />
+                <MaterialIcons name="auto-awesome" size={20} color={colors.accentPositive} />
               </View>
               <Text style={styles.messageRole}>Integra AI</Text>
             </View>
@@ -423,6 +498,19 @@ const ChatInterface: React.FC<ChatInterfaceProps> = ({ newsContext }) => {
           onSubmitEditing={() => sendMessage()}
           blurOnSubmit={false}
         />
+        {isTyping && (
+          <TouchableOpacity
+            style={styles.stopButton}
+            onPress={stopTyping}
+          >
+            <MaterialIcons 
+              name="stop-circle" 
+              size={14} 
+              color={colors.textSecondary} 
+            />
+            <Text style={{ color: colors.textSecondary, fontSize: 14 }}>Stop</Text>
+          </TouchableOpacity>
+        )}
         <TouchableOpacity
           style={[
             styles.sendButton,
@@ -434,7 +522,7 @@ const ChatInterface: React.FC<ChatInterfaceProps> = ({ newsContext }) => {
           <MaterialIcons 
             name="send" 
             size={20} 
-            color={inputText.trim() ? colors.accentPositive : colors.textSecondary} 
+            color={colors.bgPrimary} 
           />
         </TouchableOpacity>
       </View>
@@ -572,9 +660,29 @@ const styles = StyleSheet.create({
     height: 50,
     justifyContent: 'center',
     alignItems: 'center',
+    shadowColor: colors.accentPositive,
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.3,
+    shadowRadius: 4,
+    elevation: 5,
   },
   disabledSendButton: {
-    opacity: 0.5,
+    backgroundColor: colors.bgTertiary,
+    shadowOpacity: 0,
+    elevation: 0,
+  },
+  stopButton: {
+    backgroundColor: colors.bgSecondary,
+    borderWidth: 1,
+    borderColor: colors.divider,
+    borderRadius: 20,
+    paddingHorizontal: 14,
+    paddingVertical: 10,
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginRight: 8,
+    flexDirection: 'row',
+    gap: 4,
   },
   // New styles for formatted content
   messageTextBlock: {

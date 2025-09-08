@@ -15,6 +15,8 @@ interface NewsItem {
   sentiment?: string;
   sentimentScore?: string;
   timeAgo?: string;
+  commodities?: string[];
+  marketImpact?: string;
 }
 
 interface NewsCardProps {
@@ -23,30 +25,34 @@ interface NewsCardProps {
 }
 
 export default function NewsCard({ item, onAIClick }: NewsCardProps) {
-  const { addBookmark, removeBookmark, isBookmarked, bookmarks } = useBookmarks();
-  const isCurrentlyBookmarked = isBookmarked(item.title);
+  const { addNewsBookmark, removeBookmark, isBookmarked, newsBookmarks } = useBookmarks();
+  const isCurrentlyBookmarked = isBookmarked(item.title, 'news');
 
   const handleBookmarkToggle = async () => {
     try {
       if (isCurrentlyBookmarked) {
         // Find the bookmark by title and remove it
-        const bookmark = bookmarks.find(b => b.title === item.title);
+        const bookmark = newsBookmarks.find(b => b.title === item.title);
         if (bookmark) {
           await removeBookmark(bookmark.id);
         }
       } else {
-        // Add new bookmark
-        await addBookmark({
+        // Add new news bookmark with enhanced fields
+        await addNewsBookmark({
           title: item.title,
           summary: item.summary || item.content || '',
           source: item.source || 'Unknown',
+          sourceUrl: item.sourceUrl,
           sentiment: (item.sentiment?.toUpperCase() as "BULLISH" | "BEARISH" | "NEUTRAL") || 'NEUTRAL',
-          sentimentScore: parseFloat(item.sentimentScore || '0.5')
+          sentimentScore: parseFloat(item.sentimentScore || '0.5'),
+          commodities: Array.isArray(item.commodities) ? item.commodities : undefined,
+          marketImpact: item.marketImpact,
+          tags: [item.source || 'news', ...(item.commodities || [])]
         });
       }
     } catch (error) {
       console.error('Bookmark error:', error);
-      Alert.alert('Error', 'Failed to update bookmark');
+      // Error alert is handled by the provider
     }
   };
   const handleSourcePress = async () => {
@@ -305,8 +311,7 @@ const styles = StyleSheet.create({
     borderRadius: 16,
     padding: 16,
     marginBottom: 16,
-    borderWidth: 1,
-    borderColor: '#FFFFFF',
+    // Border removed - background contrast is sufficient
     shadowColor: 'rgba(0, 0, 0, 0.2)',
     shadowRadius: 4,
   },

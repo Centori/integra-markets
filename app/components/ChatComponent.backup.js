@@ -1,8 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { View, Text, TextInput, TouchableOpacity, ScrollView, StyleSheet } from 'react-native';
 import { makeApiRequest } from '../services/apiKeyService';
-import MarkdownMessage from './MarkdownMessage';
-import { cleanAIResponse, containsMarkdown } from '../utils/markdownUtils';
 
 const ChatComponent = () => {
   const [messages, setMessages] = useState([]);
@@ -36,31 +34,11 @@ const ChatComponent = () => {
   return (
     <View style={styles.container}>
       <ScrollView style={styles.chatArea}>
-        {messages.map((msg, index) => {
-          const isUser = msg.role === 'user';
-          const content = msg.content;
-          
-          // Use MarkdownMessage for AI responses with markdown
-          if (!isUser && containsMarkdown(content)) {
-            const cleanedContent = cleanAIResponse(content);
-            return (
-              <View key={index} style={styles.messageContainer}>
-                <MarkdownMessage 
-                  content={cleanedContent} 
-                  isUser={false}
-                  isDarkMode={true}
-                />
-              </View>
-            );
-          }
-          
-          // Plain text for user messages and non-markdown AI messages
-          return (
-            <Text key={index} style={isUser ? styles.userText : styles.aiText}>
-              {content}
-            </Text>
-          );
-        })}
+        {messages.map((msg, index) => (
+          <Text key={index} style={msg.role === 'user' ? styles.userText : styles.aiText}>
+            {msg.content}
+          </Text>
+        ))}
       </ScrollView>
       <View style={styles.inputArea}>
         <TextInput
@@ -97,10 +75,6 @@ const styles = StyleSheet.create({
     color: '#ffffff',
     marginVertical: 5,
     textAlign: 'left',
-  },
-  messageContainer: {
-    marginVertical: 5,
-    paddingHorizontal: 10,
   },
   inputArea: {
     flexDirection: 'row',

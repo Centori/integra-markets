@@ -15,9 +15,6 @@ import {
 import { Ionicons } from '@expo/vector-icons';
 import { BlurView } from 'expo-blur';
 import { api } from '../services/apiClient';
-import MarkdownMessage from './MarkdownMessage';
-import { cleanAIResponse, containsMarkdown } from '../utils/markdownUtils';
-import StructuredAnalysis from './StructuredAnalysis';
 
 // Tool selection modal
 const ToolSelectionModal = ({ visible, onClose, tools, selectedTools, onToggleTool }) => {
@@ -72,24 +69,32 @@ const MessageBubble = ({ message, isUser }) => {
   
   const renderContent = () => {
     if (message.type === 'text') {
-      // Use MarkdownMessage for AI responses that contain markdown
-      if (!isUser && containsMarkdown(message.content)) {
-        const cleanedContent = cleanAIResponse(message.content);
-        return <MarkdownMessage content={cleanedContent} isUser={isUser} isDarkMode={darkTheme} />;
-      }
-      // Plain text for user messages and non-markdown AI messages
       return <Text style={styles.messageText}>{message.content}</Text>;
     }
     
     if (message.type === 'analysis') {
-      // Use the new StructuredAnalysis component for analysis messages
       return (
-        <StructuredAnalysis 
-          analysis={message.data}
-          isDarkMode={darkTheme}
-          showActions={true}
-          onBookmark={() => console.log('Bookmark:', message.id)}
-        />
+        <View>
+          <Text style={styles.messageText}>{message.content}</Text>
+          {message.data && (
+            <View style={styles.analysisData}>
+              <Text style={styles.analysisTitle}>Analysis Results:</Text>
+              <Text style={styles.analysisSentiment}>
+                Sentiment: {message.data.sentiment} ({(message.data.confidence * 100).toFixed(1)}%)
+              </Text>
+              {message.data.predictions && (
+                <View style={styles.predictions}>
+                  <Text style={styles.predictionTitle}>Price Predictions:</Text>
+                  {Object.entries(message.data.predictions).map(([timeframe, value]) => (
+                    <Text key={timeframe} style={styles.predictionItem}>
+                      {timeframe}: ${value.toFixed(2)}
+                    </Text>
+                  ))}
+                </View>
+              )}
+            </View>
+          )}
+        </View>
       );
     }
     
@@ -132,14 +137,13 @@ const MessageBubble = ({ message, isUser }) => {
   );
 };
 
-export default function AIChatInterface({ commodity = null, onInsightGenerated, isDarkMode = false }) {
+export default function AIChatInterface({ commodity = null, onInsightGenerated }) {
   const [messages, setMessages] = useState([]);
   const [inputText, setInputText] = useState('');
   const [loading, setLoading] = useState(false);
   const [showTools, setShowTools] = useState(false);
   const [selectedTools, setSelectedTools] = useState(['search_commodity_news', 'analyze_price_data']);
   const [responseMode, setResponseMode] = useState('reasoning'); // reasoning, json, tools
-  const [darkTheme, setDarkTheme] = useState(isDarkMode);
   const scrollViewRef = useRef();
   const fadeAnim = useRef(new Animated.Value(0)).current;
   
@@ -225,7 +229,7 @@ export default function AIChatInterface({ commodity = null, onInsightGenerated, 
           setMessages(prev => [...prev, {
             id: Date.now().toString() + '-reasoning',
             type: 'text',
-            content: `## Reasoning Process\n\n${response.reasoning}`,
+            content: `**Reasoning Process:**\n${response.reasoning}`,
             isUser: false,
             timestamp: new Date()
           }]);
@@ -339,9 +343,9 @@ export default function AIChatInterface({ commodity = null, onInsightGenerated, 
   ];
   
   return (
-    <Animated.View style={[styles.container, darkTheme && styles.darkContainer, { opacity: fadeAnim }]}>
-      <View style={[styles.header, darkTheme && styles.darkHeader]}>
-        <Text style={[styles.headerTitle, darkTheme && styles.darkHeaderTitle]}>AI Analysis Assistant</Text>
+    <Animated.View style={[styles.container, { opacity: fadeAnim }]}>
+      <View style={styles.header}>
+        <Text style={styles.headerTitle}>AI Analysis Assistant</Text>
         <View style={styles.headerActions}>
           <TouchableOpacity 
             style={styles.modeButton}
@@ -364,20 +368,9 @@ export default function AIChatInterface({ commodity = null, onInsightGenerated, 
             <Ionicons 
               name={responseMode === 'reasoning' ? 'bulb' : responseMode === 'tools' ? 'construct' : 'code-slash'} 
               size={20} 
-              color={darkTheme ? '#fff' : '#666'} 
+              color="#666" 
             />
-            <Text style={[styles.modeButtonText, darkTheme && styles.darkModeButtonText]}>{responseMode}</Text>
-          </TouchableOpacity>
-          
-          <TouchableOpacity 
-            style={styles.modeButton}
-            onPress={() => setDarkTheme(!darkTheme)}
-          >
-            <Ionicons 
-              name={darkTheme ? 'sunny' : 'moon'} 
-              size={20} 
-              color={darkTheme ? '#fff' : '#666'} 
-            />
+            <Text style={styles.modeButtonText}>{responseMode}</Text>
           </TouchableOpacity>
         </View>
       </View>
@@ -461,9 +454,6 @@ const styles = StyleSheet.create({
     flex: 1,
     backgroundColor: '#f5f5f5',
   },
-  darkContainer: {
-    backgroundColor: '#1C1C1E',
-  },
   header: {
     flexDirection: 'row',
     justifyContent: 'space-between',
@@ -473,17 +463,10 @@ const styles = StyleSheet.create({
     borderBottomWidth: 1,
     borderBottomColor: '#e0e0e0',
   },
-  darkHeader: {
-    backgroundColor: '#2C2C2E',
-    borderBottomColor: '#3A3A3C',
-  },
   headerTitle: {
     fontSize: 18,
     fontWeight: '600',
     color: '#333',
-  },
-  darkHeaderTitle: {
-    color: '#ffffff',
   },
   headerActions: {
     flexDirection: 'row',
@@ -501,9 +484,6 @@ const styles = StyleSheet.create({
   modeButtonText: {
     fontSize: 12,
     color: '#666',
-  },
-  darkModeButtonText: {
-    color: '#fff',
   },
   messagesContainer: {
     flex: 1,

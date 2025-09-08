@@ -18,6 +18,14 @@ try:
 except ImportError:
     SUMMARIZER_AVAILABLE = False
 
+# Import user news service
+try:
+    from user_news_service import user_news_service
+    USER_NEWS_AVAILABLE = True
+except ImportError:
+    USER_NEWS_AVAILABLE = False
+    user_news_service = None
+
 # Import Groq AI service
 try:
     from groq_ai_service import GroqAIService, ResponseMode
@@ -148,6 +156,15 @@ class AIChatRequest(BaseModel):
     commodity: Optional[str] = Field(None, description="Commodity context")
     mode: Optional[str] = Field("reasoning", description="Response mode")
 
+class UserPreferencesRequest(BaseModel):
+    commodities: List[str] = Field(default_factory=list, description="User's selected commodities")
+    regions: List[str] = Field(default_factory=list, description="User's selected regions")
+    currencies: List[str] = Field(default_factory=list, description="User's selected currencies")
+    keywords: List[str] = Field(default_factory=list, description="User's alert keywords")
+    websiteURLs: List[str] = Field(default_factory=list, description="User's custom news sources")
+    alertFrequency: str = Field("daily", description="Alert frequency")
+    alertThreshold: str = Field("medium", description="Alert threshold level")
+
 # Root endpoint
 @app.get('/')
 def read_root():
@@ -172,7 +189,9 @@ def read_root():
             "/api/summarize/article",
             "/ai/analyze",
             "/ai/chat",
-            "/ai/report"
+            "/ai/report",
+            "/api/user/news",
+            "/api/user/market-data"
         ]
     }
 
@@ -544,6 +563,69 @@ async def generate_ai_report(
     except Exception as e:
         logger.error(f"AI report generation error: {e}")
         raise HTTPException(status_code=500, detail=str(e))
+
+# User preference-based endpoints
+@app.post('/api/user/news')
+async def get_user_news(request: UserPreferencesRequest):
+    """Get news based on user preferences"""
+    if USER_NEWS_AVAILABLE and user_news_service:
+        try:
+            user_prefs = {
+                "commodities": request.commodities or ["oil", "gold"],
+                "regions": request.regions or ["US"],
+                "keywords": request.keywords or [],
+                "websiteURLs": request.websiteURLs or [],
+                "alertThreshold": request.alertThreshold or "medium"
+            }
+            
+            result = await user_news_service.get_user_based_news(user_prefs)
+            return result
+        except Exception as e:
+            logger.error(f"Error fetching user news: {e}")
+            return {"error": str(e), "news": [], "market_data": {}}
+    else:
+        return {
+            "error": "User news service not available",
+            "news": [],
+            "market_data": {}
+        }
+
+@app.post('/api/user/market-data')
+async def get_user_market_data(request: UserPreferencesRequest):
+    """Get market data for user's selected commodities"""
+    try:
+        commodities = request.commodities or ["oil", "gold", "wheat"]
+        
+        # Simulate real-time market data based on user preferences
+        import random
+        market_data = {}
+        
+        for commodity in commodities:
+            base_prices = {
+                "oil": 75.50, "gold": 2050.00, "silver": 24.50,
+                "wheat": 5.80, "corn": 4.25, "natural gas": 2.75,
+                "copper": 3.85
+            }
+            
+            base_price = base_prices.get(commodity.lower(), 100)
+            change = random.uniform(-5, 5)
+            current_price = base_price * (1 + change/100)
+            
+            market_data[commodity] = {
+                "current_price": round(current_price, 2),
+                "change_percent": round(change, 2),
+                "sentiment": "BULLISH" if change > 1 else "BEARISH" if change < -1 else "NEUTRAL",
+                "timestamp": datetime.datetime.now().isoformat()
+            }
+        
+        return {
+            "success": True,
+            "market_data": market_data,
+            "user_commodities": commodities
+        }
+    except Exception as e:
+        logger.error(f"Error fetching market data: {e}")
+        return {"success": False, "error": str(e), "market_data": {}}
 
 if __name__ == "__main__":
     import uvicorn

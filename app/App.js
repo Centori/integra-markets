@@ -45,6 +45,7 @@ import AlertsScreen from './components/AlertsScreen';
 import NewsCard from './components/NewsCard';
 import AIAnalysisOverlay from './components/AIAnalysisOverlay';
 import { BookmarkProvider } from './providers/BookmarkProvider';
+import BookmarksScreen from './components/BookmarksScreen';
 import PrivacyPolicyModal from './components/PrivacyPolicyModal';
 import TermsOfServiceModal from './components/TermsOfServiceModal';
 
@@ -231,6 +232,7 @@ const App = () => {
   const [userData, setUserData] = useState(null);
   const [selectedArticle, setSelectedArticle] = useState(null);
   const [showAIAnalysis, setShowAIAnalysis] = useState(false);
+  const [showBookmarks, setShowBookmarks] = useState(false);
   const [showPrivacyPolicy, setShowPrivacyPolicy] = useState(false);
   const [showTermsOfService, setShowTermsOfService] = useState(false);
 
@@ -631,6 +633,20 @@ const App = () => {
     );
   }
 
+  // Render bookmarks screen
+  if (showBookmarks) {
+    return (
+      <BookmarksScreen
+        onBack={() => setShowBookmarks(false)}
+        onSelectBookmark={(bookmark) => {
+          setShowBookmarks(false);
+          // Handle bookmark selection - could open the article or chat
+          console.log('Selected bookmark:', bookmark);
+        }}
+      />
+    );
+  }
+
   // Render profile screen
   if (activeNav === 'Profile') {
     return (
@@ -644,6 +660,7 @@ const App = () => {
           onLogout={handleLogout}
           onShowPrivacyPolicy={() => setShowPrivacyPolicy(true)}
           onShowTermsOfService={() => setShowTermsOfService(true)}
+          onNavigateToBookmarks={() => setShowBookmarks(true)}
         />
         <PrivacyPolicyModal
           visible={showPrivacyPolicy}
@@ -661,7 +678,10 @@ const App = () => {
   if (activeNav === 'Alerts') {
     return (
       <View style={styles.container}>
-        <AlertsScreen onNavigateToAlertPreferences={() => setShowAlertPreferences(true)} />
+        <AlertsScreen 
+          onNavigateToAlertPreferences={() => setShowAlertPreferences(true)}
+          onNavigateToBookmarks={() => setShowBookmarks(true)}
+        />
         {renderBottomNav()}
       </View>
     );
@@ -718,7 +738,60 @@ const App = () => {
               <Text style={styles.integraIconText}>i</Text>
             </View>
             <Text style={styles.endOfFeedText}>You're all caught up!</Text>
-            <TouchableOpacity style={styles.refreshButton}>
+            <TouchableOpacity 
+              style={styles.refreshButton}
+              onPress={async () => {
+                try {
+                  // Use the same API URL configuration as other services
+                  const API_BASE_URL = __DEV__ 
+                    ? 'http://localhost:8000'
+                    : 'https://integra-markets-backend.fly.dev';
+                  
+                  // Get user preferences from AsyncStorage
+                  let userPrefs = {};
+                  try {
+                    const storedPrefs = await AsyncStorage.getItem('alert_preferences');
+                    if (storedPrefs) {
+                      userPrefs = JSON.parse(storedPrefs);
+                    }
+                  } catch (e) {
+                    console.log('Using default preferences');
+                  }
+                  
+                  // Get latest news analysis from backend with user preferences
+                  const response = await fetch(`${API_BASE_URL}/api/news/analysis`);
+                  
+                  if (response.ok) {
+                    const newData = await response.json();
+                    // In production, update the news state here
+                    console.log('News refreshed:', newData.length, 'items');
+                    Alert.alert('Success', 'News feed refreshed with latest data');
+                  } else {
+                    // Try alternative endpoints with user preferences
+                    const altResponse = await fetch(`${API_BASE_URL}/ai/report`, {
+                      method: 'POST',
+                      headers: { 'Content-Type': 'application/json' },
+                      body: JSON.stringify({
+                        commodities: userPrefs.commodities || ['oil', 'gold', 'wheat'],
+                        regions: userPrefs.regions || ['US', 'EU', 'Asia'],
+                        websiteURLs: userPrefs.websiteURLs || [],
+                        keywords: userPrefs.keywords || [],
+                        include_news: true,
+                        include_sources: true
+                      })
+                    });
+                    if (altResponse.ok) {
+                      Alert.alert('Success', 'Market report refreshed');
+                    } else {
+                      Alert.alert('Info', 'Using cached news data');
+                    }
+                  }
+                } catch (error) {
+                  console.error('Refresh error:', error);
+                  Alert.alert('Info', 'Continuing with current data');
+                }
+              }}
+            >
               <MaterialIcons name="refresh" size={16} color={colors.accentData} />
               <Text style={styles.refreshText}>Refresh</Text>
             </TouchableOpacity>

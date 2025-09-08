@@ -52,7 +52,7 @@ const getRoleLabel = (role) => {
   return roleMap[role] || role;
 };
 
-export default function ProfileScreen({ userProfile, alertPreferences, apiKeys, onBack, onNavigateToSettings, onLogout }) {
+export default function ProfileScreen({ userProfile, alertPreferences, apiKeys, onBack, onNavigateToSettings, onLogout, onNavigateToBookmarks }) {
   const [selectedProvider, setSelectedProvider] = useState(null);
   const [showAPIKeySetup, setShowAPIKeySetup] = useState(false);
   const [showAlertPreferences, setShowAlertPreferences] = useState(false);
@@ -309,7 +309,13 @@ export default function ProfileScreen({ userProfile, alertPreferences, apiKeys, 
               <MaterialIcons name="bookmark" color={colors.accentPositive} size={20} />
               <Text style={styles.sectionTitle}>Bookmarks</Text>
             </View>
-            <Text style={styles.bookmarkCount}>{bookmarks.length}</Text>
+            <TouchableOpacity 
+              style={styles.manageButton}
+              onPress={() => onNavigateToBookmarks ? onNavigateToBookmarks() : handleViewAllBookmarks()}
+            >
+              <Text style={styles.bookmarkCount}>{bookmarks.length}</Text>
+              <MaterialIcons name="chevron-right" color={colors.accentPositive} size={20} />
+            </TouchableOpacity>
           </View>
 
           {bookmarks.length === 0 ? (
@@ -322,13 +328,19 @@ export default function ProfileScreen({ userProfile, alertPreferences, apiKeys, 
           ) : (
             <View style={styles.bookmarksList}>
               {(showAllBookmarks ? bookmarks : bookmarks.slice(0, 3)).map((bookmark) => (
-                <TouchableOpacity key={bookmark.id} style={styles.bookmarkItem}>
+                <TouchableOpacity 
+                  key={bookmark.id} 
+                  style={styles.bookmarkItem}
+                  onPress={() => onNavigateToBookmarks ? onNavigateToBookmarks() : handleViewAllBookmarks()}
+                >
                   <View style={styles.bookmarkContent}>
                     <Text style={styles.bookmarkTitle} numberOfLines={2}>
                       {bookmark.title}
                     </Text>
-                    <Text style={styles.bookmarkSource}>{bookmark.source}</Text>
-                    {bookmark.sentiment && (
+                    <Text style={styles.bookmarkSource}>
+                      {bookmark.type === 'chat' ? 'AI Chat' : bookmark.source}
+                    </Text>
+                    {bookmark.type === 'news' && bookmark.sentiment && (
                       <Text style={[styles.bookmarkSentiment, {
                         color: bookmark.sentiment === 'BULLISH' ? colors.accentPositive :
                                bookmark.sentiment === 'BEARISH' ? colors.accentNegative :
@@ -340,18 +352,24 @@ export default function ProfileScreen({ userProfile, alertPreferences, apiKeys, 
                   </View>
                   <TouchableOpacity 
                     style={styles.deleteBookmarkButton}
-                    onPress={() => handleDeleteBookmark(bookmark.id, bookmark.title)}
+                    onPress={(e) => {
+                      e.stopPropagation();
+                      handleDeleteBookmark(bookmark.id, bookmark.title);
+                    }}
                   >
                     <MaterialIcons name="delete" color={colors.accentNegative} size={18} />
                   </TouchableOpacity>
                 </TouchableOpacity>
               ))}
               {!showAllBookmarks && bookmarks.length > 3 && (
-                <TouchableOpacity style={styles.viewAllButton} onPress={handleViewAllBookmarks}>
+                <TouchableOpacity 
+                  style={styles.viewAllButton} 
+                  onPress={() => onNavigateToBookmarks ? onNavigateToBookmarks() : handleViewAllBookmarks()}
+                >
                   <Text style={styles.viewAllText}>View all {bookmarks.length} bookmarks</Text>
                   <MaterialIcons name="chevron-right" color={colors.accentPositive} size={16} />
                 </TouchableOpacity>
-              )}
+              )
               {showAllBookmarks && bookmarks.length > 3 && (
                 <TouchableOpacity style={styles.viewAllButton} onPress={() => setShowAllBookmarks(false)}>
                   <Text style={styles.viewAllText}>Show less</Text>
@@ -479,6 +497,11 @@ const styles = StyleSheet.create({
   bookmarkCount: {
     color: colors.textSecondary,
     fontSize: 16,
+  },
+  manageButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
   },
   profileCard: {
     backgroundColor: colors.bgSecondary,
