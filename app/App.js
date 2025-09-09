@@ -496,15 +496,15 @@ const App = () => {
     if (activeFilter !== filter) return colors.bgSecondary;
     
     switch (filter) {
-      case 'Bullish': return '#4ade80';
-      case 'Bearish': return '#ff6b6b';
-      case 'Neutral': return '#fbbf24';
+      case 'Bullish': return '#4ade80'; // Green for bullish
+      case 'Bearish': return '#ff6b6b'; // Red for bearish 
+      case 'Neutral': return '#fbbf24'; // Yellow for neutral
       default: return colors.accentPositive;
     }
   };
 
   const getFilterBorderColor = (filter) => {
-    if (activeFilter !== filter) return colors.cardBorder;
+    if (activeFilter !== filter) return colors.divider;
     
     switch (filter) {
       case 'Bullish': return '#4ade80';

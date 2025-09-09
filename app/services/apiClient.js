@@ -199,7 +199,7 @@ class APIClient {
 
     async getNewsAnalysis(preferences = {}) {
         // Use the correct endpoint that accepts POST with preferences
-        return this.post('/user/news', {
+        return this.post('/api/user/news', {
             commodities: preferences.commodities || [],
             regions: preferences.regions || [],
             keywords: preferences.keywords || [],

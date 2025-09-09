@@ -43,6 +43,9 @@ const NewsFeed = ({
   const [page, setPage] = useState(1);
   const [error, setError] = useState(null);
   const [lastRefreshTime, setLastRefreshTime] = useState(null);
+  const [showScrollButtons, setShowScrollButtons] = useState(false);
+  const [isNearTop, setIsNearTop] = useState(true);
+  const [isNearBottom, setIsNearBottom] = useState(false);
   
   // Refs for optimization
   const flatListRef = useRef(null);
@@ -198,10 +201,24 @@ const NewsFeed = ({
           articleDate = now;
         }
         
+        // Process summary - clean HTML if present
+        let summary = item.summary || item.description || item.content || '';
+        
+        // Remove HTML tags if present
+        if (summary && summary.includes('<')) {
+          summary = summary.replace(/<[^>]*>/g, '').trim();
+        }
+        
+        // Don't show placeholder text - backend should provide real summaries
+        if (summary === 'More details would go here...' || summary.length < 5) {
+          summary = '';
+        }
+        
         return {
           id: item.id || `news-${Date.now()}-${index}`,
           title: item.title || item.headline || 'Untitled',
-          summary: item.summary || item.description || '',
+          summary: summary,
+          content: item.content || summary,
           source: item.source || 'Unknown',
           sourceUrl: item.url || item.source_url || '#',
           timeAgo: formatTimeAgo(articleDate),
@@ -272,6 +289,32 @@ const NewsFeed = ({
       }, 1000);
     }
   }, [isLoadingMore, hasMore, filteredData.length]);
+
+  // Handle scroll events to show/hide scroll buttons
+  const handleScroll = useCallback((event) => {
+    const { contentOffset, contentSize, layoutMeasurement } = event.nativeEvent;
+    const scrollY = contentOffset.y;
+    const contentHeight = contentSize.height;
+    const screenHeight = layoutMeasurement.height;
+    
+    // Show buttons after scrolling 200px from top
+    const shouldShowButtons = scrollY > 200 && contentHeight > screenHeight * 1.5;
+    setShowScrollButtons(shouldShowButtons);
+    
+    // Update position states
+    setIsNearTop(scrollY < 100);
+    setIsNearBottom(scrollY + screenHeight > contentHeight - 100);
+  }, []);
+
+  // Scroll to top
+  const scrollToTop = useCallback(() => {
+    flatListRef.current?.scrollToOffset({ offset: 0, animated: true });
+  }, []);
+
+  // Scroll to bottom
+  const scrollToBottom = useCallback(() => {
+    flatListRef.current?.scrollToEnd({ animated: true });
+  }, []);
 
   // Render individual news item
   const renderItem = useCallback(({ item, index }) => (
@@ -394,33 +437,62 @@ const NewsFeed = ({
   }
 
   return (
-    <FlatList
-      ref={flatListRef}
-      data={filteredData}
-      renderItem={renderItem}
-      keyExtractor={keyExtractor}
-      ListHeaderComponent={renderHeader}
-      ListFooterComponent={renderFooter}
-      ListEmptyComponent={renderEmpty}
-      refreshControl={
-        <RefreshControl
-          refreshing={isRefreshing}
-          onRefresh={handleRefresh}
-          tintColor={colors.accentPositive}
-          title="Pull to refresh"
-          titleColor={colors.textSecondary}
-        />
-      }
-      onEndReached={handleLoadMore}
-      onEndReachedThreshold={0.5}
-      getItemLayout={getItemLayout}
-      removeClippedSubviews={Platform.OS === 'android'}
-      maxToRenderPerBatch={10}
-      windowSize={21}
-      initialNumToRender={10}
-      showsVerticalScrollIndicator={false}
-      contentContainerStyle={filteredData.length === 0 ? styles.emptyList : null}
-    />
+    <View style={{ flex: 1 }}>
+      <FlatList
+        ref={flatListRef}
+        data={filteredData}
+        renderItem={renderItem}
+        keyExtractor={keyExtractor}
+        ListHeaderComponent={renderHeader}
+        ListFooterComponent={renderFooter}
+        ListEmptyComponent={renderEmpty}
+        refreshControl={
+          <RefreshControl
+            refreshing={isRefreshing}
+            onRefresh={handleRefresh}
+            tintColor={colors.accentPositive}
+            title="Pull to refresh"
+            titleColor={colors.textSecondary}
+          />
+        }
+        onEndReached={handleLoadMore}
+        onEndReachedThreshold={0.5}
+        onScroll={handleScroll}
+        scrollEventThrottle={16}
+        getItemLayout={getItemLayout}
+        removeClippedSubviews={Platform.OS === 'android'}
+        maxToRenderPerBatch={10}
+        windowSize={21}
+        initialNumToRender={10}
+        showsVerticalScrollIndicator={false}
+        contentContainerStyle={filteredData.length === 0 ? styles.emptyList : null}
+      />
+      
+      {/* Floating scroll buttons */}
+      {showScrollButtons && (
+        <View style={styles.scrollButtonsContainer}>
+          {!isNearTop && (
+            <TouchableOpacity
+              style={[styles.scrollButton, styles.scrollToTopButton]}
+              onPress={scrollToTop}
+              activeOpacity={0.7}
+            >
+              <MaterialIcons name="keyboard-arrow-up" size={24} color={colors.textPrimary} />
+            </TouchableOpacity>
+          )}
+          
+          {!isNearBottom && filteredData.length > 5 && (
+            <TouchableOpacity
+              style={[styles.scrollButton, styles.scrollToBottomButton]}
+              onPress={scrollToBottom}
+              activeOpacity={0.7}
+            >
+              <MaterialIcons name="keyboard-arrow-down" size={24} color={colors.textPrimary} />
+            </TouchableOpacity>
+          )}
+        </View>
+      )}
+    </View>
   );
 };
 
@@ -599,6 +671,34 @@ const styles = StyleSheet.create({
   newsCard: {
     marginHorizontal: 20,
     marginVertical: 8,
+  },
+  scrollButtonsContainer: {
+    position: 'absolute',
+    right: 16,
+    bottom: 20,
+    flexDirection: 'column',
+    alignItems: 'center',
+  },
+  scrollButton: {
+    width: 44,
+    height: 44,
+    borderRadius: 22,
+    backgroundColor: colors.bgSecondary,
+    borderWidth: 1,
+    borderColor: colors.divider,
+    justifyContent: 'center',
+    alignItems: 'center',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.25,
+    shadowRadius: 4,
+    elevation: 5,
+  },
+  scrollToTopButton: {
+    marginBottom: 8,
+  },
+  scrollToBottomButton: {
+    // No additional styles needed
   },
 });
 

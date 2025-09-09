@@ -269,9 +269,11 @@ export default function NewsCard({ item, onAIClick }: NewsCardProps) {
       <Text style={styles.title}>{item.title}</Text>
 
       {/* Description */}
-      <Text style={styles.description} numberOfLines={3}>
-        {item.summary || item.content || 'More details would go here...'}
-      </Text>
+      {(item.summary || item.content) && (
+        <Text style={styles.description} numberOfLines={3}>
+          {item.summary || item.content}
+        </Text>
+      )}
 
       {/* Footer with source and share */}
       <View style={styles.footer}>
