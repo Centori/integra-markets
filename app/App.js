@@ -1,5 +1,5 @@
 // Full Integra App v1.0 - TestFlight Ready with All Features
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import {
   StyleSheet,
   Text,
@@ -12,6 +12,8 @@ import {
   Image,
   Platform,
   DevSettings,
+  RefreshControl,
+  ActivityIndicator,
 } from 'react-native';
 import { MaterialIcons, MaterialCommunityIcons } from '@expo/vector-icons';
 import AsyncStorage from '@react-native-async-storage/async-storage';
@@ -48,6 +50,8 @@ import { BookmarkProvider } from './providers/BookmarkProvider';
 import BookmarksScreen from './components/BookmarksScreen';
 import PrivacyPolicyModal from './components/PrivacyPolicyModal';
 import TermsOfServiceModal from './components/TermsOfServiceModal';
+import NewsFeed from './components/NewsFeed';
+import { api } from './services/apiClient';
 
 // Color Palette
 const colors = {
@@ -64,48 +68,7 @@ const colors = {
   cardBorder: '#2A2A2A',
 };
 
-// Sample news data
-const sampleNewsData = [
-  {
-    id: '1',
-    title: 'US Natural Gas Storage Exceeds Expectations',
-    summary: 'Weekly natural gas storage report shows higher than expected inventory build, indicating potential oversupply conditions in key markets. This could signal bearish pressure on natural gas prices in the near term.',
-    source: 'Bloomberg',
-    sourceUrl: 'https://www.bloomberg.com',
-    timeAgo: '2 hours ago',
-    sentiment: 'BEARISH',
-    sentimentScore: '0.83',
-    keyDrivers: ['Storage build', 'Oversupply conditions', 'Price pressure'],
-    marketImpact: 'HIGH',
-    commodities: ['Natural Gas'],
-  },
-  {
-    id: '2',
-    title: 'Gold Prices Rally on Fed Policy Uncertainty',
-    summary: 'Precious metals gain momentum as investors seek safe haven assets amid monetary policy shifts...',
-    source: 'MarketWatch',
-    sourceUrl: 'https://www.marketwatch.com',
-    timeAgo: '1 hour ago',
-    sentiment: 'BULLISH',
-    sentimentScore: '0.72',
-    keyDrivers: ['Fed policy', 'Safe haven demand', 'Monetary shifts'],
-    marketImpact: 'MEDIUM',
-    commodities: ['Gold', 'Silver'],
-  },
-  {
-    id: '3',
-    title: 'Oil Demand Forecasts Remain Steady',
-    summary: 'International Energy Agency maintains stable outlook for global oil consumption through Q4...',
-    source: 'IEA',
-    sourceUrl: 'https://www.iea.org',
-    timeAgo: '30 minutes ago',
-    sentiment: 'NEUTRAL',
-    sentimentScore: '0.45',
-    keyDrivers: ['IEA forecasts', 'Global consumption', 'Q4 outlook'],
-    marketImpact: 'LOW',
-    commodities: ['Crude Oil'],
-  },
-];
+// REMOVED: Sample news data - Now fetching real data from API
 
 // Profile Screen Component
 const ProfileScreen = ({ onNavigateHome, userData, onResetData, onShowAlertPreferences, onDeleteAccount, onLogout, onShowPrivacyPolicy, onShowTermsOfService }) => {
@@ -235,6 +198,9 @@ const App = () => {
   const [showBookmarks, setShowBookmarks] = useState(false);
   const [showPrivacyPolicy, setShowPrivacyPolicy] = useState(false);
   const [showTermsOfService, setShowTermsOfService] = useState(false);
+  // News state handled by NewsFeed component
+  const [isEditingPreferences, setIsEditingPreferences] = useState(false); // Track if editing from Profile
+  // Refs removed - handled by NewsFeed
 
   // Check app state on mount
   useEffect(() => {
@@ -253,6 +219,9 @@ const App = () => {
     // setupDatabase.createTables();
     // testConnection();
   }, []);
+
+  // News is now handled by the NewsFeed component
+
 
   // Initialize notifications
   const initializeNotifications = async () => {
@@ -513,6 +482,7 @@ const App = () => {
   
   const handleShowAlertPreferences = () => {
     setActiveNav('Today');
+    setIsEditingPreferences(true); // Mark as editing from profile
     setShowAlertPreferences(true);
   };
 
@@ -521,10 +491,6 @@ const App = () => {
     setShowAIAnalysis(true);
   };
 
-  const getFilteredNews = () => {
-    if (activeFilter === 'All') return sampleNewsData;
-    return sampleNewsData.filter(item => item.sentiment === activeFilter.toUpperCase());
-  };
 
   const getFilterChipColor = (filter) => {
     if (activeFilter !== filter) return colors.bgSecondary;
@@ -624,11 +590,21 @@ const App = () => {
 
   // Render alert preferences
   if (showAlertPreferences) {
+    // Check if we came from profile (editing) or onboarding
+    const isFromProfile = isEditingPreferences;
+    
     return (
       <AlertPreferencesForm
-        onComplete={handleAlertPreferencesComplete}
-        onSkip={handleAlertPreferencesSkip}
-        showSkipOption={true}
+        onComplete={(preferences) => {
+          handleAlertPreferencesComplete(preferences);
+          setIsEditingPreferences(false); // Reset flag
+        }}
+        onSkip={isFromProfile ? () => {
+          setShowAlertPreferences(false);
+          setIsEditingPreferences(false);
+        } : handleAlertPreferencesSkip}
+        showSkipOption={!isFromProfile} // Only show skip during onboarding
+        isEditMode={isFromProfile} // Pass edit mode flag
       />
     );
   }
@@ -679,7 +655,10 @@ const App = () => {
     return (
       <View style={styles.container}>
         <AlertsScreen 
-          onNavigateToAlertPreferences={() => setShowAlertPreferences(true)}
+          onNavigateToAlertPreferences={() => {
+            setIsEditingPreferences(true); // Mark as editing
+            setShowAlertPreferences(true);
+          }}
           onNavigateToBookmarks={() => setShowBookmarks(true)}
         />
         {renderBottomNav()}
@@ -728,75 +707,13 @@ const App = () => {
           ))}
         </ScrollView>
 
-        <ScrollView style={styles.feed} showsVerticalScrollIndicator={false}>
-          {getFilteredNews().map((item) => (
-            <NewsCard key={item.id} item={item} onAIClick={handleArticlePress} />
-          ))}
-          
-          <View style={styles.endOfFeed}>
-            <View style={styles.integraIcon}>
-              <Text style={styles.integraIconText}>i</Text>
-            </View>
-            <Text style={styles.endOfFeedText}>You're all caught up!</Text>
-            <TouchableOpacity 
-              style={styles.refreshButton}
-              onPress={async () => {
-                try {
-                  // Use the same API URL configuration as other services
-                  const API_BASE_URL = __DEV__ 
-                    ? 'http://localhost:8000'
-                    : 'https://integra-markets-backend.fly.dev';
-                  
-                  // Get user preferences from AsyncStorage
-                  let userPrefs = {};
-                  try {
-                    const storedPrefs = await AsyncStorage.getItem('alert_preferences');
-                    if (storedPrefs) {
-                      userPrefs = JSON.parse(storedPrefs);
-                    }
-                  } catch (e) {
-                    console.log('Using default preferences');
-                  }
-                  
-                  // Get latest news analysis from backend with user preferences
-                  const response = await fetch(`${API_BASE_URL}/api/news/analysis`);
-                  
-                  if (response.ok) {
-                    const newData = await response.json();
-                    // In production, update the news state here
-                    console.log('News refreshed:', newData.length, 'items');
-                    Alert.alert('Success', 'News feed refreshed with latest data');
-                  } else {
-                    // Try alternative endpoints with user preferences
-                    const altResponse = await fetch(`${API_BASE_URL}/ai/report`, {
-                      method: 'POST',
-                      headers: { 'Content-Type': 'application/json' },
-                      body: JSON.stringify({
-                        commodities: userPrefs.commodities || ['oil', 'gold', 'wheat'],
-                        regions: userPrefs.regions || ['US', 'EU', 'Asia'],
-                        websiteURLs: userPrefs.websiteURLs || [],
-                        keywords: userPrefs.keywords || [],
-                        include_news: true,
-                        include_sources: true
-                      })
-                    });
-                    if (altResponse.ok) {
-                      Alert.alert('Success', 'Market report refreshed');
-                    } else {
-                      Alert.alert('Info', 'Using cached news data');
-                    }
-                  }
-                } catch (error) {
-                  console.error('Refresh error:', error);
-                  Alert.alert('Info', 'Continuing with current data');
-                }
-              }}
-            >
-              <MaterialIcons name="refresh" size={16} color={colors.accentData} />
-              <Text style={styles.refreshText}>Refresh</Text>
-            </TouchableOpacity>
-          </View>
-        </ScrollView>
+        <View style={styles.feed}>
+          <NewsFeed 
+            activeFilter={activeFilter}
+            onArticlePress={handleArticlePress}
+            refreshTrigger={0}
+          />
+        </View>
 
         {renderBottomNav()}
       </View>
@@ -1013,9 +930,41 @@ const styles = StyleSheet.create({
     backgroundColor: colors.bgSecondary,
   },
   refreshText: {
-    color: colors.accentData,
     fontSize: 14,
+    color: colors.accentData,
     marginLeft: 6,
+  },
+  scrollToTopButton: {
+    position: 'absolute',
+    right: 20,
+    bottom: 100,
+    width: 44,
+    height: 44,
+    borderRadius: 22,
+    backgroundColor: colors.accentPositive,
+    justifyContent: 'center',
+    alignItems: 'center',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.25,
+    shadowRadius: 3.84,
+    elevation: 5,
+  },
+  scrollToBottomButton: {
+    position: 'absolute',
+    right: 20,
+    bottom: 155,
+    width: 44,
+    height: 44,
+    borderRadius: 22,
+    backgroundColor: colors.accentData,
+    justifyContent: 'center',
+    alignItems: 'center',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.25,
+    shadowRadius: 3.84,
+    elevation: 5,
   },
   bottomNav: {
     position: 'absolute',
@@ -1199,6 +1148,50 @@ const styles = StyleSheet.create({
     color: colors.bgPrimary,
     fontSize: 16,
     fontWeight: '600',
+  },
+  loadingContainer: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+    paddingVertical: 100,
+  },
+  loadingText: {
+    color: colors.textPrimary,
+    fontSize: 16,
+    marginTop: 16,
+    fontWeight: '500',
+  },
+  loadingSubtext: {
+    color: colors.textSecondary,
+    fontSize: 14,
+    marginTop: 8,
+  },
+  emptyContainer: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+    paddingVertical: 100,
+  },
+  lastRefreshText: {
+    color: colors.textSecondary,
+    fontSize: 12,
+    marginBottom: 12,
+    fontStyle: 'italic',
+  },
+  olderNewsIndicator: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: colors.bgSecondary,
+    paddingHorizontal: 20,
+    paddingVertical: 8,
+    borderBottomWidth: 1,
+    borderBottomColor: colors.divider,
+  },
+  olderNewsText: {
+    color: colors.accentNeutral,
+    fontSize: 13,
+    marginLeft: 8,
+    fontWeight: '500',
   },
 });
 

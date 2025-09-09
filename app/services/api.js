@@ -3,10 +3,8 @@
  * Handles communication with the Python FastAPI backend
  */
 
-// iOS Simulator can access localhost, physical devices need your machine's IP
-const API_BASE_URL = __DEV__ 
-  ? 'http://localhost:8000'  // localhost works for iOS simulator
-  : 'https://integra-markets-backend.fly.dev';  // Fly.io production URL
+// Force production backend for TestFlight deployment
+const API_BASE_URL = 'https://integra-markets-backend.fly.dev';  // Always use Fly.io production URL
 const API_URL = `${API_BASE_URL}/api`;
 
 /**

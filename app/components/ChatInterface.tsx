@@ -50,6 +50,11 @@ interface ChatInterfaceProps {
     title: string;
     summary: string;
     source: string;
+    sentiment?: any;
+    keyDrivers?: any[];
+    marketImpact?: any;
+    traderInsights?: string[];
+    fullAnalysis?: string;
   } | null;
 }
 
@@ -149,15 +154,31 @@ const ChatInterface: React.FC<ChatInterfaceProps> = ({ newsContext }) => {
         content: text
       });
 
-      // Call backend API instead of direct GROQ
-      const response = await fetch('http://localhost:8000/ai/chat', {
+      // Prepare context for the AI
+      let contextMessage = '';
+      if (newsContext) {
+        contextMessage = `Context: Analyzing "${newsContext.title}" from ${newsContext.source}. `;
+        if (newsContext.sentiment) {
+          contextMessage += `Sentiment: Bullish ${newsContext.sentiment.bullish}%, Bearish ${newsContext.sentiment.bearish}%, Neutral ${newsContext.sentiment.neutral}%. `;
+        }
+        if (newsContext.keyDrivers && newsContext.keyDrivers.length > 0) {
+          contextMessage += `Key drivers: ${newsContext.keyDrivers.map(d => d.text).join(', ')}. `;
+        }
+        if (newsContext.marketImpact) {
+          contextMessage += `Market impact: ${newsContext.marketImpact.level} with ${newsContext.marketImpact.confidence} confidence. `;
+        }
+      }
+      
+      // Call backend API with enhanced context
+      const response = await fetch('https://integra-markets-backend.fly.dev/ai/chat', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
         },
         body: JSON.stringify({
           messages: apiMessages,
-          commodity: newsContext?.title || 'general'
+          commodity: newsContext?.title || 'general',
+          context: contextMessage
         })
       });
 

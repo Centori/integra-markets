@@ -1,7 +1,8 @@
 import React, { useEffect, useRef } from 'react';
-import { View, Text, StyleSheet, Animated, ViewStyle } from 'react-native';
+import { View, Text, StyleSheet, Animated, ViewStyle, Image } from 'react-native';
 import { Colors } from '../../constants/colors';
 import { Typography } from '../../constants/typography';
+import badgeConfig from '../../assets/badges/badge-config.json';
 
 export type BadgeVariant = 'default' | 'sentiment' | 'alert' | 'success';
 export type BadgeSize = 'small' | 'medium' | 'large';
@@ -16,10 +17,10 @@ interface NotificationBadgeProps {
 }
 
 const BADGE_COLORS = {
-  default: Colors.accent,
-  sentiment: Colors.bullish,
-  alert: Colors.bearish,
-  success: Colors.bullish,
+  default: badgeConfig.brandColors.accent,
+  sentiment: badgeConfig.brandColors.bullish,
+  alert: badgeConfig.brandColors.bearish,
+  success: badgeConfig.brandColors.bullish,
 };
 
 const BADGE_SIZES = {

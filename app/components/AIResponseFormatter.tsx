@@ -365,8 +365,8 @@ const renderLayeredAnalysis = (data: any, sources: string[], isDarkMode: boolean
           {data.primary_analysis.map((point: string, index: number) => (
             <View key={index} style={styles.bulletPoint}>
               <Text style={[styles.bullet, { color: colors.primaryBullet }]}>•</Text>
-              <Text style={[styles.bulletText, { color: colors.text, fontWeight: '500' }]}>
-                {point.replace(/^[•\-\*]\s*/, '')}
+              <Text style={[styles.bulletText, { color: colors.text }]}>
+                {point.replace(/^[•\-\*]\s*/, '').replace(/<br>/g, '')}
               </Text>
             </View>
           ))}
@@ -380,7 +380,7 @@ const renderLayeredAnalysis = (data: any, sources: string[], isDarkMode: boolean
             <View key={index} style={[styles.bulletPoint, { marginLeft: 20 }]}>
               <Text style={[styles.bullet, { color: colors.supportingBullet, fontSize: 14 }]}>◦</Text>
               <Text style={[styles.bulletText, { color: colors.text, fontSize: 14 }]}>
-                {point.replace(/^[•◦\-\*]\s*/, '').trim()}
+                {point.replace(/^[•◦\-\*]\s*/, '').replace(/<br>/g, '').trim()}
               </Text>
             </View>
           ))}
@@ -399,7 +399,7 @@ const renderLayeredAnalysis = (data: any, sources: string[], isDarkMode: boolean
               <Text style={[styles.driverLabel, { color: colors.bullish }]}>Bullish Factors:</Text>
               {data.market_drivers.bullish_factors.map((driver: string, idx: number) => (
                 <Text key={idx} style={[styles.driverText, { color: colors.text }]}>
-                  • {driver}
+                  • {driver.replace(/<br>/g, '')}
                 </Text>
               ))}
             </View>
@@ -410,7 +410,7 @@ const renderLayeredAnalysis = (data: any, sources: string[], isDarkMode: boolean
               <Text style={[styles.driverLabel, { color: colors.bearish }]}>Bearish Factors:</Text>
               {data.market_drivers.bearish_factors.map((driver: string, idx: number) => (
                 <Text key={idx} style={[styles.driverText, { color: colors.text }]}>
-                  • {driver}
+                  • {driver.replace(/<br>/g, '')}
                 </Text>
               ))}
             </View>
@@ -421,7 +421,7 @@ const renderLayeredAnalysis = (data: any, sources: string[], isDarkMode: boolean
               <Text style={[styles.driverLabel, { color: colors.neutral }]}>Key Considerations:</Text>
               {data.market_drivers.key_considerations.map((item: string, idx: number) => (
                 <Text key={idx} style={[styles.driverText, { color: colors.text }]}>
-                  • {item}
+                  • {item.replace(/<br>/g, '')}
                 </Text>
               ))}
             </View>
@@ -463,7 +463,7 @@ const renderLayeredAnalysis = (data: any, sources: string[], isDarkMode: boolean
           </Text>
           {data.key_metrics.map((metric: string, index: number) => (
             <Text key={index} style={[styles.statText, { color: colors.metric }]}>
-              • {metric}
+              • {metric.replace(/<br>/g, '')}
             </Text>
           ))}
         </View>

@@ -1,0 +1,18 @@
+{
+  "Simulator Target Bundle": "com.centori.integramarkets",
+  "aps": {
+    "alert": {
+      "title": "📰 Breaking News",
+      "body": "OPEC announces surprise production cut"
+    },
+    "badge": 3,
+    "sound": "default",
+    "category": "BREAKING_NEWS",
+    "mutable-content": 1
+  },
+  "data": {
+    "type": "news",
+    "priority": "high",
+    "article_id": "12345"
+  }
+}

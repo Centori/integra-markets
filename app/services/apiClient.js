@@ -6,10 +6,10 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import Constants from 'expo-constants';
 
 // Safely access environment variables to prevent iOS 18.6 crashes
-// Use EXPO_PUBLIC_API_URL from environment, fallback to app.json extra.apiUrl, then local dev
-const API_BASE_URL = process.env.EXPO_PUBLIC_API_URL || 
-                     Constants.expoConfig?.extra?.apiUrl || 
-                     'http://192.168.0.208:8000';
+// Force production backend for TestFlight deployment
+const API_BASE_URL = 'https://integra-markets-backend.fly.dev' || 
+                     process.env.EXPO_PUBLIC_API_URL || 
+                     Constants.expoConfig?.extra?.apiUrl;
 const API_URL = `${API_BASE_URL}/api`;
 
 class APIClient {
@@ -197,8 +197,15 @@ class APIClient {
         return this.get('/sentiment/movers');
     }
 
-    async getNewsAnalysis() {
-        return this.get('/news/analysis');
+    async getNewsAnalysis(preferences = {}) {
+        // Use the correct endpoint that accepts POST with preferences
+        return this.post('/user/news', {
+            commodities: preferences.commodities || [],
+            regions: preferences.regions || [],
+            keywords: preferences.keywords || [],
+            websiteURLs: preferences.websiteURLs || [],
+            sources: 6
+        });
     }
 
     async getWeatherAlerts() {

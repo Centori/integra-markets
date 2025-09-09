@@ -88,6 +88,8 @@ export async function registerForPushNotificationsAsync() {
         vibrationPattern: [0, 250, 250, 250],
         lightColor: '#F05454',
         sound: 'market_alert.wav',
+        icon: '@drawable/notification_icon', // Use simplified icon
+        badge: true,
       });
       
       await Notifications.setNotificationChannelAsync('breaking-news', {
@@ -96,6 +98,8 @@ export async function registerForPushNotificationsAsync() {
         vibrationPattern: [0, 500, 250, 500],
         lightColor: '#30A5FF',
         sound: 'breaking_news.wav',
+        icon: '@drawable/notification_icon', // Use simplified icon
+        badge: true,
       });
     }
 

@@ -1,0 +1,7 @@
+              <TouchableOpacity 
+                style={styles.refreshButton}
+                onPress={handleRefresh}
+              >
+                <MaterialIcons name="refresh" size={16} color={colors.accentData} />
+                <Text style={styles.refreshText}>Refresh</Text>
+              </TouchableOpacity>

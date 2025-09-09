@@ -1,8 +1,9 @@
-import React, { useState } from 'react';
-import { View, Text, StyleSheet, Modal, TouchableOpacity, ScrollView, Platform, Clipboard, Alert } from 'react-native';
+import React, { useState, useEffect } from 'react';
+import { View, Text, StyleSheet, Modal, TouchableOpacity, ScrollView, Platform, Clipboard, Alert, ActivityIndicator } from 'react-native';
 import { MaterialIcons } from '@expo/vector-icons';
 import ChatInterface from './ChatInterface';
 import { useBookmarks } from '../providers/BookmarkProvider';
+import newsAnalysisService from '../services/newsAnalysisService';
 
 interface NewsData {
     title: string;
@@ -21,9 +22,40 @@ interface AIAnalysisOverlayProps {
 
 const AIAnalysisOverlay: React.FC<AIAnalysisOverlayProps> = ({ newsData, isVisible, onClose }) => {
     const [showChat, setShowChat] = useState(false);
+    const [isLoading, setIsLoading] = useState(false);
+    const [analysisData, setAnalysisData] = useState<any>(null);
     const { addBookmark, removeBookmark, isBookmarked, bookmarks } = useBookmarks();
     
     const isCurrentlyBookmarked = newsData ? isBookmarked(newsData.title) : false;
+    
+    // Fetch analysis when component mounts or newsData changes
+    useEffect(() => {
+        if (newsData && isVisible) {
+            fetchAnalysis();
+        }
+    }, [newsData, isVisible]);
+    
+    const fetchAnalysis = async () => {
+        if (!newsData) return;
+        
+        setIsLoading(true);
+        try {
+            const analysis = await newsAnalysisService.analyzeArticle(newsData);
+            setAnalysisData(analysis);
+        } catch (error) {
+            console.error('Error fetching analysis:', error);
+            // Use fallback data
+            setAnalysisData({
+                summary: newsData.summary || newsData.title,
+                finBertSentiment: { bullish: 33, bearish: 33, neutral: 34 },
+                keyDrivers: [],
+                marketImpact: { level: 'MEDIUM', confidence: 0.5 },
+                traderInsights: ['Analysis unavailable - please try again later']
+            });
+        } finally {
+            setIsLoading(false);
+        }
+    };
     
     const handleBookmarkToggle = async () => {
         if (!newsData) return;
@@ -67,39 +99,35 @@ const AIAnalysisOverlay: React.FC<AIAnalysisOverlayProps> = ({ newsData, isVisib
     };
 
     const formatAnalysisForCopy = () => {
+        if (!analysisData) return '';
+        
         const sentiment = `Bullish: ${analysisData.finBertSentiment.bullish}%, Bearish: ${analysisData.finBertSentiment.bearish}%, Neutral: ${analysisData.finBertSentiment.neutral}%`;
-        const drivers = analysisData.keyDrivers.map(d => `${d.text} (${d.score})`).join(', ');
-        const insights = analysisData.traderInsights.map((insight, i) => `${i + 1}. ${insight}`).join('\n');
+        const drivers = analysisData.keyDrivers?.map(d => `${d.text} (${d.score})`).join(', ') || 'N/A';
+        const insights = analysisData.traderInsights?.map((insight, i) => `${i + 1}. ${insight}`).join('\n') || 'N/A';
         
         return `INTEGRA AI ANALYSIS\n\nArticle: ${newsData.title}\nSource: ${newsData.source}\n\nSUMMARY:\n${analysisData.summary}\n\nSENTIMENT:\n${sentiment}\n\nKEY DRIVERS:\n${drivers}\n\nMARKET IMPACT:\n${analysisData.marketImpact.level} (Confidence: ${analysisData.marketImpact.confidence})\n\nTRADER INSIGHTS:\n${insights}`;
     };
 
-    // Mock data for the comprehensive analysis
-    const analysisData = {
-        summary: "Weekly natural gas storage report shows higher than expected inventory build, indicating potential oversupply conditions in key markets. This could signal bearish pressure on natural gas prices in the near term.",
-        finBertSentiment: {
-            bullish: 20,
-            bearish: 20,
-            neutral: 70
-        },
-        keyDrivers: [
-            { text: "market", score: 0.5 },
-            { text: "supply", score: 0.7 },
-            { text: "inventory", score: 0.6 },
-            { text: "storage", score: 0.8 },
-            { text: "oversupply", score: 0.9 }
-        ],
-        marketImpact: {
-            level: "MEDIUM",
-            confidence: 0.5
-        },
-        traderInsights: [
-            "Higher inventory levels typically lead to downward pressure on natural gas prices",
-            "Watch for storage injection rates vs. seasonal norms",
-            "Monitor weather forecasts for heating/cooling demand shifts",
-            "Consider supply-side factors from key production regions"
-        ]
-    };
+    // Show loading indicator while fetching
+    if (isLoading || !analysisData) {
+        return (
+            <Modal
+                animationType="slide"
+                transparent={true}
+                visible={isVisible}
+                onRequestClose={onClose}
+            >
+                <View style={styles.overlayContainer}>
+                    <View style={styles.webWrapper}>
+                        <View style={[styles.contentContainer, styles.loadingContainer]}>
+                            <ActivityIndicator size="large" color="#4ECCA3" />
+                            <Text style={styles.loadingText}>Analyzing article...</Text>
+                        </View>
+                    </View>
+                </View>
+            </Modal>
+        );
+    }
 
     const renderProgressBar = (percentage: number, color: string) => (
         <View style={styles.progressBarContainer}>
@@ -318,8 +346,13 @@ const AIAnalysisOverlay: React.FC<AIAnalysisOverlayProps> = ({ newsData, isVisib
                                     <ChatInterface 
                                         newsContext={{
                                             title: newsData.title,
-                                            summary: newsData.summary,
-                                            source: newsData.source
+                                            summary: analysisData.summary || newsData.summary,
+                                            source: newsData.source,
+                                            sentiment: analysisData.finBertSentiment,
+                                            keyDrivers: analysisData.keyDrivers,
+                                            marketImpact: analysisData.marketImpact,
+                                            traderInsights: analysisData.traderInsights,
+                                            fullAnalysis: formatAnalysisForCopy()
                                         }}
                                     />
                                 </View>
@@ -569,6 +602,16 @@ const styles = StyleSheet.create({
     },
     chatCloseButton: {
         padding: 2,
+    },
+    loadingContainer: {
+        justifyContent: 'center',
+        alignItems: 'center',
+        minHeight: 200,
+    },
+    loadingText: {
+        marginTop: 20,
+        fontSize: 16,
+        color: '#A0A0A0',
     },
 });
 

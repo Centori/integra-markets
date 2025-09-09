@@ -1,0 +1,19 @@
+{
+  "Simulator Target Bundle": "com.centori.integramarkets",
+  "aps": {
+    "alert": {
+      "title": "⚠️ Price Alert",
+      "body": "Bitcoin dropped below $40,000 threshold"
+    },
+    "badge": 2,
+    "sound": "default",
+    "category": "MARKET_ALERT",
+    "interruption-level": "time-sensitive"
+  },
+  "data": {
+    "type": "price_alert",
+    "asset": "BTC",
+    "threshold": 40000,
+    "current": 39850
+  }
+}

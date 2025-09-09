@@ -2,7 +2,7 @@
  * Debug API Helper to troubleshoot connection issues
  */
 
-const API_BASE_URL = 'http://192.168.0.208:8000';
+const API_BASE_URL = 'https://integra-markets-backend.fly.dev';
 const API_URL = `${API_BASE_URL}/api`;
 
 export const testConnection = async () => {
