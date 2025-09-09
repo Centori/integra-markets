@@ -13,6 +13,24 @@ from bs4 import BeautifulSoup
 import feedparser
 import re
 
+# Import the article summarizer that already exists!
+try:
+    from article_summarizer import ArticleSummarizer
+    SUMMARIZER_AVAILABLE = True
+except ImportError:
+    SUMMARIZER_AVAILABLE = False
+    logging.warning("Article summarizer not available")
+
+# Import VADER for enhanced sentiment
+try:
+    from nltk.sentiment.vader import SentimentIntensityAnalyzer
+    vader_analyzer = SentimentIntensityAnalyzer()
+    VADER_AVAILABLE = True
+except ImportError:
+    VADER_AVAILABLE = False
+    vader_analyzer = None
+    logging.warning("VADER sentiment analyzer not available")
+
 logger = logging.getLogger(__name__)
 
 class UserNewsService:
@@ -21,6 +39,11 @@ class UserNewsService:
     def __init__(self):
         self.cache = {}
         self.cache_duration = timedelta(minutes=15)  # Cache for 15 minutes
+        
+        # Initialize the article summarizer (uses NLTK, Sumy, and Newspaper3k)
+        self.summarizer = ArticleSummarizer() if SUMMARIZER_AVAILABLE else None
+        if self.summarizer:
+            logger.info("Article summarizer initialized with NLTK/Sumy/Newspaper3k support")
         
         # Default news sources if user hasn't specified
         self.default_sources = {
@@ -148,7 +171,7 @@ class UserNewsService:
         return news_items
     
     async def _fetch_from_rss(self, commodities: List[str], regions: List[str], keywords: List[str]) -> List[Dict]:
-        """Fetch news from RSS feeds"""
+        """Fetch news from RSS feeds and enhance with article summaries"""
         news_items = []
         
         for feed_name, feed_url in self.rss_feeds.items():
@@ -162,23 +185,80 @@ class UserNewsService:
                 
                 feed = feedparser.parse(feed_url)
                 
-                for entry in feed.entries[:15]:  # Limit entries per feed
-                    # Check relevance
+                for entry in feed.entries[:10]:  # Limit entries per feed
                     title = entry.get('title', '')
-                    summary = entry.get('summary', '')
+                    url = entry.get('link', '')
                     
-                    relevant = any(comm.lower() in title.lower() or comm.lower() in summary.lower() 
-                                 for comm in commodities)
+                    # Check relevance
+                    relevant = any(comm.lower() in title.lower() for comm in commodities)
                     
                     if relevant or not commodities:  # Include if relevant or no specific commodities
-                        news_items.append({
+                        # Initialize news item
+                        news_item = {
                             "title": title,
-                            "summary": summary[:200],
                             "source": feed_name,
-                            "url": entry.get('link', ''),
+                            "url": url,
                             "published": entry.get('published', datetime.now().isoformat()),
                             "relevance_score": 0.9 if relevant else 0.5
-                        })
+                        }
+                        
+                        # Use article summarizer to get real content and summary
+                        if self.summarizer and url:
+                            try:
+                                # Summarize article using NLTK/Sumy/Newspaper3k
+                                summary_result = self.summarizer.summarize_url(url, sentences=3, method='auto')
+                                
+                                if 'error' not in summary_result:
+                                    # Get the actual summary from the article
+                                    summary_sentences = summary_result.get('summary', [])
+                                    if summary_sentences:
+                                        news_item['summary'] = ' '.join(summary_sentences)
+                                    else:
+                                        news_item['summary'] = title  # Fallback to title
+                                    
+                                    # Extract keywords if available
+                                    if 'keywords' in summary_result:
+                                        news_item['keywords'] = summary_result['keywords'][:5]
+                                    
+                                    # Get full text for better sentiment analysis
+                                    full_text = summary_result.get('full_text', news_item['summary'])
+                                    
+                                    # Perform VADER sentiment analysis on full article
+                                    if VADER_AVAILABLE and vader_analyzer and full_text:
+                                        scores = vader_analyzer.polarity_scores(full_text)
+                                        compound = scores['compound']
+                                        
+                                        # Map VADER scores to sentiment labels
+                                        if compound >= 0.05:
+                                            news_item['sentiment'] = 'POSITIVE'
+                                            news_item['sentiment_score'] = round(0.5 + (compound * 0.5), 2)
+                                        elif compound <= -0.05:
+                                            news_item['sentiment'] = 'NEGATIVE'
+                                            news_item['sentiment_score'] = round(0.5 - (abs(compound) * 0.5), 2)
+                                        else:
+                                            news_item['sentiment'] = 'NEUTRAL'
+                                            news_item['sentiment_score'] = 0.5
+                                    else:
+                                        # Use basic sentiment if VADER not available
+                                        self._add_basic_sentiment(news_item, full_text or title)
+                                else:
+                                    # Summarization failed, use title as summary
+                                    news_item['summary'] = title
+                                    self._add_basic_sentiment(news_item, title)
+                                    
+                            except Exception as e:
+                                logger.warning(f"Could not summarize {url}: {e}")
+                                news_item['summary'] = title
+                                self._add_basic_sentiment(news_item, title)
+                        else:
+                            # No summarizer available, use title as summary
+                            news_item['summary'] = title
+                            self._add_basic_sentiment(news_item, title)
+                        
+                        news_items.append(news_item)
+                        
+                        # Rate limiting to avoid overwhelming servers
+                        await asyncio.sleep(0.5)
                         
             except Exception as e:
                 logger.error(f"Error fetching RSS feed {feed_name}: {e}")
@@ -187,6 +267,13 @@ class UserNewsService:
         news_items.sort(key=lambda x: x['relevance_score'], reverse=True)
         
         return news_items
+    
+    def _add_basic_sentiment(self, item: Dict, text: str):
+        """Add basic sentiment analysis to item"""
+        sentiment_result = self._analyze_news_sentiment([{'title': text, 'summary': ''}], [])
+        if sentiment_result:
+            item['sentiment'] = sentiment_result[0].get('sentiment', 'NEUTRAL')
+            item['sentiment_score'] = sentiment_result[0].get('sentiment_score', 0.5)
     
     async def _fetch_commodity_data(self, commodities: List[str]) -> Dict:
         """Fetch real-time commodity price data"""
