@@ -11,23 +11,14 @@ RUN apt-get update && apt-get install -y \
     curl \
     && rm -rf /var/lib/apt/lists/*
 
-# Create requirements file for backend
-RUN echo "fastapi==0.104.1" > requirements.txt && \
-    echo "uvicorn==0.24.0" >> requirements.txt && \
-    echo "supabase==2.0.0" >> requirements.txt && \
-    echo "nltk==3.8.1" >> requirements.txt && \
-    echo "groq==0.9.0" >> requirements.txt && \
-    echo "httpx==0.24.1" >> requirements.txt && \
-    echo "beautifulsoup4==4.12.2" >> requirements.txt && \
-    echo "feedparser==6.0.10" >> requirements.txt && \
-    echo "python-dotenv==1.0.0" >> requirements.txt && \
-    echo "pydantic==2.5.0" >> requirements.txt
+# Copy requirements file from backend directory
+COPY backend/requirements.txt .
 
 # Install Python dependencies
 RUN pip install --no-cache-dir --user -r requirements.txt
 
-# Download NLTK data during build
-RUN python -c "import nltk; nltk.download('vader_lexicon', download_dir='/root/nltk_data')"
+# Download NLTK data during build (punkt and stopwords for text processing)
+RUN python -c "import nltk; nltk.download('punkt', download_dir='/root/nltk_data'); nltk.download('stopwords', download_dir='/root/nltk_data'); nltk.download('vader_lexicon', download_dir='/root/nltk_data')"
 
 # Final stage
 FROM python:3.11-slim
@@ -50,8 +41,8 @@ COPY --from=builder /root/nltk_data /root/nltk_data
 ENV PATH=/root/.local/bin:$PATH
 ENV NLTK_DATA=/root/nltk_data
 
-# Copy application code
-COPY backend/ ./backend/
+# Copy application code - flatten structure for proper imports
+COPY backend/ ./
 
 # Create directories for model caching
 RUN mkdir -p /app/models/finbert /app/models/nltk_data /app/cache
@@ -72,4 +63,4 @@ HEALTHCHECK --interval=30s --timeout=10s --start-period=40s --retries=3 \
     CMD curl -f http://localhost:8000/health || exit 1
 
 # Run the application
-CMD ["python", "backend/main_simple_nlp.py"]
+CMD ["python", "main_simple_nlp.py"]

@@ -1,11 +1,130 @@
 /**
  * API Service for Integra Markets
  * Handles communication with the Python FastAPI backend
+ * Implements robust error handling and retry logic
  */
 
 // Force production backend for TestFlight deployment
 const API_BASE_URL = 'https://integra-markets-backend.fly.dev';  // Always use Fly.io production URL
 const API_URL = `${API_BASE_URL}/api`;
+
+// Common API configuration
+const API_CONFIG = {
+  timeout: 10000, // 10 seconds
+  retries: 2,
+  retryDelay: 1000, // 1 second
+};
+
+/**
+ * Check network connectivity before making requests
+ * Common pattern for React Native apps
+ */
+const checkNetworkConnectivity = async () => {
+  try {
+    // Simple connectivity test to a reliable endpoint
+    const response = await fetch('https://httpbin.org/status/200', {
+      method: 'HEAD',
+      cache: 'no-cache',
+    });
+    return response.ok;
+  } catch (error) {
+    console.warn('Network connectivity check failed:', error.message);
+    return false;
+  }
+};
+
+/**
+ * Enhanced health check with connectivity validation
+ */
+export const checkApiStatus = async () => {
+  try {
+    // First check basic connectivity
+    const isConnected = await checkNetworkConnectivity();
+    if (!isConnected) {
+      console.warn('No internet connection detected');
+      return false;
+    }
+    
+    const response = await fetchWithTimeout(`${API_BASE_URL}/health`, {}, 5000);
+    const isHealthy = response.ok;
+    
+    if (isHealthy) {
+      console.log('API health check passed');
+    } else {
+      console.warn(`API health check failed: ${response.status}`);
+    }
+    
+    return isHealthy;
+  } catch (error) {
+    console.error('API health check error:', error.message);
+    return false;
+  }
+};
+
+/**
+ * Enhanced fetch with timeout and retry logic
+ * Common pattern for React Native API calls
+ */
+const fetchWithTimeout = async (url, options = {}, timeout = API_CONFIG.timeout) => {
+  const controller = new AbortController();
+  const timeoutId = setTimeout(() => controller.abort(), timeout);
+  
+  try {
+    const response = await fetch(url, {
+      ...options,
+      signal: controller.signal,
+      headers: {
+        'Content-Type': 'application/json',
+        'Accept': 'application/json',
+        // Common headers that help with API compatibility
+        'User-Agent': 'IntegraMarkets/1.0.1',
+        ...options.headers,
+      },
+    });
+    
+    clearTimeout(timeoutId);
+    return response;
+  } catch (error) {
+    clearTimeout(timeoutId);
+    if (error.name === 'AbortError') {
+      throw new Error('Request timeout - please check your connection');
+    }
+    throw error;
+  }
+};
+
+/**
+ * Retry logic for failed requests
+ * Common pattern for handling transient network errors
+ */
+const fetchWithRetry = async (url, options = {}, retries = API_CONFIG.retries) => {
+  for (let i = 0; i <= retries; i++) {
+    try {
+      const response = await fetchWithTimeout(url, options);
+      
+      // Check for specific error status codes that shouldn't be retried
+      if (response.status === 404 || response.status === 401 || response.status === 403) {
+        return response; // Don't retry client errors
+      }
+      
+      if (!response.ok && i < retries) {
+        console.warn(`API request failed (attempt ${i + 1}/${retries + 1}): ${response.status}`);
+        await new Promise(resolve => setTimeout(resolve, API_CONFIG.retryDelay * (i + 1)));
+        continue;
+      }
+      
+      return response;
+    } catch (error) {
+      if (i === retries) {
+        console.error('API request failed after all retries:', error.message);
+        throw error;
+      }
+      
+      console.warn(`API request failed (attempt ${i + 1}/${retries + 1}):`, error.message);
+      await new Promise(resolve => setTimeout(resolve, API_CONFIG.retryDelay * (i + 1)));
+    }
+  }
+};
 
 /**
  * Fetches market sentiment data from the Python backend
@@ -13,15 +132,20 @@ const API_URL = `${API_BASE_URL}/api`;
  */
 export const fetchMarketSentiment = async () => {
   try {
-    const response = await fetch(`${API_URL}/sentiment/market`);
+    const response = await fetchWithRetry(`${API_URL}/sentiment/market`);
     
     if (!response.ok) {
-      throw new Error(`API error: ${response.status}`);
+      // Log specific error details for debugging
+      const errorText = await response.text().catch(() => 'Unknown error');
+      console.error(`Market sentiment API error: ${response.status} - ${errorText}`);
+      throw new Error(`API error: ${response.status} - ${response.statusText}`);
     }
     
-    return await response.json();
+    const data = await response.json();
+    console.log('Market sentiment fetched successfully');
+    return data;
   } catch (error) {
-    console.error('Error fetching market sentiment:', error);
+    console.error('Error fetching market sentiment:', error.message);
     // Return default data if API is unreachable
     return {
       overall: 'NEUTRAL',
@@ -31,7 +155,8 @@ export const fetchMarketSentiment = async () => {
         { name: 'NAT GAS', change: 0.0 },
         { name: 'WHEAT', change: 0.0 },
         { name: 'GOLD', change: 0.0 },
-      ]
+      ],
+      error: error.message
     };
   }
 };
@@ -61,21 +186,90 @@ export const fetchTopMovers = async () => {
 };
 
 /**
- * Fetches latest news analysis
+ * Fetches latest news analysis from real news sources
  * @returns {Promise<Array>} News items with sentiment analysis
  */
-export const fetchNewsAnalysis = async () => {
+export const fetchNewsAnalysis = async (preferences = {}) => {
   try {
-    const response = await fetch(`${API_URL}/news/analysis`);
+    console.log('fetchNewsAnalysis: Fetching real news from backend...');
+    
+    // Check if enhanced content is requested (for premium users or specific features)
+    const enhancedContent = preferences.enhancedContent || false;
+    
+    const response = await fetchWithRetry(`${API_URL}/news/feed`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
+        max_articles: preferences.maxArticles || 20,
+        sources: preferences.sources || null,
+        commodity_filter: preferences.commodity || null,
+        hours_back: preferences.hoursBack || 24,
+        enhanced_content: enhancedContent,
+        max_enhanced: enhancedContent ? (preferences.maxEnhanced || 3) : 0
+      })
+    });
     
     if (!response.ok) {
-      throw new Error(`API error: ${response.status}`);
+      const errorText = await response.text().catch(() => 'Unknown error');
+      console.error(`News feed API error: ${response.status} - ${errorText}`);
+      throw new Error(`API error: ${response.status} - ${response.statusText}`);
     }
     
-    return await response.json();
+    const data = await response.json();
+    const articles = data.articles || [];
+    
+    console.log(`✅ Real news data fetched: ${articles.length} articles from ${data.sources_used?.join(', ') || 'various sources'}`);
+    
+    if (data.status === 'fallback') {
+      console.warn('⚠️  Using fallback mock data - news sources not available on backend');
+    }
+    
+    return articles;
   } catch (error) {
-    console.error('Error fetching news analysis:', error);
-    return [];
+    console.error('Error fetching news analysis:', error.message);
+    
+    // Return fallback mock data
+    console.log('📄 Using local fallback data');
+    return [
+      {
+        id: 1,
+        title: 'Oil Prices Rise Amid Supply Concerns',
+        summary: 'Crude oil futures jumped 2.3% as geopolitical tensions raise supply concerns in key producing regions.',
+        source: 'Reuters',
+        source_url: 'https://reuters.com',
+        time_published: new Date(Date.now() - 2 * 60 * 60 * 1000).toISOString(),
+        sentiment: 'BULLISH',
+        sentiment_score: 0.72,
+        categories: ['energy', 'commodities'],
+        tickers: ['WTI', 'BRENT']
+      },
+      {
+        id: 2,
+        title: 'Gold Holds Steady as Fed Signals Caution', 
+        summary: 'Gold prices remained stable around $1,950 per ounce as Federal Reserve officials signal a cautious approach to rate changes.',
+        source: 'Bloomberg',
+        source_url: 'https://bloomberg.com',
+        time_published: new Date(Date.now() - 4 * 60 * 60 * 1000).toISOString(),
+        sentiment: 'NEUTRAL',
+        sentiment_score: 0.51,
+        categories: ['metals', 'precious metals'],
+        tickers: ['GOLD']
+      },
+      {
+        id: 3,
+        title: 'Wheat Futures Fall on Improved Weather Forecast',
+        summary: 'Chicago wheat futures declined 1.8% after meteorologists predicted favorable weather conditions for major growing regions.',
+        source: 'MarketWatch',
+        source_url: 'https://marketwatch.com',
+        time_published: new Date(Date.now() - 6 * 60 * 60 * 1000).toISOString(),
+        sentiment: 'BEARISH',
+        sentiment_score: 0.34,
+        categories: ['agriculture', 'grains'],
+        tickers: ['WHEAT']
+      }
+    ];
   }
 };
 
@@ -98,19 +292,6 @@ export const fetchWeatherAlerts = async () => {
   }
 };
 
-/**
- * Checks status of the Python backend
- * @returns {Promise<boolean>} True if backend is online
- */
-export const checkApiStatus = async () => {
-  try {
-    const response = await fetch(`${API_BASE_URL}/health`);
-    return response.ok;
-  } catch (error) {
-    console.warn('API not available:', error);
-    return false;
-  }
-};
 
 /**
  * Preprocesses raw news text
@@ -119,11 +300,11 @@ export const checkApiStatus = async () => {
  */
 export const preprocessNews = async (rawText) => {
   try {
-    const response = await fetch(`${API_URL}/preprocess-news`, {
+    // Use analyze-sentiment endpoint instead of non-existent preprocess-news
+    const response = await fetch(`${API_BASE_URL}/analyze-sentiment`, {
       method: 'POST',
-        headers: {
-            'Content-Type': 'application/json',
-            ...(this.authToken && { 'Authorization': `Bearer ${this.authToken}` }),
+      headers: {
+        'Content-Type': 'application/json',
       },
       body: JSON.stringify({ text: rawText }),
     });
@@ -152,20 +333,52 @@ export const preprocessNews = async (rawText) => {
 };
 
 /**
+ * Analyzes news text using the backend analysis endpoint
+ * @param {string} newsText - The news text to analyze
+ * @param {string} source - Optional source identifier
+ * @returns {Promise<Object>} Analysis result with sentiment and insights
+ */
+export const analyzeNewsText = async (newsText, source = null) => {
+  try {
+    const response = await fetchWithRetry(`${API_URL}/news/analysis`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
+        text: newsText,
+        source: source
+      })
+    });
+    
+    if (!response.ok) {
+      const errorText = await response.text().catch(() => 'Unknown error');
+      console.error(`News text analysis API error: ${response.status} - ${errorText}`);
+      throw new Error(`API error: ${response.status} - ${response.statusText}`);
+    }
+    
+    const data = await response.json();
+    console.log('News text analysis completed successfully');
+    return data;
+  } catch (error) {
+    console.error('Error analyzing news text:', error.message);
+    return {
+      sentiment: 'NEUTRAL',
+      confidence: 0.5,
+      analysis: 'Text analysis failed',
+      error: error.message
+    };
+  }
+};
+
+/**
  * Fetches enhanced news data
+ * @deprecated Use fetchNewsAnalysis() instead - this returns mock data
  * @returns {Promise<Array>} Enhanced news items
  */
 export const getEnhancedNews = async () => {
-  try {
-    const response = await fetch(`${API_URL}/news/enhanced`);
-    if (!response.ok) {
-      throw new Error(`HTTP error! status: ${response.status}`);
-    }
-    return await response.json();
-  } catch (error) {
-    console.error('Enhanced news fetch failed:', error);
-    return [];
-  }
+  console.warn('getEnhancedNews is deprecated, using fetchNewsAnalysis instead');
+  return await fetchNewsAnalysis();
 };
 
 /**
@@ -210,7 +423,7 @@ export const dashboardApi = {
   getTodayDashboard: async (commodities = []) => {
     try {
       // Try to fetch real-time market data
-      const response = await fetch(`${API_URL}/market/realtime`);
+      const response = await fetch(`${API_URL}/sentiment/market`);
       
       if (!response.ok) {
         throw new Error(`API error: ${response.status}`);
@@ -218,8 +431,14 @@ export const dashboardApi = {
       
       const marketData = await response.json();
       
-      // Also fetch news analysis
-      const newsResponse = await fetch(`${API_URL}/news/analysis`);
+      // Also fetch news analysis (using POST as required by the backend)
+      const newsResponse = await fetch(`${API_URL}/news/analysis`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({})
+      });
       const newsData = newsResponse.ok ? await newsResponse.json() : [];
       
       return {
@@ -298,7 +517,7 @@ export const marketDataApi = {
   getTopMovers: fetchTopMovers,
   getMarketOverview: async () => {
     try {
-      const response = await fetch(`${API_URL}/market/realtime`);
+      const response = await fetch(`${API_URL}/sentiment/market`);
       if (!response.ok) throw new Error('Failed to fetch market data');
       return await response.json();
     } catch (error) {

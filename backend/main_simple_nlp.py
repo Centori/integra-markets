@@ -18,6 +18,14 @@ try:
 except ImportError:
     SUMMARIZER_AVAILABLE = False
 
+# Import news data sources
+try:
+    from data_sources import NewsDataSources
+    NEWS_SOURCES_AVAILABLE = True
+except ImportError:
+    NEWS_SOURCES_AVAILABLE = False
+    logging.warning("News data sources not available")
+
 # Import user news service
 try:
     from user_news_service import user_news_service
@@ -156,14 +164,19 @@ class AIChatRequest(BaseModel):
     commodity: Optional[str] = Field(None, description="Commodity context")
     mode: Optional[str] = Field("reasoning", description="Response mode")
 
-class UserPreferencesRequest(BaseModel):
-    commodities: List[str] = Field(default_factory=list, description="User's selected commodities")
-    regions: List[str] = Field(default_factory=list, description="User's selected regions")
-    currencies: List[str] = Field(default_factory=list, description="User's selected currencies")
-    keywords: List[str] = Field(default_factory=list, description="User's alert keywords")
-    websiteURLs: List[str] = Field(default_factory=list, description="User's custom news sources")
-    alertFrequency: str = Field("daily", description="Alert frequency")
-    alertThreshold: str = Field("medium", description="Alert threshold level")
+class NewsRequest(BaseModel):
+    max_articles: Optional[int] = Field(20, ge=1, le=50, description="Maximum number of articles to return")
+    sources: Optional[List[str]] = Field(None, description="Specific news sources to fetch from")
+    commodity_filter: Optional[str] = Field(None, description="Filter for specific commodity")
+    hours_back: Optional[int] = Field(24, ge=1, le=168, description="Hours back to fetch news from")
+    enhanced_content: Optional[bool] = Field(False, description="Enable full HTML content extraction and NLTK summarization")
+    max_enhanced: Optional[int] = Field(3, ge=1, le=10, description="Maximum number of articles to enhance with full content")
+
+class UserNewsRequest(BaseModel):
+    user_id: str = Field(..., description="User ID in Supabase")
+    max_articles: Optional[int] = Field(20, ge=1, le=50)
+    enhanced_content: Optional[bool] = Field(False)
+    max_enhanced: Optional[int] = Field(3, ge=1, le=10)
 
 # Root endpoint
 @app.get('/')
@@ -184,14 +197,14 @@ def read_root():
             "/api/sentiment/market",
             "/api/sentiment/movers", 
             "/api/news/analysis",
+            "/api/news/feed",
+            "/api/user/news",
             "/api/weather/alerts",
             "/api/models/status",
             "/api/summarize/article",
             "/ai/analyze",
             "/ai/chat",
-            "/ai/report",
-            "/api/user/news",
-            "/api/user/market-data"
+            "/ai/report"
         ]
     }
 
@@ -380,6 +393,253 @@ async def get_weather_alerts():
         "last_updated": datetime.datetime.now().isoformat()
     }
 
+# News feed endpoint - fetches real news from multiple sources
+@app.post('/api/news/feed')
+async def get_news_feed(request: NewsRequest):
+    """Fetch real news articles from multiple financial sources"""
+    try:
+        if not NEWS_SOURCES_AVAILABLE:
+            logger.warning("News sources not available, returning mock data")
+            return get_mock_news_data(request.max_articles)
+        
+        # Fetch news from real sources with optional content enhancement
+        all_articles = []
+        
+        # Initialize NewsDataSources with enhanced content options
+        enable_enhancement = request.enhanced_content or False
+        async with NewsDataSources(
+            enable_full_content=enable_enhancement,
+            enable_nltk_summary=enable_enhancement
+        ) as news_sources:
+            # Fetch from different sources in parallel
+            import asyncio
+            
+            tasks = []
+            if not request.sources or 'reuters' in (request.sources or []):
+                tasks.append(news_sources.fetch_reuters_commodities())
+            if not request.sources or 'yahoo' in (request.sources or []):
+                tasks.append(news_sources.fetch_yahoo_finance_commodities())
+            if not request.sources or 'eia' in (request.sources or []):
+                tasks.append(news_sources.fetch_eia_reports())
+            if not request.sources or 'iea' in (request.sources or []):
+                tasks.append(news_sources.fetch_iea_news())
+            if not request.sources or 'bloomberg' in (request.sources or []):
+                tasks.append(news_sources.fetch_bloomberg_commodities())
+            
+            # Execute all fetching tasks concurrently
+            results = await asyncio.gather(*tasks, return_exceptions=True)
+            
+            # Combine results and filter out exceptions
+            for result in results:
+                if isinstance(result, list):
+                    all_articles.extend(result)
+                elif isinstance(result, Exception):
+                    logger.error(f"Error fetching news: {result}")
+        
+        # Filter articles by commodity if specified
+        if request.commodity_filter:
+            commodity_filter = request.commodity_filter.lower()
+            filtered_articles = []
+            for article in all_articles:
+                title_lower = article.get('title', '').lower()
+                summary_lower = article.get('summary', '').lower()
+                if commodity_filter in title_lower or commodity_filter in summary_lower:
+                    filtered_articles.append(article)
+            all_articles = filtered_articles
+        
+        # Sort by publication date (most recent first)
+        all_articles.sort(key=lambda x: x.get('published', ''), reverse=True)
+        
+        # Limit to requested number of articles
+        articles = all_articles[:request.max_articles]
+        
+        # Enhance articles with full content and NLTK summaries if requested
+        if request.enhanced_content and NEWS_SOURCES_AVAILABLE:
+            try:
+                async with NewsDataSources(
+                    enable_full_content=True,
+                    enable_nltk_summary=True
+                ) as content_sources:
+                    articles = await content_sources.enhance_articles_with_full_content(
+                        articles,
+                        commodity_focus=request.commodity_filter,
+                        max_enhance=request.max_enhanced or 3
+                    )
+                logger.info(f"Enhanced {sum(1 for a in articles if a.get('enhanced', False))} articles with full content")
+            except Exception as e:
+                logger.error(f"Error enhancing articles with full content: {e}")
+        
+        # Add sentiment analysis to each article
+        enhanced_articles = []
+        for article in articles:
+            try:
+                # Use enhanced summary if available, otherwise use original title + summary
+                if article.get('enhanced') and article.get('summary'):
+                    # For enhanced articles, use the NLTK-generated summary
+                    text_for_analysis = f"{article.get('title', '')}. {article.get('summary', '')}"
+                    logger.debug(f"Using enhanced summary for sentiment analysis: {article.get('title', '')[:50]}...")
+                else:
+                    # For regular articles, combine title and summary
+                    text_for_analysis = f"{article.get('title', '')}. {article.get('summary', '')}"
+                
+                if vader_analyzer:
+                    scores = vader_analyzer.polarity_scores(text_for_analysis)
+                    compound = scores['compound']
+                    
+                    if compound >= 0.05:
+                        sentiment = "BULLISH"
+                        confidence = 0.5 + (compound * 0.5)
+                    elif compound <= -0.05:
+                        sentiment = "BEARISH"
+                        confidence = 0.5 + (abs(compound) * 0.5)
+                    else:
+                        sentiment = "NEUTRAL"
+                        confidence = 0.5
+                else:
+                    # Fallback sentiment analysis
+                    basic_result = basic_sentiment_analysis(text_for_analysis)
+                    sentiment = basic_result['sentiment']
+                    confidence = basic_result['confidence']
+                
+                # Enhance article with sentiment data
+                enhanced_article = {
+                    'id': len(enhanced_articles) + 1,
+                    'title': article.get('title', ''),
+                    'summary': article.get('summary', ''),
+                    'source': article.get('source', ''),
+                    'source_url': article.get('url', ''),
+                    'time_published': article.get('published', datetime.datetime.now().isoformat()),
+                    'sentiment': sentiment,
+                    'sentiment_score': round(confidence, 2),
+                    'categories': [article.get('category', 'general')],
+                    'tickers': extract_commodity_tickers(text_for_analysis),
+                    'keywords': extract_keywords(text_for_analysis),
+                    # Include enhanced content fields if available
+                    'enhanced': article.get('enhanced', False),
+                    'word_count': article.get('word_count'),
+                    'enhancement_method': article.get('enhancement_method')
+                }
+                
+                # Remove None values from enhanced_article
+                enhanced_article = {k: v for k, v in enhanced_article.items() if v is not None}
+                enhanced_articles.append(enhanced_article)
+                
+            except Exception as e:
+                logger.error(f"Error processing article: {e}")
+                # Add article without sentiment if processing fails
+                enhanced_article = {
+                    'id': len(enhanced_articles) + 1,
+                    'title': article.get('title', ''),
+                    'summary': article.get('summary', ''),
+                    'source': article.get('source', ''),
+                    'source_url': article.get('url', ''),
+                    'time_published': article.get('published', datetime.datetime.now().isoformat()),
+                    'sentiment': 'NEUTRAL',
+                    'sentiment_score': 0.5,
+                    'categories': [article.get('category', 'general')],
+                    'tickers': [],
+                    'keywords': []
+                }
+                enhanced_articles.append(enhanced_article)
+        
+        logger.info(f"Fetched and processed {len(enhanced_articles)} news articles")
+        
+        # Calculate enhancement statistics
+        enhanced_count = sum(1 for article in enhanced_articles if article.get('enhanced', False))
+        
+        return {
+            'status': 'success',
+            'articles': enhanced_articles,
+            'total_fetched': len(all_articles),
+            'sources_used': list(set(article.get('source') for article in all_articles if article.get('source'))),
+            'timestamp': datetime.datetime.now().isoformat(),
+            'analysis_method': 'vader' if vader_analyzer else 'basic',
+            'content_enhanced': request.enhanced_content or False,
+            'enhanced_articles_count': enhanced_count,
+            'enhancement_method': 'nltk_summarization' if request.enhanced_content else None
+        }
+    
+    except Exception as e:
+        logger.error(f"News feed error: {e}")
+        # Return mock data as fallback
+        return get_mock_news_data(request.max_articles)
+
+# New: User-specific news via Supabase preferences
+@app.post('/api/user/news')
+async def get_user_news(request: UserNewsRequest):
+    """Fetch personalized news based on user's saved preferences in Supabase"""
+    if not supabase:
+        raise HTTPException(status_code=503, detail="Supabase not configured")
+
+    try:
+        # Load user preferences
+        res = supabase.table('user_preferences').select('*').eq('user_id', request.user_id).single().execute()
+        if not getattr(res, 'data', None):
+            raise HTTPException(status_code=404, detail="User preferences not found")
+        prefs = res.data
+
+        # Normalize sources to match our fetchers
+        source_map = {
+            'yahoo_finance': 'yahoo',
+            'yahoo': 'yahoo',
+            'reuters': 'reuters',
+            'bloomberg': 'bloomberg',
+            'eia': 'eia',
+            'iea': 'iea',
+            'marketwatch': 'marketwatch',
+            'sp_global': 'sp_global',
+            'cnbc': 'cnbc',
+        }
+        pref_sources = prefs.get('sources') or []
+        normalized_sources = [source_map.get(s.lower().replace(' ', '_'), s.lower()) for s in pref_sources]
+        normalized_sources = list({s for s in normalized_sources if s}) or None
+
+        # Choose a commodity filter if user has a primary commodity
+        commodities = prefs.get('commodities') or []
+        commodity_filter = None
+        if isinstance(commodities, list) and len(commodities) == 1:
+            commodity_filter = commodities[0]
+
+        # Handle custom website URLs if provided
+        website_urls = prefs.get('websiteURLs') or []
+        keywords = prefs.get('keywords') or []
+        
+        # If user has custom websites and user_news_service is available, use it
+        if website_urls and USER_NEWS_AVAILABLE and user_news_service:
+            # Use the advanced user news service that handles custom URLs
+            result = await user_news_service.get_user_based_news(prefs)
+            result['enhanced_content'] = request.enhanced_content or False
+            return result
+        
+        # Otherwise use the standard news feed pipeline
+        news_req = NewsRequest(
+            max_articles=request.max_articles or 20,
+            sources=normalized_sources,
+            commodity_filter=commodity_filter,
+            hours_back=24,
+            enhanced_content=request.enhanced_content or False,
+            max_enhanced=request.max_enhanced or 3
+        )
+        result = await get_news_feed(news_req)
+
+        # Add user context to the result
+        result['user_preferences'] = {
+            'commodities': commodities,
+            'sources': pref_sources,
+            'regions': prefs.get('regions') or [],
+            'keywords': keywords,
+            'websiteURLs': website_urls,
+            'alert_threshold': prefs.get('alertThreshold', 'medium')
+        }
+        result['status'] = result.get('status', 'success')
+        return result
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"User news error: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
 # Legacy endpoint for backward compatibility
 @app.post('/analyze-sentiment')
 async def analyze_sentiment_legacy(request: SentimentRequest):
@@ -446,6 +706,90 @@ def determine_market_impact(sentiment: str, confidence: float) -> str:
             return "moderate_negative"
     
     return "neutral"
+
+def extract_commodity_tickers(text: str) -> List[str]:
+    """Extract commodity tickers from text"""
+    tickers = []
+    text_lower = text.lower()
+    
+    # Map commodities to tickers
+    commodity_map = {
+        'oil': ['WTI', 'BRENT'],
+        'crude': ['WTI', 'BRENT'],
+        'petroleum': ['WTI'],
+        'gas': ['NAT GAS'],
+        'natural gas': ['NAT GAS'],
+        'gold': ['GOLD'],
+        'silver': ['SILVER'],
+        'copper': ['COPPER'],
+        'wheat': ['WHEAT'],
+        'corn': ['CORN'],
+        'coffee': ['COFFEE'],
+        'sugar': ['SUGAR']
+    }
+    
+    for commodity, ticker_list in commodity_map.items():
+        if commodity in text_lower:
+            tickers.extend(ticker_list)
+    
+    return list(set(tickers))  # Remove duplicates
+
+def get_mock_news_data(max_articles: int = 20) -> dict:
+    """Return mock news data as fallback"""
+    mock_articles = [
+        {
+            'id': 1,
+            'title': 'Oil Prices Surge on OPEC Production Cuts',
+            'summary': 'Crude oil futures jumped 3.2% after OPEC announced additional production cuts, tightening global supply.',
+            'source': 'Reuters',
+            'source_url': 'https://reuters.com',
+            'time_published': (datetime.datetime.now() - datetime.timedelta(hours=2)).isoformat(),
+            'sentiment': 'BULLISH',
+            'sentiment_score': 0.78,
+            'categories': ['energy'],
+            'tickers': ['WTI', 'BRENT'],
+            'keywords': ['oil', 'opec', 'production', 'cuts']
+        },
+        {
+            'id': 2,
+            'title': 'Gold Holds Near Record High as Fed Signals Pause',
+            'summary': 'Gold prices remained stable near record levels as Federal Reserve officials indicated a potential pause in rate hikes.',
+            'source': 'Bloomberg',
+            'source_url': 'https://bloomberg.com',
+            'time_published': (datetime.datetime.now() - datetime.timedelta(hours=4)).isoformat(),
+            'sentiment': 'NEUTRAL',
+            'sentiment_score': 0.52,
+            'categories': ['metals'],
+            'tickers': ['GOLD'],
+            'keywords': ['gold', 'fed', 'rates']
+        },
+        {
+            'id': 3,
+            'title': 'Wheat Futures Drop on Improved Weather Outlook',
+            'summary': 'Chicago wheat futures declined 2.1% as meteorologists predicted favorable weather conditions for major growing regions.',
+            'source': 'MarketWatch',
+            'source_url': 'https://marketwatch.com',
+            'time_published': (datetime.datetime.now() - datetime.timedelta(hours=6)).isoformat(),
+            'sentiment': 'BEARISH',
+            'sentiment_score': 0.67,
+            'categories': ['agriculture'],
+            'tickers': ['WHEAT'],
+            'keywords': ['wheat', 'weather', 'forecast']
+        }
+    ]
+    
+    # Limit to requested number
+    articles = mock_articles[:min(max_articles, len(mock_articles))]
+    
+    return {
+        'status': 'fallback',
+        'articles': articles,
+        'total_fetched': len(articles),
+        'sources_used': ['Reuters', 'Bloomberg', 'MarketWatch'],
+        'timestamp': datetime.datetime.now().isoformat(),
+        'analysis_method': 'mock_data',
+        'message': 'Using mock data - news sources not available'
+    }
 
 # Article summarization endpoint
 @app.post('/api/summarize/article')
@@ -564,68 +908,20 @@ async def generate_ai_report(
         logger.error(f"AI report generation error: {e}")
         raise HTTPException(status_code=500, detail=str(e))
 
-# User preference-based endpoints
-@app.post('/api/user/news')
-async def get_user_news(request: UserPreferencesRequest):
-    """Get news based on user preferences"""
-    if USER_NEWS_AVAILABLE and user_news_service:
-        try:
-            user_prefs = {
-                "commodities": request.commodities or ["oil", "gold"],
-                "regions": request.regions or ["US"],
-                "keywords": request.keywords or [],
-                "websiteURLs": request.websiteURLs or [],
-                "alertThreshold": request.alertThreshold or "medium"
-            }
-            
-            result = await user_news_service.get_user_based_news(user_prefs)
-            return result
-        except Exception as e:
-            logger.error(f"Error fetching user news: {e}")
-            return {"error": str(e), "news": [], "market_data": {}}
-    else:
-        return {
-            "error": "User news service not available",
-            "news": [],
-            "market_data": {}
-        }
-
-@app.post('/api/user/market-data')
-async def get_user_market_data(request: UserPreferencesRequest):
-    """Get market data for user's selected commodities"""
-    try:
-        commodities = request.commodities or ["oil", "gold", "wheat"]
-        
-        # Simulate real-time market data based on user preferences
-        import random
-        market_data = {}
-        
-        for commodity in commodities:
-            base_prices = {
-                "oil": 75.50, "gold": 2050.00, "silver": 24.50,
-                "wheat": 5.80, "corn": 4.25, "natural gas": 2.75,
-                "copper": 3.85
-            }
-            
-            base_price = base_prices.get(commodity.lower(), 100)
-            change = random.uniform(-5, 5)
-            current_price = base_price * (1 + change/100)
-            
-            market_data[commodity] = {
-                "current_price": round(current_price, 2),
-                "change_percent": round(change, 2),
-                "sentiment": "BULLISH" if change > 1 else "BEARISH" if change < -1 else "NEUTRAL",
-                "timestamp": datetime.datetime.now().isoformat()
-            }
-        
-        return {
-            "success": True,
-            "market_data": market_data,
-            "user_commodities": commodities
-        }
-    except Exception as e:
-        logger.error(f"Error fetching market data: {e}")
-        return {"success": False, "error": str(e), "market_data": {}}
+# Test endpoint to verify news feed is working
+@app.get('/api/test/news')
+async def test_news_endpoint():
+    """Test endpoint for news functionality"""
+    return {
+        "message": "News endpoint is working",
+        "news_sources_available": NEWS_SOURCES_AVAILABLE,
+        "endpoints_available": [
+            "/api/news/feed (POST)",
+            "/api/news/analysis (POST)",
+            "/api/sentiment/market (GET)",
+            "/api/sentiment/movers (GET)"
+        ]
+    }
 
 if __name__ == "__main__":
     import uvicorn

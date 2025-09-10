@@ -35,7 +35,7 @@ export const testConnection = async () => {
   // Test 2: Market data endpoint
   try {
     console.log('\nTest 2: Market data endpoint...');
-    const marketResponse = await fetch(`${API_URL}/market/realtime`, {
+    const marketResponse = await fetch(`${API_URL}/sentiment/market`, {
       method: 'GET',
       headers: {
         'Accept': 'application/json',
@@ -108,7 +108,7 @@ export const debugDashboardApi = {
     try {
       // Step 1: Try market data
       console.log('Step 1: Fetching market data...');
-      const marketUrl = `${API_URL}/market/realtime`;
+      const marketUrl = `${API_URL}/sentiment/market`;
       console.log('Market URL:', marketUrl);
       
       const response = await fetch(marketUrl, {
