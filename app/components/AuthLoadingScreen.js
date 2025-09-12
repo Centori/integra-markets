@@ -14,7 +14,7 @@ import {
     ScrollView,
 } from 'react-native';
 import { BlurView as ExpoBlurView } from 'expo-blur';
-import { MaterialIcons, MaterialCommunityIcons, FontAwesome } from '@expo/vector-icons';
+import { MaterialIcons, MaterialCommunityIcons } from '@expo/vector-icons';
 import IntegraIcon from './IntegraIcon';
 import { authService } from '../services/authService';
 import AsyncStorage from '@react-native-async-storage/async-storage';
@@ -133,145 +133,60 @@ const AuthLoadingScreen = ({ onAuthComplete, onSkip }) => {
 
         setIsLoading(true);
 
-        // Simulate authentication process
-        setTimeout(() => {
-            setIsLoading(false);
-            const userData = {
-                id: Date.now().toString(),
-                email: email.trim(),
-                fullName: isSignUp ? fullName.trim() : email.split('@')[0],
-                username: email.split('@')[0],
-                authMethod: 'email',
-                isNewUser: isSignUp,
-            };
-            onAuthComplete(userData);
-        }, 2000);
-    };
-
-    const handleSocialAuth = async (provider) => {
-        setIsLoading(true);
-        
         try {
+            // Use the actual authService to authenticate with Supabase
             let result;
-            if (provider === 'google') {
-                // Mock Google Sign-In for now
-                result = {
-                    success: true,
-                    user: {
-                        id: 'google_' + Date.now().toString(),
-                        email: 'user@gmail.com',
-                        fullName: 'Google User'
-                    }
-                };
+            if (isSignUp) {
+                result = await authService.signUpWithEmail(email.trim(), password, fullName.trim());
+            } else {
+                result = await authService.signInWithEmail(email.trim(), password);
             }
-            
+
             setIsLoading(false);
-            
+
             if (result.success) {
+                // Check if email confirmation is required
+                if (result.requiresConfirmation) {
+                    Alert.alert(
+                        'Confirm Your Email',
+                        result.message || 'Please check your email to confirm your account',
+                        [{ text: 'OK' }]
+                    );
+                    return;
+                }
+
+                // Successful authentication
                 const userData = {
-                    id: result.user.id,
-                    email: result.user.email,
-                    fullName: result.user.fullName,
-                    username: result.user.email.split('@')[0],
-                    authMethod: provider,
-                    isNewUser: false,
+                    id: result.user?.id || Date.now().toString(),
+                    email: result.user?.email || email.trim(),
+                    fullName: result.user?.fullName || (isSignUp ? fullName.trim() : email.split('@')[0]),
+                    username: email.split('@')[0],
+                    authMethod: 'email',
+                    isNewUser: isSignUp,
                 };
                 onAuthComplete(userData);
             } else {
-                Alert.alert('Authentication Failed', result.error || 'Unable to sign in');
+                // Show error message
+                Alert.alert(
+                    'Authentication Failed',
+                    result.error || 'Unable to ' + (isSignUp ? 'sign up' : 'sign in'),
+                    [{ text: 'Try Again' }]
+                );
             }
         } catch (error) {
             setIsLoading(false);
-            Alert.alert('Error', 'An unexpected error occurred');
-            console.error('Social auth error:', error);
+            console.error('Email auth error:', error);
+            Alert.alert(
+                'Error',
+                'An unexpected error occurred. Please try again.',
+                [{ text: 'OK' }]
+            );
         }
     };
 
-    const handleGoogleAuth = async () => {
-        setIsLoading(true);
-        
-        try {
-            // Check if onboarding has been completed before
-            const onboardingCompleted = await AsyncStorage.getItem('onboarding_completed');
-            const alertsCompleted = await AsyncStorage.getItem('alerts_completed');
-            const existingUserData = await AsyncStorage.getItem('user_data');
-            
-            console.log('Google Auth - Storage check:', {
-                onboardingCompleted,
-                alertsCompleted,
-                hasUserData: !!existingUserData
-            });
-            
-            const isReturningUser = onboardingCompleted === 'true';
-            
-            // Attempt to use the authService for proper Google OAuth
-            const result = await authService.signInWithGoogle();
-            
-            setIsLoading(false);
-            
-            if (result.success && result.user) {
-                const userData = {
-                    id: result.user.id,
-                    email: result.user.email || 'user@gmail.com',
-                    fullName: result.user.full_name || result.user.fullName || 'Google User',
-                    username: result.user.email ? result.user.email.split('@')[0] : 'googleuser',
-                    authMethod: 'google',
-                    isNewUser: !isReturningUser,
-                    skipOnboarding: isReturningUser
-                };
-                
-                console.log('Google Auth Success - User data:', {
-                    ...userData,
-                    skipOnboarding: userData.skipOnboarding
-                });
-                
-                onAuthComplete(userData);
-            } else {
-                // Fallback to a mock if OAuth fails but don't block the user
-                console.log('Google OAuth not available, using simplified flow');
-                const mockGoogleUser = {
-                    id: 'google_' + Date.now().toString(),
-                    email: 'user@gmail.com',
-                    fullName: 'Google User',
-                    username: 'googleuser',
-                    authMethod: 'google',
-                    isNewUser: !isReturningUser,
-                    skipOnboarding: isReturningUser
-                };
-                
-                console.log('Google Auth Fallback - User data:', {
-                    ...mockGoogleUser,
-                    skipOnboarding: mockGoogleUser.skipOnboarding
-                });
-                
-                onAuthComplete(mockGoogleUser);
-            }
-        } catch (error) {
-            setIsLoading(false);
-            console.error('Google auth error:', error);
-            
-            // Check onboarding status even on error
-            let isReturningUser = false;
-            try {
-                const onboardingCompleted = await AsyncStorage.getItem('onboarding_completed');
-                isReturningUser = onboardingCompleted === 'true';
-            } catch (e) {
-                console.error('Error checking onboarding status:', e);
-            }
-            
-            // Even on error, allow user to proceed with mock account
-            const mockGoogleUser = {
-                id: 'google_' + Date.now().toString(),
-                email: 'user@gmail.com',
-                fullName: 'Google User',
-                username: 'googleuser',
-                authMethod: 'google',
-                isNewUser: !isReturningUser,
-                skipOnboarding: isReturningUser
-            };
-            onAuthComplete(mockGoogleUser);
-        }
-    };
+    // Social auth removed - using only email/password authentication
+
+    // Google auth removed - using only email/password authentication
 
     const handleSkip = () => {
         Alert.alert(
@@ -378,21 +293,10 @@ const AuthLoadingScreen = ({ onAuthComplete, onSkip }) => {
                             </Text>
                         </View>
 
-                        <View style={styles.authOptions}>
-                            <TouchableOpacity 
-                                style={[styles.socialButton, styles.googleButton]}
-                                onPress={handleGoogleAuth}
-                                disabled={isLoading}
-                            >
-                                <FontAwesome name="google" size={24} color="#FFFFFF" />
-                                <Text style={styles.socialButtonText}>Continue with Google</Text>
-                            </TouchableOpacity>
-                        </View>
-                        
                         <View style={styles.emailOptions}>
                             <View style={styles.dividerContainer}>
                                 <View style={styles.divider} />
-                                <Text style={styles.dividerText}>or continue with email</Text>
+                                <Text style={styles.dividerText}>Sign in to your account</Text>
                                 <View style={styles.divider} />
                             </View>
 
