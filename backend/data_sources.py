@@ -15,6 +15,7 @@ from bs4 import BeautifulSoup
 import logging
 import socket
 import asyncio
+import random
 
 # Import content extraction utilities
 try:
@@ -89,7 +90,18 @@ class NewsDataSources:
         if self.session:
             await self.session.close()
 
-    async def _get_text_with_retry(self, url: str, retries: int = 3, verify_ssl: bool = True) -> str:
+    async def _get_text_with_retry(self, url: str, retries: int = 3, verify_ssl: bool = True, initial_delay: float = 1.0) -> str:
+        """Get text content with exponential backoff retry
+        Args:
+            url: URL to fetch
+            retries: Number of retries
+            verify_ssl: Whether to verify SSL certificates
+            initial_delay: Initial delay in seconds before first retry
+        Returns:
+            Text content from the URL
+        Raises:
+            Exception if all retries fail
+        """
         last_err = None
         for attempt in range(retries):
             try:
@@ -102,14 +114,21 @@ class NewsDataSources:
                     last_err = ClientError(f"HTTP {response.status}")
             except Exception as e:
                 last_err = e
-                await asyncio.sleep(1 + attempt)
-        raise last_err or Exception("Unknown error")
+                # Exponential backoff with jitter
+                delay = initial_delay * (2 ** attempt) * (0.5 + random.random())
+                logger.info(f"Retrying {url} in {delay:.1f}s (attempt {attempt + 1}/{retries})")
+                await asyncio.sleep(delay)
+        
+        if last_err:
+            logger.error(f"Failed to fetch {url} after {retries} retries: {last_err}")
+            raise last_err
+        raise Exception(f"Failed to fetch {url} after {retries} retries")
 
     async def fetch_reuters_commodities(self) -> List[Dict]:
         """Fetch Reuters commodities news via RSS feed"""
         try:
-            # Reuters commodities RSS feed
-            url = "https://www.reuters.com/rss/markets/commodities"
+            # Reuters commodities news feed
+            url = "https://www.reuters.com/markets/commodities"
             
             try:
                 content = await self._get_text_with_retry(url, verify_ssl=False)  # Skip SSL for test
@@ -252,8 +271,8 @@ class NewsDataSources:
     async def fetch_iea_news(self) -> List[Dict]:
         """Fetch International Energy Agency news"""
         try:
-            # IEA RSS feed
-            url = "https://www.iea.org/api/articles/rss"
+            # IEA news feed
+            url = "https://www.iea.org/news"
             
             try:
                 content = await self._get_text_with_retry(url)
