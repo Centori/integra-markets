@@ -129,7 +129,7 @@ export async function registerForPushNotificationsAsync() {
     try {
         const authToken = await AsyncStorage.getItem('@auth_token');
         if (authToken) {
-            const { api } = require('./api');
+            const { api } = require('./apiClient');
             api.setAuthToken(authToken);
             await api.post('/notifications/register-token', {
                 token: token.data,

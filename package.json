@@ -50,6 +50,7 @@
     "ios": "expo run:ios",
     "dev": "npx expo start",
     "start": "npx expo start",
+    "build:web": "npx expo export:web",
     "deploy": "npx railway up --service integra-markets",
     "deploy:logs": "npx railway logs --service integra-markets",
     "deploy:status": "npx railway status",

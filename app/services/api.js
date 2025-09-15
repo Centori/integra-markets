@@ -10,9 +10,9 @@ const API_URL = `${API_BASE_URL}/api`;
 
 // Common API configuration
 const API_CONFIG = {
-  timeout: 10000, // 10 seconds
-  retries: 2,
-  retryDelay: 1000, // 1 second
+  timeout: 30000, // 30 seconds for news aggregation
+  retries: 3,     // More retries
+  retryDelay: 2000, // 2 seconds between retries
 };
 
 /**

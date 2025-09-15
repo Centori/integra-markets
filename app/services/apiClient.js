@@ -200,15 +200,21 @@ class APIClient {
     }
 
     async getNewsAnalysis(preferences = {}) {
-        // Backend doesn't have a news fetching endpoint, use the mock data from api.js
-        const { fetchNewsAnalysis } = require('./api');
-        const result = await fetchNewsAnalysis(preferences);
+        // Use the real news feed endpoint
+        const result = await this.post('/news/feed', {
+            max_articles: preferences.maxArticles || 20,
+            sources: preferences.sources || null,
+            commodity_filter: preferences.commodity || null,
+            hours_back: preferences.hoursBack || 12,
+            enhanced_content: preferences.enhancedContent || false,
+            max_enhanced: preferences.maxEnhanced || 3
+        });
         
-        // Return in the expected format
         return {
-            news: result,
+            news: result.news || [],
             status: 'success',
-            message: 'Mock news data provided (backend has no news endpoint)'
+            sources: result.sources || [],
+            timestamp: result.timestamp
         };
     }
 

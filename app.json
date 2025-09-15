@@ -98,7 +98,17 @@
         {
           "icon": "./assets/notification-icon-new.png",
           "color": "#4ECCA3",
-          "defaultChannel": "default"
+          "sounds": ["default"],
+          "defaultChannel": "default",
+          "channels": [
+            {
+              "name": "default",
+              "importance": "max",
+              "sound": "default",
+              "enableVibrate": true,
+              "enableLights": true
+            }
+          ]
         }
       ],
       [

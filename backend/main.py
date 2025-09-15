@@ -6,6 +6,12 @@ from dotenv import load_dotenv
 from supabase import create_client, Client
 from pydantic import BaseModel
 
+# DB
+from .db import init_db, close_db
+
+# Routers
+from backend.api.notifications import router as notifications_router
+
 # Routers
 from api.notifications import router as notifications_router
 
@@ -15,6 +21,18 @@ env_path = parent_dir / '.env'
 load_dotenv(env_path)
 
 app = FastAPI(title="Integra AI Backend", description="Financial AI Analysis API")
+
+# Lifespan events
+@app.on_event("startup")
+async def startup_event():
+    await init_db()
+
+@app.on_event("shutdown")
+async def shutdown_event():
+    await close_db()
+
+# Mount routers
+app.include_router(notifications_router)
 
 # Mount routers
 app.include_router(notifications_router)
@@ -55,6 +73,11 @@ def read_root():
         "version": "1.0.1",  # Updated version
         "endpoints": [
             "/analyze-sentiment",
+            "/health",
+            "/api/notifications/register-token",
+            "/api/notifications/test"
+        ]
+    }
             "/health",
             "/api/notifications/register-token",
             "/api/notifications/test"

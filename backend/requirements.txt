@@ -25,6 +25,10 @@ groq==0.9.0  # For Groq AI service
 # Push Notifications
 exponent-server-sdk==2.0.0  # For mobile push notifications
 
+# Database ORM
+tortoise-orm==0.20.0
+aerich==0.7.2  # For database migrations
+
 # Utilities
 python-dotenv==1.0.0
 
