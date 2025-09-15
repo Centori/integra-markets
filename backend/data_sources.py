@@ -376,25 +376,6 @@ class NewsDataSources:
                 except Exception as e:
                     logger.warning(f"Error fetching Platts feed {url}: {e}")
                     continue
-                
-            feed = feedparser.parse(content)
-            
-            articles = []
-            for entry in feed.entries[:12]:
-                title = entry.title.lower()
-                summary = getattr(entry, 'summary', '').lower()
-                
-                # Filter for energy and commodities
-                keywords = ['oil', 'gas', 'energy', 'crude', 'natural gas', 'commodity', 'futures', 'gold', 'silver', 'copper']
-                if any(keyword in title or keyword in summary for keyword in keywords):
-                    articles.append({
-                        'source': 'MarketWatch/S&P',
-                        'title': entry.title,
-                        'summary': getattr(entry, 'summary', ''),
-                        'url': entry.link,
-                        'published': self._parse_date(entry.published),
-                        'category': 'commodities'
-                    })
             
             # Sort by date
             articles.sort(key=lambda x: x['published'], reverse=True)
