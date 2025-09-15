@@ -1,25 +1,12 @@
 from fastapi import APIRouter, Depends, HTTPException, BackgroundTasks
-from pydantic import BaseModel
-from typing import List, Dict, Any, Optional
 from datetime import datetime
 import httpx
 import logging
+from .notification_models import PushTokenRequest, NotificationRequest
 
 # Configure logging
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
-
-# Request models
-class PushTokenRequest(BaseModel):
-    token: str
-    device_type: str = "ios"  # ios, android, web
-
-class NotificationRequest(BaseModel):
-    title: str
-    body: str
-    data: Optional[Dict[str, Any]] = None
-    priority: str = "default"  # default, high
-    channel_id: Optional[str] = None  # For Android
 
 # Create router
 router = APIRouter(prefix="/api/notifications", tags=["notifications"])
@@ -29,8 +16,6 @@ device_tokens = {}
 
 @router.post("/register-token")
 async def register_push_token(request: PushTokenRequest):
-    """Register a device push token"""
-    try:
         device_tokens[request.token] = {
             'type': request.device_type,
             'registered_at': datetime.now().isoformat()
