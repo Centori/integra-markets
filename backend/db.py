@@ -1,7 +1,7 @@
 import os
 from tortoise import Tortoise
 
-DATABASE_URL = os.getenv("DATABASE_URL", "sqlite://db.sqlite3")
+DATABASE_URL = os.getenv("DATABASE_URL", "sqlite:///data/db.sqlite3")
 
 MODELS_MODULES = [
     "backend.api.models.notification",

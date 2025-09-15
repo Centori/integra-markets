@@ -5,6 +5,7 @@ Fetches news from major financial sources without requiring API keys or triggeri
 
 import asyncio
 import aiohttp
+from aiohttp import AsyncResolver, TCPConnector, ClientTimeout, ClientError
 import feedparser
 import json
 import re
@@ -12,6 +13,8 @@ from datetime import datetime, timedelta
 from typing import List, Dict, Optional
 from bs4 import BeautifulSoup
 import logging
+import socket
+import asyncio
 
 # Import content extraction utilities
 try:
@@ -55,9 +58,20 @@ class NewsDataSources:
     
     async def __aenter__(self):
         """Async context manager entry"""
+        resolver = AsyncResolver(nameservers=["8.8.8.8", "8.8.4.4"])  # Reliable DNS
+        connector = TCPConnector(
+            limit=20,
+            limit_per_host=5,
+            resolver=resolver,
+            family=socket.AF_INET,
+            enable_cleanup_closed=True,
+            force_close=True
+        )
+        timeout = ClientTimeout(total=30, connect=10, sock_connect=10)
         self.session = aiohttp.ClientSession(
+            connector=connector,
             headers=self.headers,
-            timeout=aiohttp.ClientTimeout(total=30)
+            timeout=timeout
         )
         
         # Initialize content extractor if needed
@@ -75,37 +89,57 @@ class NewsDataSources:
         if self.session:
             await self.session.close()
 
+    async def _get_text_with_retry(self, url: str, retries: int = 3, verify_ssl: bool = True) -> str:
+        last_err = None
+        for attempt in range(retries):
+            try:
+                async with self.session.get(url, ssl=verify_ssl) as response:
+                    if response.status == 200:
+                        return await response.text()
+                    if response.status == 429:
+                        await asyncio.sleep(2 ** attempt)
+                        continue
+                    last_err = ClientError(f"HTTP {response.status}")
+            except Exception as e:
+                last_err = e
+                await asyncio.sleep(1 + attempt)
+        raise last_err or Exception("Unknown error")
+
     async def fetch_reuters_commodities(self) -> List[Dict]:
         """Fetch Reuters commodities news via RSS feed"""
         try:
             # Reuters commodities RSS feed
-            url = "https://feeds.reuters.com/reuters/businessNews"
+            url = "https://www.reuters.com/rss/markets/commodities"
             
-            async with self.session.get(url) as response:
-                if response.status == 200:
-                    content = await response.text()
-                    feed = feedparser.parse(content)
+            try:
+                content = await self._get_text_with_retry(url, verify_ssl=False)  # Skip SSL for test
+            except Exception as e:
+                logger.error(f"Error fetching Reuters news: {e}")
+                return []
+
+            feed = feedparser.parse(content)
+            
+            articles = []
+            for entry in feed.entries[:10]:  # Get latest 10 articles
+                # Filter for commodity-related keywords
+                title = entry.title.lower()
+                summary = getattr(entry, 'summary', '').lower()
+                
+                commodity_keywords = ['oil', 'gas', 'gold', 'silver', 'copper', 'wheat', 'corn', 'commodity', 'energy', 'metal']
+                if any(keyword in title or keyword in summary for keyword in commodity_keywords):
+                    articles.append({
+                        'source': 'Reuters',
+                        'title': entry.title,
+                        'summary': getattr(entry, 'summary', ''),
+                        'url': entry.link,
+                        'published': self._parse_date(entry.published),
+                        'category': 'commodities'
+                    })
+            
+            logger.info(f"Fetched {len(articles)} Reuters articles")
+            return articles
                     
-                    articles = []
-                    for entry in feed.entries[:10]:  # Get latest 10 articles
-                        # Filter for commodity-related keywords
-                        title = entry.title.lower()
-                        summary = getattr(entry, 'summary', '').lower()
-                        
-                        commodity_keywords = ['oil', 'gas', 'gold', 'silver', 'copper', 'wheat', 'corn', 'commodity', 'energy', 'metal']
-                        if any(keyword in title or keyword in summary for keyword in commodity_keywords):
-                            articles.append({
-                                'source': 'Reuters',
-                                'title': entry.title,
-                                'summary': getattr(entry, 'summary', ''),
-                                'url': entry.link,
-                                'published': self._parse_date(entry.published),
-                                'category': 'commodities'
-                            })
-                    
-                    logger.info(f"Fetched {len(articles)} Reuters articles")
-                    return articles
-                    
+            
         except Exception as e:
             logger.error(f"Error fetching Reuters news: {e}")
             return []
@@ -116,25 +150,29 @@ class NewsDataSources:
             # OilPrice.com RSS feed
             url = "https://oilprice.com/rss/main"
             
-            async with self.session.get(url) as response:
-                if response.status == 200:
-                    content = await response.text()
-                    feed = feedparser.parse(content)
+            try:
+                content = await self._get_text_with_retry(url)
+            except Exception as e:
+                logger.error(f"Error fetching OilPrice.com news: {e}")
+                return []
+
+            feed = feedparser.parse(content)
+            
+            articles = []
+            for entry in feed.entries[:15]:  # Get latest 15 articles
+                articles.append({
+                    'source': 'OilPrice.com',
+                    'title': entry.title,
+                    'summary': getattr(entry, 'summary', ''),
+                    'url': entry.link,
+                    'published': self._parse_date(entry.published),
+                    'category': 'energy'
+                })
+            
+            logger.info(f"Fetched {len(articles)} OilPrice.com articles")
+            return articles
                     
-                    articles = []
-                    for entry in feed.entries[:15]:  # Get latest 15 articles
-                        articles.append({
-                            'source': 'OilPrice.com',
-                            'title': entry.title,
-                            'summary': getattr(entry, 'summary', ''),
-                            'url': entry.link,
-                            'published': self._parse_date(entry.published),
-                            'category': 'energy'
-                        })
-                    
-                    logger.info(f"Fetched {len(articles)} OilPrice.com articles")
-                    return articles
-                    
+            
         except Exception as e:
             logger.error(f"Error fetching OilPrice.com news: {e}")
             return []
@@ -143,33 +181,37 @@ class NewsDataSources:
         """Fetch Yahoo Finance commodities news via RSS"""
         try:
             # Yahoo Finance commodities RSS feed
-            url = "https://feeds.finance.yahoo.com/rss/2.0/headline"
+            url = "https://finance.yahoo.com/rss/commodities"
             
-            async with self.session.get(url) as response:
-                if response.status == 200:
-                    content = await response.text()
-                    feed = feedparser.parse(content)
+            try:
+                content = await self._get_text_with_retry(url)
+            except Exception as e:
+                logger.error(f"Error fetching Yahoo Finance news: {e}")
+                return []
+
+            feed = feedparser.parse(content)
+            
+            articles = []
+            for entry in feed.entries[:15]:
+                title = entry.title.lower()
+                summary = getattr(entry, 'summary', '').lower()
+                
+                # Look for commodity-related content
+                commodity_keywords = ['crude', 'oil', 'natural gas', 'gold', 'silver', 'copper', 'wheat', 'corn', 'soybeans', 'commodity', 'futures', 'energy']
+                if any(keyword in title or keyword in summary for keyword in commodity_keywords):
+                    articles.append({
+                        'source': 'Yahoo Finance',
+                        'title': entry.title,
+                        'summary': getattr(entry, 'summary', ''),
+                        'url': entry.link,
+                        'published': self._parse_date(entry.published),
+                        'category': 'commodities'
+                    })
+            
+            logger.info(f"Fetched {len(articles)} Yahoo Finance articles")
+            return articles
                     
-                    articles = []
-                    for entry in feed.entries[:15]:
-                        title = entry.title.lower()
-                        summary = getattr(entry, 'summary', '').lower()
-                        
-                        # Look for commodity-related content
-                        commodity_keywords = ['crude', 'oil', 'natural gas', 'gold', 'silver', 'copper', 'wheat', 'corn', 'soybeans', 'commodity', 'futures', 'energy']
-                        if any(keyword in title or keyword in summary for keyword in commodity_keywords):
-                            articles.append({
-                                'source': 'Yahoo Finance',
-                                'title': entry.title,
-                                'summary': getattr(entry, 'summary', ''),
-                                'url': entry.link,
-                                'published': self._parse_date(entry.published),
-                                'category': 'commodities'
-                            })
-                    
-                    logger.info(f"Fetched {len(articles)} Yahoo Finance articles")
-                    return articles
-                    
+            
         except Exception as e:
             logger.error(f"Error fetching Yahoo Finance news: {e}")
             return []
@@ -178,27 +220,31 @@ class NewsDataSources:
         """Fetch Energy Information Administration reports and data"""
         try:
             # EIA RSS feed for reports
-            url = "https://www.eia.gov/rss/press_releases.xml"
+            url = "https://www.eia.gov/petroleum/weekly/includes/newsletter_rss.xml"
             
-            async with self.session.get(url) as response:
-                if response.status == 200:
-                    content = await response.text()
-                    feed = feedparser.parse(content)
+            try:
+                content = await self._get_text_with_retry(url)
+            except Exception as e:
+                logger.error(f"Error fetching EIA reports: {e}")
+                return []
+
+            feed = feedparser.parse(content)
+            
+            articles = []
+            for entry in feed.entries[:8]:
+                articles.append({
+                    'source': 'U.S. EIA',
+                    'title': entry.title,
+                    'summary': getattr(entry, 'summary', ''),
+                    'url': entry.link,
+                    'published': self._parse_date(entry.published),
+                    'category': 'energy_data'
+                })
+            
+            logger.info(f"Fetched {len(articles)} EIA reports")
+            return articles
                     
-                    articles = []
-                    for entry in feed.entries[:8]:
-                        articles.append({
-                            'source': 'U.S. EIA',
-                            'title': entry.title,
-                            'summary': getattr(entry, 'summary', ''),
-                            'url': entry.link,
-                            'published': self._parse_date(entry.published),
-                            'category': 'energy_data'
-                        })
-                    
-                    logger.info(f"Fetched {len(articles)} EIA reports")
-                    return articles
-                    
+            
         except Exception as e:
             logger.error(f"Error fetching EIA reports: {e}")
             return []
@@ -209,25 +255,29 @@ class NewsDataSources:
             # IEA RSS feed
             url = "https://www.iea.org/api/articles/rss"
             
-            async with self.session.get(url) as response:
-                if response.status == 200:
-                    content = await response.text()
-                    feed = feedparser.parse(content)
+            try:
+                content = await self._get_text_with_retry(url)
+            except Exception as e:
+                logger.error(f"Error fetching IEA news: {e}")
+                return []
+
+            feed = feedparser.parse(content)
+            
+            articles = []
+            for entry in feed.entries[:8]:
+                articles.append({
+                    'source': 'IEA',
+                    'title': entry.title,
+                    'summary': getattr(entry, 'summary', ''),
+                    'url': entry.link,
+                    'published': self._parse_date(entry.published),
+                    'category': 'energy_policy'
+                })
+            
+            logger.info(f"Fetched {len(articles)} IEA articles")
+            return articles
                     
-                    articles = []
-                    for entry in feed.entries[:8]:
-                        articles.append({
-                            'source': 'IEA',
-                            'title': entry.title,
-                            'summary': getattr(entry, 'summary', ''),
-                            'url': entry.link,
-                            'published': self._parse_date(entry.published),
-                            'category': 'energy_policy'
-                        })
-                    
-                    logger.info(f"Fetched {len(articles)} IEA articles")
-                    return articles
-                    
+            
         except Exception as e:
             logger.error(f"Error fetching IEA news: {e}")
             return []
@@ -239,31 +289,35 @@ class NewsDataSources:
             # Note: Bloomberg has limited free RSS feeds
             url = "https://feeds.bloomberg.com/markets/news.rss"
             
-            async with self.session.get(url) as response:
-                if response.status == 200:
-                    content = await response.text()
-                    feed = feedparser.parse(content)
+            try:
+                content = await self._get_text_with_retry(url)
+            except Exception as e:
+                logger.error(f"Error fetching Bloomberg news: {e}")
+                return []
+
+            feed = feedparser.parse(content)
+            
+            articles = []
+            for entry in feed.entries[:10]:
+                title = entry.title.lower()
+                summary = getattr(entry, 'summary', '').lower()
+                
+                # Filter for commodity content
+                commodity_keywords = ['oil', 'gas', 'gold', 'silver', 'copper', 'wheat', 'corn', 'commodity', 'energy', 'metal', 'futures']
+                if any(keyword in title or keyword in summary for keyword in commodity_keywords):
+                    articles.append({
+                        'source': 'Bloomberg',
+                        'title': entry.title,
+                        'summary': getattr(entry, 'summary', ''),
+                        'url': entry.link,
+                        'published': self._parse_date(entry.published),
+                        'category': 'markets'
+                    })
+            
+            logger.info(f"Fetched {len(articles)} Bloomberg articles")
+            return articles
                     
-                    articles = []
-                    for entry in feed.entries[:10]:
-                        title = entry.title.lower()
-                        summary = getattr(entry, 'summary', '').lower()
-                        
-                        # Filter for commodity content
-                        commodity_keywords = ['oil', 'gas', 'gold', 'silver', 'copper', 'wheat', 'corn', 'commodity', 'energy', 'metal', 'futures']
-                        if any(keyword in title or keyword in summary for keyword in commodity_keywords):
-                            articles.append({
-                                'source': 'Bloomberg',
-                                'title': entry.title,
-                                'summary': getattr(entry, 'summary', ''),
-                                'url': entry.link,
-                                'published': self._parse_date(entry.published),
-                                'category': 'markets'
-                            })
-                    
-                    logger.info(f"Fetched {len(articles)} Bloomberg articles")
-                    return articles
-                    
+            
         except Exception as e:
             logger.error(f"Error fetching Bloomberg news: {e}")
             return []
@@ -277,30 +331,33 @@ class NewsDataSources:
             # Alternative: Use MarketWatch commodities which is owned by S&P
             marketwatch_url = "https://feeds.marketwatch.com/marketwatch/realtimeheadlines/"
             
-            async with self.session.get(marketwatch_url) as response:
-                if response.status == 200:
-                    content = await response.text()
-                    feed = feedparser.parse(content)
-                    
-                    articles = []
-                    for entry in feed.entries[:12]:
-                        title = entry.title.lower()
-                        summary = getattr(entry, 'summary', '').lower()
-                        
-                        # Filter for energy and commodities
-                        keywords = ['oil', 'gas', 'energy', 'crude', 'natural gas', 'commodity', 'futures', 'gold', 'silver', 'copper']
-                        if any(keyword in title or keyword in summary for keyword in keywords):
-                            articles.append({
-                                'source': 'MarketWatch/S&P',
-                                'title': entry.title,
-                                'summary': getattr(entry, 'summary', ''),
-                                'url': entry.link,
-                                'published': self._parse_date(entry.published),
-                                'category': 'commodities'
-                            })
-                    
-                    logger.info(f"Fetched {len(articles)} S&P/MarketWatch articles")
-                    return articles
+            try:
+                content = await self._get_text_with_retry(marketwatch_url)
+            except Exception as e:
+                logger.error(f"Error fetching MarketWatch feed: {e}")
+                return []
+                
+            feed = feedparser.parse(content)
+            
+            articles = []
+            for entry in feed.entries[:12]:
+                title = entry.title.lower()
+                summary = getattr(entry, 'summary', '').lower()
+                
+                # Filter for energy and commodities
+                keywords = ['oil', 'gas', 'energy', 'crude', 'natural gas', 'commodity', 'futures', 'gold', 'silver', 'copper']
+                if any(keyword in title or keyword in summary for keyword in keywords):
+                    articles.append({
+                        'source': 'MarketWatch/S&P',
+                        'title': entry.title,
+                        'summary': getattr(entry, 'summary', ''),
+                        'url': entry.link,
+                        'published': self._parse_date(entry.published),
+                        'category': 'commodities'
+                    })
+            
+            logger.info(f"Fetched {len(articles)} S&P/MarketWatch articles")
+            return articles
                     
         except Exception as e:
             logger.error(f"Error fetching S&P Global Platts news: {e}")
@@ -379,6 +436,64 @@ class NewsDataSources:
         except Exception:
             return datetime.now()
 
+    async def fetch_investing_news(self) -> List[Dict]:
+        """Fetch news from Investing.com RSS feeds"""
+        try:
+            # Investing.com commodities feed
+            url = "https://www.investing.com/rss/commodities.rss"
+            
+            async with self.session.get(url) as response:
+                if response.status == 200:
+                    content = await response.text()
+                    feed = feedparser.parse(content)
+                    
+                    articles = []
+                    for entry in feed.entries[:15]:
+                        articles.append({
+                            'source': 'Investing.com',
+                            'title': entry.title,
+                            'summary': getattr(entry, 'summary', ''),
+                            'url': entry.link,
+                            'published': self._parse_date(entry.published),
+                            'category': 'commodities'
+                        })
+                    
+                    logger.info(f"Fetched {len(articles)} Investing.com articles")
+                    return articles
+                    
+        except Exception as e:
+            logger.error(f"Error fetching Investing.com news: {e}")
+            return []
+    
+    async def fetch_mining_weekly(self) -> List[Dict]:
+        """Fetch news from MiningWeekly.com"""
+        try:
+            # MiningWeekly.com RSS feed
+            url = "https://www.miningweekly.com/feed"
+            
+            async with self.session.get(url) as response:
+                if response.status == 200:
+                    content = await response.text()
+                    feed = feedparser.parse(content)
+                    
+                    articles = []
+                    for entry in feed.entries[:15]:
+                        articles.append({
+                            'source': 'Mining Weekly',
+                            'title': entry.title,
+                            'summary': getattr(entry, 'summary', ''),
+                            'url': entry.link,
+                            'published': self._parse_date(entry.published),
+                            'category': 'mining'
+                        })
+                    
+                    logger.info(f"Fetched {len(articles)} Mining Weekly articles")
+                    return articles
+                    
+        except Exception as e:
+            logger.error(f"Error fetching Mining Weekly news: {e}")
+            return []
+
     async def fetch_all_sources(self) -> List[Dict]:
         """Fetch news from all sources concurrently"""
         tasks = [
@@ -389,6 +504,8 @@ class NewsDataSources:
             self.fetch_bloomberg_commodities(),
             self.fetch_sp_global_platts(),
             self.fetch_additional_sources(),
+            self.fetch_investing_news(),
+            self.fetch_mining_weekly(),
         ]
         
         results = await asyncio.gather(*tasks, return_exceptions=True)

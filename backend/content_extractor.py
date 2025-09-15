@@ -8,7 +8,7 @@ import asyncio
 import logging
 from bs4 import BeautifulSoup
 from urllib.parse import urljoin, urlparse
-from typing import Optional, List, Dict
+from typing import Optional, List, Dict, Union
 import re
 import nltk
 from nltk.tokenize import sent_tokenize, word_tokenize
@@ -16,6 +16,9 @@ from nltk.corpus import stopwords
 from collections import Counter, defaultdict
 import string
 from datetime import datetime
+import socket
+from aiohttp import TCPConnector, ClientTimeout, AsyncResolver, ClientSession, ClientError
+from tenacity import retry, stop_after_attempt, wait_exponential
 
 logger = logging.getLogger(__name__)
 
@@ -27,14 +30,30 @@ class ContentExtractor:
         self.stopwords = set(stopwords.words('english')) if nltk.data.find('corpora/stopwords') else set()
         
     async def __aenter__(self):
-        """Async context manager entry"""
-        connector = aiohttp.TCPConnector(limit=10, limit_per_host=3)
-        timeout = aiohttp.ClientTimeout(total=15, connect=5)
-        self.session = aiohttp.ClientSession(
-            connector=connector,
+        """Async context manager entry with robust connection handling"""
+        # Configure DNS settings and timeouts
+        resolver = AsyncResolver(nameservers=["8.8.8.8", "8.8.4.4"])  # Use Google DNS
+        self.connector = TCPConnector(
+            limit=10,
+            limit_per_host=3,
+            resolver=resolver,
+            family=socket.AF_INET,  # IPv4 only for better compatibility
+            ssl=False,  # Handle SSL in request
+            force_close=True,  # Avoid stale connections
+            enable_cleanup_closed=True
+        )
+        
+        timeout = ClientTimeout(total=30, connect=10, sock_connect=10)
+        self.session = ClientSession(
+            connector=self.connector,
             timeout=timeout,
             headers={
-                'User-Agent': 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36'
+                'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+                'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
+                'Accept-Language': 'en-US,en;q=0.5',
+                'Accept-Encoding': 'gzip, deflate',
+                'Connection': 'keep-alive',
+                'Upgrade-Insecure-Requests': '1'
             }
         )
         return self
@@ -44,58 +63,120 @@ class ContentExtractor:
         if self.session:
             await self.session.close()
     
-    async def fetch_article_content(self, url: str) -> Dict[str, str]:
-        """
-        Fetch full HTML content from article URL and extract text
-        
-        Args:
-            url: Article URL to fetch
-            
-        Returns:
-            Dict containing extracted content
-        """
+    @retry(stop=stop_after_attempt(3), wait=wait_exponential(multiplier=1, min=4, max=10))
+    async def fetch_with_retry(self, url: str, verify_ssl: bool = True) -> str:
+        """Fetch content with retry logic for transient failures"""
+        try:
+            async with self.session.get(url, ssl=verify_ssl) as response:
+                if response.status == 200:
+                    return await response.text()
+                elif response.status == 429:  # Rate limited
+                    retry_after = int(response.headers.get('Retry-After', 5))
+                    await asyncio.sleep(retry_after)
+                    raise ClientError(f"Rate limited: retry after {retry_after}s")
+                else:
+                    raise ClientError(f"HTTP {response.status}")
+        except ClientError as e:
+            logger.warning(f"Retry needed for {url}: {e}")
+            raise  # Let retry decorator handle it
+        except Exception as e:
+            logger.error(f"Fatal error fetching {url}: {e}")
+            raise
+
+    async def fetch_article_content(self, url: str) -> Dict[str, Union[str, int, dict]]:
+        """Fetch and extract article content with error handling and retries"""
         try:
             if not self.session:
                 raise Exception("ContentExtractor not initialized as context manager")
             
-            logger.info(f"Fetching full content from: {url}")
+            logger.info(f"Fetching content from: {url}")
             
-            async with self.session.get(url) as response:
-                if response.status != 200:
-                    logger.warning(f"Failed to fetch {url}: HTTP {response.status}")
-                    return {"error": f"HTTP {response.status}", "content": "", "title": ""}
-                
-                html_content = await response.text()
-                
-                # Parse HTML with BeautifulSoup
+            # Try with SSL verification first
+            try:
+                html_content = await self.fetch_with_retry(url)
+            except Exception as ssl_error:
+                # If SSL fails, try without verification
+                logger.warning(f"SSL verification failed for {url}, retrying without verification")
+                html_content = await self.fetch_with_retry(url, verify_ssl=False)
+            
+            # Parse HTML with error handling
+            try:
                 soup = BeautifulSoup(html_content, 'html.parser')
-                
-                # Extract title
-                title = self._extract_title(soup)
-                
-                # Extract main article content
-                article_text = self._extract_article_text(soup)
-                
-                if not article_text.strip():
-                    logger.warning(f"No content extracted from {url}")
-                    return {"error": "No content found", "content": "", "title": title}
-                
-                logger.info(f"Successfully extracted {len(article_text)} characters from {url}")
-                
+            except Exception as parse_error:
+                logger.error(f"HTML parsing failed for {url}: {parse_error}")
                 return {
-                    "content": article_text,
+                    "error": "Invalid HTML content",
+                    "content": "",
+                    "title": "",
+                    "technical_details": str(parse_error)
+                }
+            
+            # Extract content
+            title = self._extract_title(soup)
+            article_text = self._extract_article_text(soup)
+            
+            if not article_text.strip():
+                logger.warning(f"No content extracted from {url}")
+                return {
+                    "error": "No content found",
+                    "content": "",
                     "title": title,
                     "url": url,
-                    "word_count": len(article_text.split()),
                     "extraction_time": datetime.now().isoformat()
                 }
-                
-        except asyncio.TimeoutError:
-            logger.error(f"Timeout fetching content from {url}")
-            return {"error": "Timeout", "content": "", "title": ""}
+            
+            # Clean and normalize content
+            article_text = self._normalize_content(article_text)
+            
+            logger.info(f"Successfully extracted {len(article_text)} chars from {url}")
+            
+            return {
+                "content": article_text,
+                "title": title,
+                "url": url,
+                "word_count": len(article_text.split()),
+                "extraction_time": datetime.now().isoformat(),
+                "metadata": {
+                    "source_domain": urlparse(url).netloc,
+                    "content_length": len(article_text),
+                    "extraction_success": True
+                }
+            }
+            
+        except asyncio.TimeoutError as e:
+            logger.error(f"Timeout fetching content from {url}: {e}")
+            return self._create_error_response("Timeout", url)
+        except ClientError as e:
+            logger.error(f"Client error for {url}: {e}")
+            return self._create_error_response(str(e), url)
         except Exception as e:
-            logger.error(f"Error fetching content from {url}: {e}")
-            return {"error": str(e), "content": "", "title": ""}
+            logger.error(f"Unexpected error fetching {url}: {e}")
+            return self._create_error_response(str(e), url)
+    
+    def _normalize_content(self, text: str) -> str:
+        """Clean and normalize extracted content"""
+        # Remove extra whitespace
+        text = re.sub(r'\s+', ' ', text)
+        # Remove common noise patterns
+        text = re.sub(r'\[\d+\]', '', text)  # Remove reference numbers
+        text = re.sub(r'Share\s+this\s+article', '', text, flags=re.IGNORECASE)
+        text = re.sub(r'Subscribe\s+to\s+our\s+newsletter', '', text, flags=re.IGNORECASE)
+        return text.strip()
+    
+    def _create_error_response(self, error_msg: str, url: str) -> Dict[str, Union[str, dict]]:
+        """Create standardized error response"""
+        return {
+            "error": error_msg,
+            "content": "",
+            "title": "",
+            "url": url,
+            "extraction_time": datetime.now().isoformat(),
+            "metadata": {
+                "source_domain": urlparse(url).netloc,
+                "extraction_success": False,
+                "error_type": error_msg
+            }
+        }
     
     def _extract_title(self, soup: BeautifulSoup) -> str:
         """Extract article title from HTML"""
