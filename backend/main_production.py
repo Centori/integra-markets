@@ -473,19 +473,19 @@ async def get_news_feed(request: NewsRequest):
         async with NewsDataSources() as news_sources:
             # Fetch from sources in parallel
             tasks = []
-        if not request.sources or 'oilprice' in (request.sources or []):
-            tasks.append(news_sources.fetch_oilprice_news())
-        if not request.sources or 'reuters' in (request.sources or []):
-            tasks.append(news_sources.fetch_reuters_commodities())
-        if not request.sources or 'eia' in (request.sources or []):
-            tasks.append(news_sources.fetch_eia_reports())
-        if not request.sources or 'iea' in (request.sources or []):
-            tasks.append(news_sources.fetch_iea_news())
-        if not request.sources or 'platts' in (request.sources or []):
-            tasks.append(news_sources.fetch_sp_global_platts())
+            if not request.sources or 'oilprice' in (request.sources or []):
+                tasks.append(news_sources.fetch_oilprice_news())
+            if not request.sources or 'reuters' in (request.sources or []):
+                tasks.append(news_sources.fetch_reuters_commodities())
+            if not request.sources or 'eia' in (request.sources or []):
+                tasks.append(news_sources.fetch_eia_reports())
+            if not request.sources or 'iea' in (request.sources or []):
+                tasks.append(news_sources.fetch_iea_news())
+            if not request.sources or 'platts' in (request.sources or []):
+                tasks.append(news_sources.fetch_sp_global_platts())
             
-        # Execute all fetches concurrently
-        results = await asyncio.gather(*tasks, return_exceptions=True)
+            # Execute all fetches concurrently
+            results = await asyncio.gather(*tasks, return_exceptions=True)
             
             # Combine results and filter out exceptions
             all_articles = []
