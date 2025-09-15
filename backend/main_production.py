@@ -15,6 +15,7 @@ from typing import Optional, List, Dict, Any
 import datetime
 import logging
 from data_sources import NewsDataSources
+from backend.db import init_db, close_db
 from pydantic import BaseModel, Field
 
 # Import routers
