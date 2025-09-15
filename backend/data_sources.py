@@ -344,17 +344,38 @@ class NewsDataSources:
     async def fetch_sp_global_platts(self) -> List[Dict]:
         """Fetch S&P Global Platts energy news"""
         try:
-            # S&P Global Platts RSS feed
-            url = "https://www.spglobal.com/commodityinsights/en/rss-feeds"
+            # S&P Global Platts commodity feeds
+            urls = [
+                "https://www.spglobal.com/platts/en/rss-feed/oil",  # Oil
+                "https://www.spglobal.com/platts/en/rss-feed/natural-gas",  # Natural Gas
+                "https://www.spglobal.com/platts/en/rss-feed/petrochemicals",  # Petrochemicals
+                "https://www.spglobal.com/platts/en/rss-feed/metals",  # Metals
+                "https://www.spglobal.com/platts/en/rss-feed/agriculture",  # Agriculture
+                "https://www.spglobal.com/platts/en/rss-feed/coal",  # Coal
+                "https://www.spglobal.com/platts/en/rss-feed/shipping"  # Shipping
+            ]
             
-            # Alternative: Use MarketWatch commodities which is owned by S&P
-            marketwatch_url = "https://feeds.marketwatch.com/marketwatch/realtimeheadlines/"
-            
-            try:
-                content = await self._get_text_with_retry(marketwatch_url)
-            except Exception as e:
-                logger.error(f"Error fetching MarketWatch feed: {e}")
-                return []
+            articles = []
+            for url in urls:
+                try:
+                    content = await self._get_text_with_retry(url, retries=2)
+                    feed = feedparser.parse(content)
+                    
+                    # Extract category from URL
+                    category = url.split('/')[-1].replace('-', ' ').title()
+                    
+                    for entry in feed.entries[:3]:  # Get top 3 from each feed
+                        articles.append({
+                            'source': 'S&P Global Platts',
+                            'title': entry.title,
+                            'summary': getattr(entry, 'summary', ''),
+                            'url': entry.link,
+                            'published': self._parse_date(entry.published),
+                            'category': category
+                        })
+                except Exception as e:
+                    logger.warning(f"Error fetching Platts feed {url}: {e}")
+                    continue
                 
             feed = feedparser.parse(content)
             
@@ -375,9 +396,12 @@ class NewsDataSources:
                         'category': 'commodities'
                     })
             
-            logger.info(f"Fetched {len(articles)} S&P/MarketWatch articles")
+            # Sort by date
+            articles.sort(key=lambda x: x['published'], reverse=True)
+            
+            logger.info(f"Fetched {len(articles)} S&P Global Platts articles")
             return articles
-                    
+            
         except Exception as e:
             logger.error(f"Error fetching S&P Global Platts news: {e}")
             return []
