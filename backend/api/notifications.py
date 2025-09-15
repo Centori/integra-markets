@@ -16,6 +16,8 @@ device_tokens = {}
 
 @router.post("/register-token")
 async def register_push_token(request: PushTokenRequest):
+    """Register a device push token"""
+    try:
         device_tokens[request.token] = {
             'type': request.device_type,
             'registered_at': datetime.now().isoformat()
@@ -26,6 +28,7 @@ async def register_push_token(request: PushTokenRequest):
             "message": "Push token registered successfully",
             "token": request.token
         }
+        
     except Exception as e:
         logger.error(f"Error registering push token: {str(e)}")
         raise HTTPException(status_code=500, detail="Failed to register push token")
@@ -60,8 +63,8 @@ async def send_test_notification(
 async def send_single_expo_notification(
     title: str,
     body: str,
-    data: Optional[Dict] = None
-) -> Dict:
+    data: dict = None
+) -> dict:
     """Send a single push notification and return the result"""
     message = {
         "title": title,
