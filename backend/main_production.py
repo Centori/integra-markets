@@ -17,6 +17,9 @@ import logging
 from data_sources import NewsDataSources
 from pydantic import BaseModel, Field
 
+# Import routers
+from app.api.notifications import router as notifications_router
+
 # Load environment variables
 parent_dir = Path(__file__).parent.parent
 env_path = parent_dir / '.env'
@@ -57,6 +60,9 @@ app = FastAPI(
     description="Production-ready API with Groq AI and source attribution",
     version="4.0.0"
 )
+
+# Include API routers
+app.include_router(notifications_router, prefix="/api")
 
 # CORS middleware
 app.add_middleware(
