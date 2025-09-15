@@ -41,11 +41,18 @@ COPY --from=builder /root/nltk_data /root/nltk_data
 ENV PATH=/root/.local/bin:$PATH
 ENV NLTK_DATA=/root/nltk_data
 
-# Copy application code - flatten structure for proper imports
-COPY backend/ ./
+# Create backend directory structure
+RUN mkdir -p /app/backend/api
+
+# Copy application code preserving structure
+COPY backend/*.py /app/backend/
+COPY backend/api/*.py /app/backend/api/
 
 # Create directories for model caching
 RUN mkdir -p /app/models/finbert /app/models/nltk_data /app/cache
+
+# Set working directory to app root
+WORKDIR /app
 
 # Set environment variables
 ENV PYTHONUNBUFFERED=1
@@ -53,6 +60,7 @@ ENV FINBERT_CACHE_DIR=/app/models/finbert
 ENV NLTK_DATA_PATH=/app/models/nltk_data
 ENV HF_HOME=/app/cache
 ENV TRANSFORMERS_CACHE=/app/cache
+ENV PYTHONPATH="/app:/app/backend:${PYTHONPATH}"
 ENV PORT=8000
 
 # Expose the port
