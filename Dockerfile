@@ -41,12 +41,8 @@ COPY --from=builder /root/nltk_data /root/nltk_data
 ENV PATH=/root/.local/bin:$PATH
 ENV NLTK_DATA=/root/nltk_data
 
-# Create backend directory structure
-RUN mkdir -p /app/backend/api
-
-# Copy application code preserving structure
-COPY backend/*.py /app/backend/
-COPY backend/api/*.py /app/backend/api/
+# Copy backend directory structure
+COPY backend /app/backend/
 
 # Create directories for model caching
 RUN mkdir -p /app/models/finbert /app/models/nltk_data /app/cache
