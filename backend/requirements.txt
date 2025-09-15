@@ -11,6 +11,8 @@ python-jose[cryptography]==3.3.0
 # HTTP & Web Scraping
 aiohttp==3.9.1
 requests==2.31.0
+aiodns==3.1.1
+pycares==4.4.0
 httpx>=0.24.0,<0.25.0  # Match supabase 2.0.0 requirement
 beautifulsoup4==4.12.2
 feedparser==6.0.10
