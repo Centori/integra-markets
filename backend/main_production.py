@@ -82,6 +82,10 @@ async def startup_event():
     """Initialize services on startup"""
     global groq_service, groq_error
     
+    # Initialize database
+    await init_db()
+    logger.info("✓ Database initialized")
+    
     groq_api_key = os.getenv("GROQ_API_KEY")
     
     if not groq_api_key:
