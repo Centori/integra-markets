@@ -8,10 +8,10 @@ import Constants from 'expo-constants';
 import { safeApiCall, logError, checkOnlineStatus } from './errorHandler';
 
 // Safely access environment variables to prevent iOS 18.6 crashes
-// Force production backend for TestFlight deployment
-const API_BASE_URL = 'https://integra-markets-backend.fly.dev' || 
-                     process.env.EXPO_PUBLIC_API_URL || 
-                     Constants.expoConfig?.extra?.apiUrl;
+// Prefer env/Expo config, fallback to production Fly.io URL
+const API_BASE_URL = process.env.EXPO_PUBLIC_API_URL || 
+                     (Constants.expoConfig?.extra?.apiUrl) || 
+                     'https://integra-markets-backend.fly.dev';
 const API_URL = `${API_BASE_URL}/api`;
 
 class APIClient {
