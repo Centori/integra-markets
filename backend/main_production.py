@@ -489,12 +489,23 @@ async def get_news_feed(request: NewsRequest):
                     logger.error(f"Error fetching news: {result}")
             
             # Filter by time
-            cutoff = datetime.datetime.now() - datetime.timedelta(hours=hours_back)
-            time_filtered = [
-                article for article in all_articles
-                if article.get('published') and 
-                datetime.datetime.fromisoformat(str(article['published']).replace('Z', '+00:00')) >= cutoff
-            ]
+            cutoff = datetime.datetime.now(datetime.timezone.utc) - datetime.timedelta(hours=hours_back)
+            time_filtered = []
+            for article in all_articles:
+                if not article.get('published'):
+                    continue
+                try:
+                    # Convert article timestamp to UTC datetime
+                    pub_str = str(article['published']).replace('Z', '+00:00')
+                    pub_date = datetime.datetime.fromisoformat(pub_str)
+                    # Make naive datetime timezone-aware if needed
+                    if pub_date.tzinfo is None:
+                        pub_date = pub_date.replace(tzinfo=datetime.timezone.utc)
+                    if pub_date >= cutoff:
+                        time_filtered.append(article)
+                except (ValueError, TypeError) as e:
+                    logger.warning(f"Failed to parse article date: {e}")
+                    continue
             
             # Filter by commodity if specified
             if request.commodity_filter:
