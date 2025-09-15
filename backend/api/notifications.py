@@ -21,7 +21,7 @@ logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
 # Create router
-router = APIRouter(prefix="/api/notifications", tags=["notifications"])
+router = APIRouter(prefix="/notifications", tags=["notifications"])
 
 @router.post("/register-token", response_model=DeviceTokenResponse)
 async def register_push_token(
