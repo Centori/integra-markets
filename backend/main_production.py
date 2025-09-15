@@ -18,7 +18,7 @@ from data_sources import NewsDataSources
 from pydantic import BaseModel, Field
 
 # Import routers
-from app.api.notifications import router as notifications_router
+from backend.api.notifications import router as notifications_router
 
 # Load environment variables
 parent_dir = Path(__file__).parent.parent
