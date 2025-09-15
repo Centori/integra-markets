@@ -6,12 +6,18 @@ from dotenv import load_dotenv
 from supabase import create_client, Client
 from pydantic import BaseModel
 
+# Routers
+from api.notifications import router as notifications_router
+
 # Load environment variables from parent directory's .env file
 parent_dir = Path(__file__).parent.parent
 env_path = parent_dir / '.env'
 load_dotenv(env_path)
 
 app = FastAPI(title="Integra AI Backend", description="Financial AI Analysis API")
+
+# Mount routers
+app.include_router(notifications_router)
 
 # Add CORS middleware to allow requests from your React Native app
 app.add_middleware(
@@ -47,7 +53,12 @@ def read_root():
     return {
         "message": "Integra AI Backend is running!",
         "version": "1.0.1",  # Updated version
-        "endpoints": ["/analyze-sentiment", "/health"]
+        "endpoints": [
+            "/analyze-sentiment",
+            "/health",
+            "/api/notifications/register-token",
+            "/api/notifications/test"
+        ]
     }
 
 @app.get('/health')
