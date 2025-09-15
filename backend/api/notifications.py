@@ -9,12 +9,6 @@ import logging
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
-# Create router
-router = APIRouter(prefix="/api/notifications", tags=["notifications"])
-
-# Expo push notification service URL
-EXPO_PUSH_URL = "https://exp.host/--/api/v2/push/send"
-
 # Request models
 class PushTokenRequest(BaseModel):
     token: str
@@ -26,6 +20,33 @@ class NotificationRequest(BaseModel):
     data: Optional[Dict[str, Any]] = None
     priority: str = "default"  # default, high
     channel_id: Optional[str] = None  # For Android
+
+# Create router
+router = APIRouter(prefix="/api/notifications", tags=["notifications"])
+
+# In-memory token storage (replace with database in production)
+device_tokens = {}
+
+@router.post("/register-token")
+async def register_push_token(request: PushTokenRequest):
+    """Register a device push token"""
+    try:
+        device_tokens[request.token] = {
+            'type': request.device_type,
+            'registered_at': datetime.now().isoformat()
+        }
+        
+        return {
+            "status": "success",
+            "message": "Push token registered successfully",
+            "token": request.token
+        }
+    except Exception as e:
+        logger.error(f"Error registering push token: {str(e)}")
+        raise HTTPException(status_code=500, detail="Failed to register push token")
+
+# Expo push notification service URL
+EXPO_PUSH_URL = "https://exp.host/--/api/v2/push/send"
 
 @router.post("/test")
 async def send_test_notification(
