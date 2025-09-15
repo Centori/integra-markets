@@ -398,6 +398,8 @@ const AuthLoadingScreen = ({ onAuthComplete, onSkip }) => {
                                 keyboardType="email-address"
                                 autoCapitalize="none"
                                 autoCorrect={false}
+                                autoComplete="email"
+                                textContentType="emailAddress"
                             />
                         </View>
 
@@ -410,6 +412,10 @@ const AuthLoadingScreen = ({ onAuthComplete, onSkip }) => {
                                 placeholder="Enter your password"
                                 placeholderTextColor={colors.textSecondary}
                                 secureTextEntry
+                                autoComplete="off"
+                                autoCorrect={false}
+                                autoCapitalize="none"
+                                textContentType="none"
                             />
                         </View>
 
@@ -423,6 +429,10 @@ const AuthLoadingScreen = ({ onAuthComplete, onSkip }) => {
                                     placeholder="Confirm your password"
                                     placeholderTextColor={colors.textSecondary}
                                     secureTextEntry
+                                    autoComplete="off"
+                                    autoCorrect={false}
+                                    autoCapitalize="none"
+                                    textContentType="none"
                                 />
                             </View>
                         )}

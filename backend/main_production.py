@@ -14,6 +14,8 @@ from pydantic import BaseModel, Field
 from typing import Optional, List, Dict, Any
 import datetime
 import logging
+from data_sources import NewsDataSources
+from pydantic import BaseModel, Field
 
 # Load environment variables
 parent_dir = Path(__file__).parent.parent
@@ -92,6 +94,14 @@ async def startup_event():
         groq_error = "Groq AI module not available"
 
 # Request models
+class NewsRequest(BaseModel):
+    max_articles: Optional[int] = Field(20, ge=1, le=50)
+    sources: Optional[List[str]] = None
+    commodity_filter: Optional[str] = None
+    hours_back: Optional[int] = Field(24, ge=1, le=168)
+    alert_frequency: Optional[str] = Field("realtime")
+    min_impact: Optional[str] = Field("LOW")
+
 class ChatRequest(BaseModel):
     messages: List[Dict[str, str]] = Field(..., description="Chat messages")
     commodity: Optional[str] = Field(None, description="Commodity context")
@@ -124,7 +134,7 @@ async def read_root():
             "real_news_integration": True
         },
         "features": [
-            "AI-powered analysis with GPT-OSS-120B",
+            "AI-powered analysis with Llama 3.3 70B",
             "Real-time news from multiple RSS sources",
             "Source attribution for transparency",
             "Structured analysis with bullet points",
@@ -136,7 +146,8 @@ async def read_root():
             "/ai/chat",
             "/ai/analyze",
             "/ai/report",
-            "/api/test/groq"
+            "/api/test/groq",
+            "/api/news/feed"
         ]
     }
 
@@ -217,7 +228,7 @@ async def ai_chat(request: ChatRequest):
                     "tool_results": result.get("tool_results", []),
                     "commodity": request.commodity,
                     "timestamp": datetime.datetime.now().isoformat(),
-                    "model": "gpt-oss-120b",
+                    "model": "llama-3.3-70b",
                     "processing": "NLTK-enhanced",
                     "metadata": processed["metadata"],
                     "real_data": True
@@ -236,7 +247,7 @@ async def ai_chat(request: ChatRequest):
             "tool_results": result.get("tool_results", []),
             "commodity": request.commodity,
             "timestamp": datetime.datetime.now().isoformat(),
-            "model": "gpt-oss-120b",
+            "model": "llama-3.3-70b",
             "processing": "standard",
             "real_data": True
         }
@@ -332,7 +343,7 @@ async def generate_market_report(request: MarketReportRequest):
         
         # Add real_data flag to indicate this is not mock data
         report["real_data"] = True
-        report["model"] = "gpt-oss-120b"
+        report["model"] = "llama-3.3-70b"
         
         return report
         
@@ -363,7 +374,7 @@ async def test_groq_connection():
             client = Groq(api_key=os.getenv("GROQ_API_KEY"))
             response = client.chat.completions.create(
                 messages=[{"role": "user", "content": "Say 'API working'"}],
-                model="mixtral-8x7b-32768",
+                model="llama-3.1-8b-instant",
                 max_tokens=10
             )
             test_results["api_test"] = {
@@ -435,6 +446,87 @@ def extract_sentiment(result: Dict) -> str:
     if "analysis" in result and isinstance(result["analysis"], dict):
         return result["analysis"].get("sentiment", "neutral")
     return "neutral"
+
+@app.post('/api/news/feed')
+async def get_news_feed(request: NewsRequest):
+    """Get news feed with support for alerts and frequency settings"""
+    try:
+        # Determine time window based on alert frequency
+        hours_back = request.hours_back or {
+            'realtime': 4,   # Last 4 hours for realtime
+            'daily': 24,     # Last 24 hours for daily
+            'weekly': 168    # Last week for weekly
+        }.get(request.alert_frequency, 24)
+        
+        # Initialize news data sources
+        async with NewsDataSources() as news_sources:
+            # Fetch from sources in parallel
+            tasks = []
+            if not request.sources or 'oilprice' in (request.sources or []):
+                tasks.append(news_sources.fetch_oilprice_news())
+            if not request.sources or 'reuters' in (request.sources or []):
+                tasks.append(news_sources.fetch_reuters_commodities())
+            if not request.sources or 'eia' in (request.sources or []):
+                tasks.append(news_sources.fetch_eia_reports())
+            if not request.sources or 'iea' in (request.sources or []):
+                tasks.append(news_sources.fetch_iea_news())
+            
+            # Execute all fetches concurrently
+            results = await asyncio.gather(*tasks, return_exceptions=True)
+            
+            # Combine results and filter out exceptions
+            all_articles = []
+            for result in results:
+                if isinstance(result, list):
+                    all_articles.extend(result)
+                elif isinstance(result, Exception):
+                    logger.error(f"Error fetching news: {result}")
+            
+            # Filter by time
+            cutoff = datetime.datetime.now() - datetime.timedelta(hours=hours_back)
+            time_filtered = [
+                article for article in all_articles
+                if article.get('published') and 
+                datetime.datetime.fromisoformat(str(article['published']).replace('Z', '+00:00')) >= cutoff
+            ]
+            
+            # Filter by commodity if specified
+            if request.commodity_filter:
+                commodity = request.commodity_filter.lower()
+                commodity_filtered = [
+                    article for article in time_filtered
+                    if commodity in article.get('title', '').lower() or
+                       commodity in article.get('description', '').lower()
+                ]
+                time_filtered = commodity_filtered
+            
+            # Filter by impact level
+            if request.min_impact:
+                impact_levels = {'LOW': 0, 'MEDIUM': 1, 'HIGH': 2}
+                min_level = impact_levels.get(request.min_impact.upper(), 0)
+                
+                impact_filtered = [
+                    article for article in time_filtered
+                    if impact_levels.get(article.get('market_impact', 'LOW').upper(), 0) >= min_level
+                ]
+                time_filtered = impact_filtered
+            
+            # Sort by date (newest first)
+            time_filtered.sort(
+                key=lambda x: datetime.datetime.fromisoformat(str(x['published']).replace('Z', '+00:00')),
+                reverse=True
+            )
+            
+            return {
+                "news": time_filtered[:request.max_articles],
+                "total": len(time_filtered),
+                "sources": list(set(a['source'] for a in time_filtered if 'source' in a)),
+                "timestamp": datetime.datetime.now().isoformat()
+            }
+            
+    except Exception as e:
+        logger.error(f"Error processing news feed: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
 
 if __name__ == "__main__":
     import uvicorn

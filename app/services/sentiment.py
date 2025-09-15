@@ -228,7 +228,7 @@ class SentimentAnalyzer:
     
     async def _extract_keywords(self, text: str) -> List[Dict[str, Any]]:
         """
-        Extract keywords with sentiment scores.
+        Extract keywords with sentiment scores using ML-based processing.
         
         Args:
             text: The text to extract keywords from
@@ -236,19 +236,95 @@ class SentimentAnalyzer:
         Returns:
             List of keywords with sentiment information
         """
-        # Financial keywords to look for in text
+        # Try ML-based keyword extraction first
+        try:
+            from app.services.keyword_ml_processor import extract_ml_keywords
+            
+            # Prepare context for ML extraction
+            context = {
+                'sentiment': 'neutral',  # Will be updated with actual sentiment
+                'event_type': 'market_movement',
+                'commodity': None
+            }
+            
+            # Try to get preprocessing context
+            try:
+                from app.services.news_preprocessing import preprocess_news
+                preprocessing_result = preprocess_news(text)
+                context.update({
+                    'event_type': preprocessing_result.get('event_type', 'market_movement'),
+                    'commodity': preprocessing_result.get('commodity'),
+                    'market_impact': preprocessing_result.get('market_impact', 'neutral')
+                })
+                trigger_keywords = preprocessing_result.get('trigger_keywords', [])
+            except:
+                trigger_keywords = []
+                preprocessing_result = {}
+            
+            # Get ML-based keywords
+            ml_keywords = extract_ml_keywords(text, context)
+            
+            # If ML extraction successful, return enhanced results
+            if ml_keywords:
+                return ml_keywords[:10]  # Return top 10 ML-scored keywords
+                
+        except ImportError:
+            # ML processor not available, continue with fallback
+            pass
+        except Exception as e:
+            logger.error(f"ML keyword extraction failed: {e}")
+        
+        # Fallback to original extraction method
+        try:
+            from app.services.news_preprocessing import preprocess_news, EVENT_TYPE_KEYWORDS, MARKET_IMPACT_KEYWORDS
+            preprocessing_result = preprocess_news(text)
+            trigger_keywords = preprocessing_result.get('trigger_keywords', [])
+        except:
+            trigger_keywords = []
+        
+        # Comprehensive financial keywords including geopolitical and event-driven terms
         important_words = [
-            "OPEC", "oil", "production", "cut", "barrel", "price", "market", "supply", "demand", 
+            # Market fundamentals
+            "OPEC", "oil", "production", "cut", "barrel", "price", "market", "supply", "demand",
             "inflation", "interest rate", "Fed", "reserve", "bank", "recession", "growth", "GDP",
-            "earnings", "profit", "loss", "rally", "decline", "bullish", "bearish", "volatility"
+            "earnings", "profit", "loss", "rally", "decline", "bullish", "bearish", "volatility",
+            
+            # Supply disruption terms
+            "shortage", "oversupply", "surplus", "inventory", "stockpile", "drawdown", "build",
+            "disruption", "outage", "shutdown", "strike", "maintenance", "closure", "halt",
+            
+            # Geopolitical terms
+            "sanctions", "tensions", "conflict", "war", "attacks", "military", "diplomatic",
+            "Iran", "Russia", "Saudi", "embargo", "blockade", "crisis", "escalate",
+            
+            # Infrastructure terms
+            "pipeline", "refinery", "terminal", "facilities", "port", "tanker", "storage",
+            "explosion", "fire", "accident", "rupture", "damage", "repair",
+            
+            # Weather and natural events
+            "drought", "flood", "hurricane", "freeze", "heat wave", "El Niño", "La Niña",
+            
+            # Trade and policy
+            "tariff", "quota", "export ban", "import", "regulation", "policy", "restriction"
         ]
         
         keywords = []
+        found_words = set()  # Track found words to avoid duplicates
         
+        # First, add trigger keywords from preprocessing (highest priority)
+        for keyword in trigger_keywords[:10]:  # Take top 10 from preprocessing
+            if keyword and keyword not in found_words:
+                found_words.add(keyword.lower())
+                keywords.append({
+                    "word": keyword,
+                    "sentiment": "contextual",
+                    "score": 0.9  # High score for preprocessing keywords
+                })
+        
+        # Then check for important words in text
         for word in important_words:
-            if word.lower() in text.lower():
+            if word.lower() in text.lower() and word.lower() not in found_words:
                 # For each found keyword, analyze its local sentiment context
-                # In a real implementation, this would use more advanced NLP techniques
                 try:
                     # Simple window-based approach (would be better with proper NLP parsing)
                     word_index = text.lower().find(word.lower())
@@ -265,11 +341,31 @@ class SentimentAnalyzer:
                         "sentiment": sentiment_label,
                         "score": abs(sentiment_score)
                     })
+                    found_words.add(word.lower())
                 except Exception as e:
                     logger.error(f"Error analyzing keyword context: {str(e)}")
         
-        # Sort by score and take top 5
-        keywords = sorted(keywords, key=lambda x: x["score"], reverse=True)[:5]
+        # Sort by score and take top 10 for better coverage
+        keywords = sorted(keywords, key=lambda x: x["score"], reverse=True)[:10]
+        
+        # Ensure proper formatting for frontend
+        formatted_keywords = []
+        for kw in keywords:
+            # Clean up multi-word keywords for display
+            word = kw['word']
+            if len(word.split()) > 2:  # Limit to 2-word phrases
+                word = ' '.join(word.split()[:2])
+            
+            formatted_keywords.append({
+                'word': word,
+                'text': word,  # Include both for compatibility
+                'score': round(kw['score'], 2),
+                'sentiment': kw.get('sentiment', 'neutral'),
+                'type': kw.get('type', 'extracted'),
+                'importance': kw.get('importance', 0)
+            })
+        
+        keywords = formatted_keywords
         
         return keywords
     

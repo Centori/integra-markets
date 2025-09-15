@@ -27,8 +27,8 @@ Important guidelines:
 class GroqService {
     constructor() {
         this.apiKey = GROQ_API_KEY;
-        // Updated to use currently supported model
-        this.model = 'llama3-70b-8192'; // Llama 3 70B with 8k context
+        // Updated to use currently supported model (as of Jan 2025)
+        this.model = 'llama-3.3-70b-versatile'; // Llama 3.3 70B - the latest available model
     }
 
     async sendMessage(messages, newsContext = null, onStreamUpdate = null) {
@@ -125,19 +125,14 @@ class GroqService {
     getAvailableModels() {
         return [
             {
-                id: 'llama3-70b-8192',
-                name: 'Llama 3 70B',
-                description: 'Best for complex analysis and reasoning'
+                id: 'llama-3.3-70b-versatile',
+                name: 'Llama 3.3 70B',
+                description: 'Latest and most capable model for complex analysis'
             },
             {
-                id: 'llama3-8b-8192',
-                name: 'Llama 3 8B',
-                description: 'Faster responses, good for quick questions'
-            },
-            {
-                id: 'mixtral-8x7b-32768',
-                name: 'Mixtral 8x7B',
-                description: 'Good balance of speed and quality'
+                id: 'llama-3.1-8b-instant',
+                name: 'Llama 3.1 8B',
+                description: 'Fast responses for quick questions'
             },
             {
                 id: 'gemma2-9b-it',

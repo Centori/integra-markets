@@ -110,6 +110,35 @@ class NewsDataSources:
             logger.error(f"Error fetching Reuters news: {e}")
             return []
     
+    async def fetch_oilprice_news(self) -> List[Dict]:
+        """Fetch OilPrice.com articles"""
+        try:
+            # OilPrice.com RSS feed
+            url = "https://oilprice.com/rss/main"
+            
+            async with self.session.get(url) as response:
+                if response.status == 200:
+                    content = await response.text()
+                    feed = feedparser.parse(content)
+                    
+                    articles = []
+                    for entry in feed.entries[:15]:  # Get latest 15 articles
+                        articles.append({
+                            'source': 'OilPrice.com',
+                            'title': entry.title,
+                            'summary': getattr(entry, 'summary', ''),
+                            'url': entry.link,
+                            'published': self._parse_date(entry.published),
+                            'category': 'energy'
+                        })
+                    
+                    logger.info(f"Fetched {len(articles)} OilPrice.com articles")
+                    return articles
+                    
+        except Exception as e:
+            logger.error(f"Error fetching OilPrice.com news: {e}")
+            return []
+    
     async def fetch_yahoo_finance_commodities(self) -> List[Dict]:
         """Fetch Yahoo Finance commodities news via RSS"""
         try:

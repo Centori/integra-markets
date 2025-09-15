@@ -205,7 +205,7 @@ export const fetchNewsAnalysis = async (preferences = {}) => {
         max_articles: preferences.maxArticles || 20,
         sources: preferences.sources || null,
         commodity_filter: preferences.commodity || null,
-        hours_back: preferences.hoursBack || 24,
+        hours_back: preferences.hoursBack || 12, // Default to 12 hours for fresher content
         enhanced_content: enhancedContent,
         max_enhanced: enhancedContent ? (preferences.maxEnhanced || 3) : 0
       })
@@ -218,11 +218,14 @@ export const fetchNewsAnalysis = async (preferences = {}) => {
     }
     
     const data = await response.json();
-    const articles = data.articles || [];
+    // Handle both array response (current) and object with articles property (future)
+    const articles = Array.isArray(data) ? data : (data.articles || []);
+    const sourcesUsed = Array.isArray(data) ? [] : (data.sources_used || []);
+    const status = Array.isArray(data) ? 'success' : (data.status || 'success');
     
-    console.log(`✅ Real news data fetched: ${articles.length} articles from ${data.sources_used?.join(', ') || 'various sources'}`);
+    console.log(`✅ Real news data fetched: ${articles.length} articles from ${sourcesUsed.length > 0 ? sourcesUsed.join(', ') : 'various sources'}`);
     
-    if (data.status === 'fallback') {
+    if (status === 'fallback') {
       console.warn('⚠️  Using fallback mock data - news sources not available on backend');
     }
     
@@ -439,7 +442,12 @@ export const dashboardApi = {
         },
         body: JSON.stringify({})
       });
-      const newsData = newsResponse.ok ? await newsResponse.json() : [];
+      let newsData = [];
+      if (newsResponse.ok) {
+        const rawNews = await newsResponse.json();
+        // Handle both array and object responses
+        newsData = Array.isArray(rawNews) ? rawNews : (rawNews.articles || []);
+      }
       
       return {
         status: 'success',

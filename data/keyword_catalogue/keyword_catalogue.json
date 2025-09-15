@@ -1,0 +1,1777 @@
+{
+  "keyword_index": {
+    "oil": 0,
+    "iran": 1,
+    "major supply": 2,
+    "supply disruption": 3,
+    "disruption": 4,
+    "tensions escalate": 5,
+    "sanctions": 6,
+    "imposed": 7,
+    "russia": 8,
+    "port": 9,
+    "saudi arabia": 10,
+    "with production": 11,
+    "production cuts": 12,
+    "production cut": 13,
+    "crude": 14,
+    "severe drought": 15,
+    "drought": 16,
+    "wheat": 17,
+    "harvest": 18,
+    "ukraine": 19,
+    "blockade": 20,
+    "opec": 21,
+    "surprise production": 22,
+    "production increase": 23,
+    "weakening demand": 24,
+    "demand": 25,
+    "oversupply": 26,
+    "oversupply fears": 27,
+    "recession": 28,
+    "oil prices": 29,
+    "prices plunge": 30,
+    "rice": 31,
+    "ice": 32,
+    "pipeline explosion": 33,
+    "pipeline": 34,
+    "explosion": 35,
+    "nigeria": 36,
+    "terminal": 37,
+    "force majeure": 38,
+    "shutdown": 39,
+    "expected": 40,
+    "china": 41,
+    "petroleum": 42,
+    "demand destruction": 43,
+    "tin": 44,
+    "inflation demand": 45
+  },
+  "index_keyword": {
+    "0": "oil",
+    "1": "iran",
+    "2": "major supply",
+    "3": "supply disruption",
+    "4": "disruption",
+    "5": "tensions escalate",
+    "6": "sanctions",
+    "7": "imposed",
+    "8": "russia",
+    "9": "port",
+    "10": "saudi arabia",
+    "11": "with production",
+    "12": "production cuts",
+    "13": "production cut",
+    "14": "crude",
+    "15": "severe drought",
+    "16": "drought",
+    "17": "wheat",
+    "18": "harvest",
+    "19": "ukraine",
+    "20": "blockade",
+    "21": "opec",
+    "22": "surprise production",
+    "23": "production increase",
+    "24": "weakening demand",
+    "25": "demand",
+    "26": "oversupply",
+    "27": "oversupply fears",
+    "28": "recession",
+    "29": "oil prices",
+    "30": "prices plunge",
+    "31": "rice",
+    "32": "ice",
+    "33": "pipeline explosion",
+    "34": "pipeline",
+    "35": "explosion",
+    "36": "nigeria",
+    "37": "terminal",
+    "38": "force majeure",
+    "39": "shutdown",
+    "40": "expected",
+    "41": "china",
+    "42": "petroleum",
+    "43": "demand destruction",
+    "44": "tin",
+    "45": "inflation demand"
+  },
+  "keyword_stats": {
+    "oil": {
+      "frequency": 13,
+      "impact_scores": [
+        0.0,
+        0.0,
+        7.904000000000001,
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        14.4,
+        0.0,
+        0.0,
+        3.125,
+        0.0,
+        0.0
+      ],
+      "sentiment_associations": {
+        "neutral": 5,
+        "BULLISH": 3,
+        "bullish": 2,
+        "BEARISH": 2,
+        "bearish": 1
+      },
+      "co_occurrences": {
+        "iran": 3,
+        "major supply": 3,
+        "supply disruption": 5,
+        "disruption": 3,
+        "tensions escalate": 11,
+        "sanctions": 3,
+        "imposed": 3,
+        "russia": 5,
+        "port": 5,
+        "severe drought": 2,
+        "drought": 2,
+        "wheat": 2,
+        "harvest": 2,
+        "ukraine": 2,
+        "blockade": 2,
+        "opec": 3,
+        "surprise production": 5,
+        "production increase": 5,
+        "weakening demand": 5,
+        "demand": 5,
+        "oversupply": 5,
+        "oversupply fears": 3,
+        "recession": 5,
+        "crude": 3,
+        "pipeline explosion": 3,
+        "pipeline": 3,
+        "explosion": 3,
+        "nigeria": 3,
+        "terminal": 3,
+        "force majeure": 3,
+        "shutdown": 3,
+        "china": 2,
+        "petroleum": 2,
+        "demand destruction": 2,
+        "tin": 2
+      },
+      "market_correlations": [
+        5.2,
+        -8.0,
+        2.5
+      ],
+      "cluster_id": null,
+      "importance_score": 1.9560769230769233,
+      "last_updated": "2025-09-15T08:35:55.183372"
+    },
+    "iran": {
+      "frequency": 4,
+      "impact_scores": [
+        0.0,
+        0.0,
+        7.904000000000001,
+        0.0
+      ],
+      "sentiment_associations": {
+        "neutral": 2,
+        "BULLISH": 1,
+        "bullish": 1
+      },
+      "co_occurrences": {
+        "oil": 3,
+        "major supply": 3,
+        "supply disruption": 4,
+        "disruption": 3,
+        "tensions escalate": 4,
+        "sanctions": 3,
+        "imposed": 3,
+        "russia": 4,
+        "port": 4,
+        "severe drought": 1,
+        "drought": 1,
+        "wheat": 1,
+        "harvest": 1,
+        "ukraine": 1,
+        "blockade": 1
+      },
+      "market_correlations": [
+        5.2
+      ],
+      "cluster_id": null,
+      "importance_score": 1.9760000000000002,
+      "last_updated": "2025-09-15T08:35:55.173119"
+    },
+    "major supply": {
+      "frequency": 5,
+      "impact_scores": [
+        0.0,
+        0.0,
+        7.904000000000001,
+        0.0,
+        0.0
+      ],
+      "sentiment_associations": {
+        "neutral": 2,
+        "BULLISH": 2,
+        "bullish": 1
+      },
+      "co_occurrences": {
+        "oil": 3,
+        "iran": 3,
+        "supply disruption": 5,
+        "disruption": 3,
+        "tensions escalate": 5,
+        "sanctions": 3,
+        "imposed": 3,
+        "russia": 5,
+        "port": 5,
+        "severe drought": 2,
+        "drought": 2,
+        "wheat": 2,
+        "harvest": 2,
+        "ukraine": 2,
+        "blockade": 2
+      },
+      "market_correlations": [
+        5.2
+      ],
+      "cluster_id": null,
+      "importance_score": 1.5808000000000002,
+      "last_updated": "2025-09-15T08:35:55.175748"
+    },
+    "supply disruption": {
+      "frequency": 6,
+      "impact_scores": [
+        0.0,
+        0.0,
+        7.904000000000001,
+        0.0,
+        0.0,
+        5.244
+      ],
+      "sentiment_associations": {
+        "neutral": 2,
+        "BULLISH": 2,
+        "bullish": 2
+      },
+      "co_occurrences": {
+        "oil": 3,
+        "iran": 3,
+        "major supply": 3,
+        "disruption": 3,
+        "tensions escalate": 6,
+        "sanctions": 3,
+        "imposed": 3,
+        "russia": 6,
+        "port": 6,
+        "severe drought": 3,
+        "drought": 3,
+        "wheat": 3,
+        "harvest": 3,
+        "ukraine": 3,
+        "blockade": 3
+      },
+      "market_correlations": [
+        5.2,
+        3.8
+      ],
+      "cluster_id": null,
+      "importance_score": 2.191333333333333,
+      "last_updated": "2025-09-15T08:35:55.175870"
+    },
+    "disruption": {
+      "frequency": 5,
+      "impact_scores": [
+        0.0,
+        0.0,
+        7.904000000000001,
+        0.0,
+        0.0
+      ],
+      "sentiment_associations": {
+        "neutral": 2,
+        "BULLISH": 2,
+        "bullish": 1
+      },
+      "co_occurrences": {
+        "oil": 3,
+        "iran": 3,
+        "major supply": 3,
+        "supply disruption": 5,
+        "tensions escalate": 5,
+        "sanctions": 3,
+        "imposed": 3,
+        "russia": 5,
+        "port": 5,
+        "severe drought": 2,
+        "drought": 2,
+        "wheat": 2,
+        "harvest": 2,
+        "ukraine": 2,
+        "blockade": 2
+      },
+      "market_correlations": [
+        5.2
+      ],
+      "cluster_id": null,
+      "importance_score": 1.5808000000000002,
+      "last_updated": "2025-09-15T08:35:55.175756"
+    },
+    "tensions escalate": {
+      "frequency": 14,
+      "impact_scores": [
+        0.0,
+        0.0,
+        7.904000000000001,
+        0.0,
+        0.0,
+        5.244,
+        0.0,
+        0.0,
+        14.4,
+        0.0,
+        0.0,
+        3.125,
+        0.0,
+        0.0
+      ],
+      "sentiment_associations": {
+        "neutral": 5,
+        "BULLISH": 3,
+        "bullish": 3,
+        "BEARISH": 2,
+        "bearish": 1
+      },
+      "co_occurrences": {
+        "oil": 9,
+        "iran": 3,
+        "major supply": 3,
+        "supply disruption": 6,
+        "disruption": 3,
+        "sanctions": 3,
+        "imposed": 3,
+        "russia": 6,
+        "port": 6,
+        "severe drought": 3,
+        "drought": 3,
+        "wheat": 3,
+        "harvest": 3,
+        "ukraine": 3,
+        "blockade": 3,
+        "opec": 3,
+        "surprise production": 5,
+        "production increase": 5,
+        "weakening demand": 5,
+        "demand": 5,
+        "oversupply": 5,
+        "oversupply fears": 3,
+        "recession": 5,
+        "crude": 3,
+        "pipeline explosion": 3,
+        "pipeline": 3,
+        "explosion": 3,
+        "nigeria": 3,
+        "terminal": 3,
+        "force majeure": 3,
+        "shutdown": 3,
+        "china": 2,
+        "petroleum": 2,
+        "demand destruction": 2,
+        "tin": 2
+      },
+      "market_correlations": [
+        5.2,
+        3.8,
+        -8.0,
+        2.5
+      ],
+      "cluster_id": null,
+      "importance_score": 2.1909285714285716,
+      "last_updated": "2025-09-15T08:35:55.183390"
+    },
+    "sanctions": {
+      "frequency": 4,
+      "impact_scores": [
+        0.0,
+        0.0,
+        7.904000000000001,
+        0.0
+      ],
+      "sentiment_associations": {
+        "neutral": 1,
+        "BULLISH": 2,
+        "bullish": 1
+      },
+      "co_occurrences": {
+        "oil": 3,
+        "iran": 3,
+        "major supply": 3,
+        "supply disruption": 4,
+        "disruption": 3,
+        "tensions escalate": 4,
+        "imposed": 3,
+        "russia": 4,
+        "port": 4,
+        "severe drought": 1,
+        "drought": 1,
+        "wheat": 1,
+        "harvest": 1,
+        "ukraine": 1,
+        "blockade": 1
+      },
+      "market_correlations": [
+        5.2
+      ],
+      "cluster_id": null,
+      "importance_score": 1.9760000000000002,
+      "last_updated": "2025-09-15T08:35:55.175766"
+    },
+    "imposed": {
+      "frequency": 5,
+      "impact_scores": [
+        0.0,
+        0.0,
+        7.904000000000001,
+        0.0,
+        0.0
+      ],
+      "sentiment_associations": {
+        "neutral": 2,
+        "BULLISH": 2,
+        "bullish": 1
+      },
+      "co_occurrences": {
+        "oil": 3,
+        "iran": 3,
+        "major supply": 3,
+        "supply disruption": 5,
+        "disruption": 3,
+        "tensions escalate": 5,
+        "sanctions": 3,
+        "russia": 5,
+        "port": 5,
+        "severe drought": 2,
+        "drought": 2,
+        "wheat": 2,
+        "harvest": 2,
+        "ukraine": 2,
+        "blockade": 2
+      },
+      "market_correlations": [
+        5.2
+      ],
+      "cluster_id": null,
+      "importance_score": 1.5808000000000002,
+      "last_updated": "2025-09-15T08:35:55.175740"
+    },
+    "russia": {
+      "frequency": 6,
+      "impact_scores": [
+        0.0,
+        0.0,
+        7.904000000000001,
+        0.0,
+        0.0,
+        5.244
+      ],
+      "sentiment_associations": {
+        "neutral": 2,
+        "BULLISH": 2,
+        "bullish": 2
+      },
+      "co_occurrences": {
+        "oil": 3,
+        "iran": 3,
+        "major supply": 3,
+        "supply disruption": 6,
+        "disruption": 3,
+        "tensions escalate": 6,
+        "sanctions": 3,
+        "imposed": 3,
+        "port": 6,
+        "severe drought": 3,
+        "drought": 3,
+        "wheat": 3,
+        "harvest": 3,
+        "ukraine": 3,
+        "blockade": 3
+      },
+      "market_correlations": [
+        5.2,
+        3.8
+      ],
+      "cluster_id": null,
+      "importance_score": 2.191333333333333,
+      "last_updated": "2025-09-15T08:35:55.175878"
+    },
+    "port": {
+      "frequency": 6,
+      "impact_scores": [
+        0.0,
+        0.0,
+        7.904000000000001,
+        0.0,
+        0.0,
+        5.244
+      ],
+      "sentiment_associations": {
+        "neutral": 2,
+        "BULLISH": 2,
+        "bullish": 2
+      },
+      "co_occurrences": {
+        "oil": 3,
+        "iran": 3,
+        "major supply": 3,
+        "supply disruption": 6,
+        "disruption": 3,
+        "tensions escalate": 6,
+        "sanctions": 3,
+        "imposed": 3,
+        "russia": 6,
+        "severe drought": 3,
+        "drought": 3,
+        "wheat": 3,
+        "harvest": 3,
+        "ukraine": 3,
+        "blockade": 3
+      },
+      "market_correlations": [
+        5.2,
+        3.8
+      ],
+      "cluster_id": null,
+      "importance_score": 2.191333333333333,
+      "last_updated": "2025-09-15T08:35:55.175822"
+    },
+    "saudi arabia": {
+      "frequency": 2,
+      "impact_scores": [
+        0.0,
+        0.0
+      ],
+      "sentiment_associations": {
+        "neutral": 1,
+        "BULLISH": 1
+      },
+      "co_occurrences": {
+        "oil": 2,
+        "iran": 2,
+        "major supply": 2,
+        "supply disruption": 2,
+        "disruption": 2,
+        "tensions escalate": 2,
+        "sanctions": 2,
+        "imposed": 2,
+        "russia": 2,
+        "port": 2
+      },
+      "market_correlations": [],
+      "cluster_id": null,
+      "importance_score": 0.0,
+      "last_updated": "2025-09-15T08:35:55.170899"
+    },
+    "with production": {
+      "frequency": 2,
+      "impact_scores": [
+        0.0,
+        0.0
+      ],
+      "sentiment_associations": {
+        "neutral": 1,
+        "BULLISH": 1
+      },
+      "co_occurrences": {
+        "oil": 2,
+        "iran": 2,
+        "major supply": 2,
+        "supply disruption": 2,
+        "disruption": 2,
+        "tensions escalate": 2,
+        "sanctions": 2,
+        "imposed": 2,
+        "russia": 2,
+        "port": 2
+      },
+      "market_correlations": [],
+      "cluster_id": null,
+      "importance_score": 0.0,
+      "last_updated": "2025-09-15T08:35:55.170912"
+    },
+    "production cuts": {
+      "frequency": 2,
+      "impact_scores": [
+        0.0,
+        0.0
+      ],
+      "sentiment_associations": {
+        "neutral": 1,
+        "BULLISH": 1
+      },
+      "co_occurrences": {
+        "oil": 2,
+        "iran": 2,
+        "major supply": 2,
+        "supply disruption": 2,
+        "disruption": 2,
+        "tensions escalate": 2,
+        "sanctions": 2,
+        "imposed": 2,
+        "russia": 2,
+        "port": 2
+      },
+      "market_correlations": [],
+      "cluster_id": null,
+      "importance_score": 0.0,
+      "last_updated": "2025-09-15T08:35:55.170923"
+    },
+    "production cut": {
+      "frequency": 2,
+      "impact_scores": [
+        0.0,
+        0.0
+      ],
+      "sentiment_associations": {
+        "neutral": 1,
+        "BULLISH": 1
+      },
+      "co_occurrences": {
+        "oil": 2,
+        "iran": 2,
+        "major supply": 2,
+        "supply disruption": 2,
+        "disruption": 2,
+        "tensions escalate": 2,
+        "sanctions": 2,
+        "imposed": 2,
+        "russia": 2,
+        "port": 2
+      },
+      "market_correlations": [],
+      "cluster_id": null,
+      "importance_score": 0.0,
+      "last_updated": "2025-09-15T08:35:55.170933"
+    },
+    "crude": {
+      "frequency": 5,
+      "impact_scores": [
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        3.125
+      ],
+      "sentiment_associations": {
+        "neutral": 2,
+        "BULLISH": 2,
+        "bullish": 1
+      },
+      "co_occurrences": {
+        "oil": 5,
+        "iran": 2,
+        "major supply": 2,
+        "supply disruption": 2,
+        "disruption": 2,
+        "tensions escalate": 5,
+        "sanctions": 2,
+        "imposed": 2,
+        "russia": 2,
+        "port": 2,
+        "pipeline explosion": 3,
+        "pipeline": 3,
+        "explosion": 3,
+        "nigeria": 3,
+        "terminal": 3,
+        "force majeure": 3,
+        "shutdown": 3
+      },
+      "market_correlations": [
+        2.5
+      ],
+      "cluster_id": null,
+      "importance_score": 0.625,
+      "last_updated": "2025-09-15T08:35:55.180752"
+    },
+    "severe drought": {
+      "frequency": 5,
+      "impact_scores": [
+        0.0,
+        0.0,
+        5.244,
+        0.0,
+        0.0
+      ],
+      "sentiment_associations": {
+        "neutral": 2,
+        "BULLISH": 2,
+        "bullish": 1
+      },
+      "co_occurrences": {
+        "port": 3,
+        "drought": 3,
+        "wheat": 3,
+        "harvest": 3,
+        "ukraine": 3,
+        "blockade": 3,
+        "russia": 3,
+        "supply disruption": 3,
+        "tensions escalate": 5,
+        "oil": 2,
+        "crude": 2,
+        "pipeline explosion": 2,
+        "pipeline": 2,
+        "explosion": 2,
+        "nigeria": 2,
+        "terminal": 2,
+        "force majeure": 2,
+        "shutdown": 2
+      },
+      "market_correlations": [
+        3.8
+      ],
+      "cluster_id": null,
+      "importance_score": 1.0488,
+      "last_updated": "2025-09-15T08:35:55.180698"
+    },
+    "drought": {
+      "frequency": 3,
+      "impact_scores": [
+        0.0,
+        0.0,
+        5.244
+      ],
+      "sentiment_associations": {
+        "neutral": 1,
+        "BULLISH": 1,
+        "bullish": 1
+      },
+      "co_occurrences": {
+        "port": 3,
+        "severe drought": 3,
+        "wheat": 3,
+        "harvest": 3,
+        "ukraine": 3,
+        "blockade": 3,
+        "russia": 3,
+        "supply disruption": 3,
+        "tensions escalate": 3
+      },
+      "market_correlations": [
+        3.8
+      ],
+      "cluster_id": null,
+      "importance_score": 1.748,
+      "last_updated": "2025-09-15T08:35:55.175840"
+    },
+    "wheat": {
+      "frequency": 7,
+      "impact_scores": [
+        0.0,
+        0.0,
+        5.244,
+        0.0,
+        0.0,
+        0.0,
+        0.0
+      ],
+      "sentiment_associations": {
+        "neutral": 3,
+        "BULLISH": 2,
+        "bullish": 1,
+        "BEARISH": 1
+      },
+      "co_occurrences": {
+        "port": 3,
+        "severe drought": 3,
+        "drought": 3,
+        "harvest": 3,
+        "ukraine": 3,
+        "blockade": 3,
+        "russia": 3,
+        "supply disruption": 3,
+        "tensions escalate": 7,
+        "oil": 4,
+        "opec": 2,
+        "surprise production": 2,
+        "production increase": 2,
+        "weakening demand": 2,
+        "demand": 2,
+        "oversupply": 2,
+        "oversupply fears": 2,
+        "recession": 2,
+        "crude": 2,
+        "pipeline explosion": 2,
+        "pipeline": 2,
+        "explosion": 2,
+        "nigeria": 2,
+        "terminal": 2,
+        "force majeure": 2,
+        "shutdown": 2
+      },
+      "market_correlations": [
+        3.8
+      ],
+      "cluster_id": null,
+      "importance_score": 0.7491428571428571,
+      "last_updated": "2025-09-15T08:35:55.180689"
+    },
+    "harvest": {
+      "frequency": 3,
+      "impact_scores": [
+        0.0,
+        0.0,
+        5.244
+      ],
+      "sentiment_associations": {
+        "neutral": 1,
+        "BULLISH": 1,
+        "bullish": 1
+      },
+      "co_occurrences": {
+        "port": 3,
+        "severe drought": 3,
+        "drought": 3,
+        "wheat": 3,
+        "ukraine": 3,
+        "blockade": 3,
+        "russia": 3,
+        "supply disruption": 3,
+        "tensions escalate": 3
+      },
+      "market_correlations": [
+        3.8
+      ],
+      "cluster_id": null,
+      "importance_score": 1.748,
+      "last_updated": "2025-09-15T08:35:55.175855"
+    },
+    "ukraine": {
+      "frequency": 3,
+      "impact_scores": [
+        0.0,
+        0.0,
+        5.244
+      ],
+      "sentiment_associations": {
+        "neutral": 1,
+        "BULLISH": 1,
+        "bullish": 1
+      },
+      "co_occurrences": {
+        "port": 3,
+        "severe drought": 3,
+        "drought": 3,
+        "wheat": 3,
+        "harvest": 3,
+        "blockade": 3,
+        "russia": 3,
+        "supply disruption": 3,
+        "tensions escalate": 3
+      },
+      "market_correlations": [
+        3.8
+      ],
+      "cluster_id": null,
+      "importance_score": 1.748,
+      "last_updated": "2025-09-15T08:35:55.175886"
+    },
+    "blockade": {
+      "frequency": 3,
+      "impact_scores": [
+        0.0,
+        0.0,
+        5.244
+      ],
+      "sentiment_associations": {
+        "neutral": 1,
+        "BULLISH": 1,
+        "bullish": 1
+      },
+      "co_occurrences": {
+        "port": 3,
+        "severe drought": 3,
+        "drought": 3,
+        "wheat": 3,
+        "harvest": 3,
+        "ukraine": 3,
+        "russia": 3,
+        "supply disruption": 3,
+        "tensions escalate": 3
+      },
+      "market_correlations": [
+        3.8
+      ],
+      "cluster_id": null,
+      "importance_score": 1.748,
+      "last_updated": "2025-09-15T08:35:55.175894"
+    },
+    "opec": {
+      "frequency": 7,
+      "impact_scores": [
+        0.0,
+        0.0,
+        14.4,
+        0.0,
+        0.0,
+        0.0,
+        0.0
+      ],
+      "sentiment_associations": {
+        "neutral": 3,
+        "BEARISH": 2,
+        "bearish": 1,
+        "BULLISH": 1
+      },
+      "co_occurrences": {
+        "oil": 5,
+        "surprise production": 5,
+        "production increase": 5,
+        "tensions escalate": 5,
+        "weakening demand": 5,
+        "demand": 5,
+        "oversupply": 5,
+        "oversupply fears": 3,
+        "recession": 5,
+        "crude": 2,
+        "pipeline explosion": 2,
+        "pipeline": 2,
+        "explosion": 2,
+        "nigeria": 2,
+        "terminal": 2,
+        "force majeure": 2,
+        "shutdown": 2,
+        "china": 2,
+        "petroleum": 2,
+        "demand destruction": 2,
+        "tin": 2
+      },
+      "market_correlations": [
+        -8.0
+      ],
+      "cluster_id": null,
+      "importance_score": 2.0571428571428574,
+      "last_updated": "2025-09-15T08:35:55.183380"
+    },
+    "surprise production": {
+      "frequency": 6,
+      "impact_scores": [
+        0.0,
+        0.0,
+        14.4,
+        0.0,
+        0.0,
+        4.224
+      ],
+      "sentiment_associations": {
+        "neutral": 2,
+        "BEARISH": 2,
+        "bearish": 2
+      },
+      "co_occurrences": {
+        "oil": 3,
+        "opec": 3,
+        "production increase": 6,
+        "tensions escalate": 3,
+        "weakening demand": 6,
+        "demand": 6,
+        "oversupply": 6,
+        "oversupply fears": 3,
+        "recession": 6,
+        "china": 3,
+        "petroleum": 3,
+        "demand destruction": 3,
+        "tin": 3
+      },
+      "market_correlations": [
+        -8.0,
+        -3.2
+      ],
+      "cluster_id": null,
+      "importance_score": 3.1040000000000005,
+      "last_updated": "2025-09-15T08:35:55.183506"
+    },
+    "production increase": {
+      "frequency": 6,
+      "impact_scores": [
+        0.0,
+        0.0,
+        14.4,
+        0.0,
+        0.0,
+        4.224
+      ],
+      "sentiment_associations": {
+        "neutral": 2,
+        "BEARISH": 2,
+        "bearish": 2
+      },
+      "co_occurrences": {
+        "oil": 3,
+        "opec": 3,
+        "surprise production": 6,
+        "tensions escalate": 3,
+        "weakening demand": 6,
+        "demand": 6,
+        "oversupply": 6,
+        "oversupply fears": 3,
+        "recession": 6,
+        "china": 3,
+        "petroleum": 3,
+        "demand destruction": 3,
+        "tin": 3
+      },
+      "market_correlations": [
+        -8.0,
+        -3.2
+      ],
+      "cluster_id": null,
+      "importance_score": 3.1040000000000005,
+      "last_updated": "2025-09-15T08:35:55.183483"
+    },
+    "weakening demand": {
+      "frequency": 6,
+      "impact_scores": [
+        0.0,
+        0.0,
+        14.4,
+        0.0,
+        0.0,
+        4.224
+      ],
+      "sentiment_associations": {
+        "neutral": 2,
+        "BEARISH": 2,
+        "bearish": 2
+      },
+      "co_occurrences": {
+        "oil": 3,
+        "opec": 3,
+        "surprise production": 6,
+        "production increase": 6,
+        "tensions escalate": 3,
+        "demand": 6,
+        "oversupply": 6,
+        "oversupply fears": 3,
+        "recession": 6,
+        "china": 3,
+        "petroleum": 3,
+        "demand destruction": 3,
+        "tin": 3
+      },
+      "market_correlations": [
+        -8.0,
+        -3.2
+      ],
+      "cluster_id": null,
+      "importance_score": 3.1040000000000005,
+      "last_updated": "2025-09-15T08:35:55.183499"
+    },
+    "demand": {
+      "frequency": 6,
+      "impact_scores": [
+        0.0,
+        0.0,
+        14.4,
+        0.0,
+        0.0,
+        4.224
+      ],
+      "sentiment_associations": {
+        "neutral": 2,
+        "BEARISH": 2,
+        "bearish": 2
+      },
+      "co_occurrences": {
+        "oil": 3,
+        "opec": 3,
+        "surprise production": 6,
+        "production increase": 6,
+        "tensions escalate": 3,
+        "weakening demand": 6,
+        "oversupply": 6,
+        "oversupply fears": 3,
+        "recession": 6,
+        "china": 3,
+        "petroleum": 3,
+        "demand destruction": 3,
+        "tin": 3
+      },
+      "market_correlations": [
+        -8.0,
+        -3.2
+      ],
+      "cluster_id": null,
+      "importance_score": 3.1040000000000005,
+      "last_updated": "2025-09-15T08:35:55.183451"
+    },
+    "oversupply": {
+      "frequency": 6,
+      "impact_scores": [
+        0.0,
+        0.0,
+        14.4,
+        0.0,
+        0.0,
+        4.224
+      ],
+      "sentiment_associations": {
+        "neutral": 2,
+        "BEARISH": 2,
+        "bearish": 2
+      },
+      "co_occurrences": {
+        "oil": 3,
+        "opec": 3,
+        "surprise production": 6,
+        "production increase": 6,
+        "tensions escalate": 3,
+        "weakening demand": 6,
+        "demand": 6,
+        "oversupply fears": 3,
+        "recession": 6,
+        "china": 3,
+        "petroleum": 3,
+        "demand destruction": 3,
+        "tin": 3
+      },
+      "market_correlations": [
+        -8.0,
+        -3.2
+      ],
+      "cluster_id": null,
+      "importance_score": 3.1040000000000005,
+      "last_updated": "2025-09-15T08:35:55.183491"
+    },
+    "oversupply fears": {
+      "frequency": 5,
+      "impact_scores": [
+        0.0,
+        0.0,
+        14.4,
+        0.0,
+        0.0
+      ],
+      "sentiment_associations": {
+        "neutral": 2,
+        "BEARISH": 2,
+        "bearish": 1
+      },
+      "co_occurrences": {
+        "oil": 3,
+        "opec": 3,
+        "surprise production": 5,
+        "production increase": 5,
+        "tensions escalate": 3,
+        "weakening demand": 5,
+        "demand": 5,
+        "oversupply": 5,
+        "recession": 5,
+        "china": 2,
+        "petroleum": 2,
+        "demand destruction": 2,
+        "tin": 2
+      },
+      "market_correlations": [
+        -8.0
+      ],
+      "cluster_id": null,
+      "importance_score": 2.88,
+      "last_updated": "2025-09-15T08:35:55.183398"
+    },
+    "recession": {
+      "frequency": 8,
+      "impact_scores": [
+        0.0,
+        0.0,
+        14.4,
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        4.224
+      ],
+      "sentiment_associations": {
+        "neutral": 3,
+        "BEARISH": 2,
+        "bearish": 2,
+        "BULLISH": 1
+      },
+      "co_occurrences": {
+        "oil": 5,
+        "opec": 3,
+        "surprise production": 6,
+        "production increase": 6,
+        "tensions escalate": 5,
+        "weakening demand": 6,
+        "demand": 6,
+        "oversupply": 6,
+        "oversupply fears": 3,
+        "crude": 2,
+        "pipeline explosion": 2,
+        "pipeline": 2,
+        "explosion": 2,
+        "nigeria": 2,
+        "terminal": 2,
+        "force majeure": 2,
+        "shutdown": 2,
+        "china": 3,
+        "petroleum": 3,
+        "demand destruction": 3,
+        "tin": 3
+      },
+      "market_correlations": [
+        -8.0,
+        -3.2
+      ],
+      "cluster_id": null,
+      "importance_score": 2.3280000000000003,
+      "last_updated": "2025-09-15T08:35:55.183476"
+    },
+    "oil prices": {
+      "frequency": 2,
+      "impact_scores": [
+        0.0,
+        0.0
+      ],
+      "sentiment_associations": {
+        "neutral": 1,
+        "BEARISH": 1
+      },
+      "co_occurrences": {
+        "oil": 2,
+        "opec": 2,
+        "surprise production": 2,
+        "production increase": 2,
+        "tensions escalate": 2,
+        "weakening demand": 2,
+        "demand": 2,
+        "oversupply": 2,
+        "oversupply fears": 2,
+        "recession": 2
+      },
+      "market_correlations": [],
+      "cluster_id": null,
+      "importance_score": 0.0,
+      "last_updated": "2025-09-15T08:35:55.178089"
+    },
+    "prices plunge": {
+      "frequency": 2,
+      "impact_scores": [
+        0.0,
+        0.0
+      ],
+      "sentiment_associations": {
+        "neutral": 1,
+        "BEARISH": 1
+      },
+      "co_occurrences": {
+        "oil": 2,
+        "opec": 2,
+        "surprise production": 2,
+        "production increase": 2,
+        "tensions escalate": 2,
+        "weakening demand": 2,
+        "demand": 2,
+        "oversupply": 2,
+        "oversupply fears": 2,
+        "recession": 2
+      },
+      "market_correlations": [],
+      "cluster_id": null,
+      "importance_score": 0.0,
+      "last_updated": "2025-09-15T08:35:55.178098"
+    },
+    "rice": {
+      "frequency": 2,
+      "impact_scores": [
+        0.0,
+        0.0
+      ],
+      "sentiment_associations": {
+        "neutral": 1,
+        "BEARISH": 1
+      },
+      "co_occurrences": {
+        "oil": 2,
+        "opec": 2,
+        "surprise production": 2,
+        "production increase": 2,
+        "tensions escalate": 2,
+        "weakening demand": 2,
+        "demand": 2,
+        "oversupply": 2,
+        "oversupply fears": 2,
+        "recession": 2
+      },
+      "market_correlations": [],
+      "cluster_id": null,
+      "importance_score": 0.0,
+      "last_updated": "2025-09-15T08:35:55.178109"
+    },
+    "ice": {
+      "frequency": 2,
+      "impact_scores": [
+        0.0,
+        0.0
+      ],
+      "sentiment_associations": {
+        "neutral": 1,
+        "BEARISH": 1
+      },
+      "co_occurrences": {
+        "oil": 2,
+        "opec": 2,
+        "surprise production": 2,
+        "production increase": 2,
+        "tensions escalate": 2,
+        "weakening demand": 2,
+        "demand": 2,
+        "oversupply": 2,
+        "oversupply fears": 2,
+        "recession": 2
+      },
+      "market_correlations": [],
+      "cluster_id": null,
+      "importance_score": 0.0,
+      "last_updated": "2025-09-15T08:35:55.178119"
+    },
+    "pipeline explosion": {
+      "frequency": 3,
+      "impact_scores": [
+        0.0,
+        0.0,
+        3.125
+      ],
+      "sentiment_associations": {
+        "neutral": 1,
+        "BULLISH": 1,
+        "bullish": 1
+      },
+      "co_occurrences": {
+        "oil": 3,
+        "tensions escalate": 3,
+        "crude": 3,
+        "pipeline": 3,
+        "explosion": 3,
+        "nigeria": 3,
+        "terminal": 3,
+        "force majeure": 3,
+        "shutdown": 3
+      },
+      "market_correlations": [
+        2.5
+      ],
+      "cluster_id": null,
+      "importance_score": 1.0416666666666667,
+      "last_updated": "2025-09-15T08:35:55.180760"
+    },
+    "pipeline": {
+      "frequency": 3,
+      "impact_scores": [
+        0.0,
+        0.0,
+        3.125
+      ],
+      "sentiment_associations": {
+        "neutral": 1,
+        "BULLISH": 1,
+        "bullish": 1
+      },
+      "co_occurrences": {
+        "oil": 3,
+        "tensions escalate": 3,
+        "crude": 3,
+        "pipeline explosion": 3,
+        "explosion": 3,
+        "nigeria": 3,
+        "terminal": 3,
+        "force majeure": 3,
+        "shutdown": 3
+      },
+      "market_correlations": [
+        2.5
+      ],
+      "cluster_id": null,
+      "importance_score": 1.0416666666666667,
+      "last_updated": "2025-09-15T08:35:55.180769"
+    },
+    "explosion": {
+      "frequency": 3,
+      "impact_scores": [
+        0.0,
+        0.0,
+        3.125
+      ],
+      "sentiment_associations": {
+        "neutral": 1,
+        "BULLISH": 1,
+        "bullish": 1
+      },
+      "co_occurrences": {
+        "oil": 3,
+        "tensions escalate": 3,
+        "crude": 3,
+        "pipeline explosion": 3,
+        "pipeline": 3,
+        "nigeria": 3,
+        "terminal": 3,
+        "force majeure": 3,
+        "shutdown": 3
+      },
+      "market_correlations": [
+        2.5
+      ],
+      "cluster_id": null,
+      "importance_score": 1.0416666666666667,
+      "last_updated": "2025-09-15T08:35:55.180777"
+    },
+    "nigeria": {
+      "frequency": 3,
+      "impact_scores": [
+        0.0,
+        0.0,
+        3.125
+      ],
+      "sentiment_associations": {
+        "neutral": 1,
+        "BULLISH": 1,
+        "bullish": 1
+      },
+      "co_occurrences": {
+        "oil": 3,
+        "tensions escalate": 3,
+        "crude": 3,
+        "pipeline explosion": 3,
+        "pipeline": 3,
+        "explosion": 3,
+        "terminal": 3,
+        "force majeure": 3,
+        "shutdown": 3
+      },
+      "market_correlations": [
+        2.5
+      ],
+      "cluster_id": null,
+      "importance_score": 1.0416666666666667,
+      "last_updated": "2025-09-15T08:35:55.180785"
+    },
+    "terminal": {
+      "frequency": 3,
+      "impact_scores": [
+        0.0,
+        0.0,
+        3.125
+      ],
+      "sentiment_associations": {
+        "neutral": 1,
+        "BULLISH": 1,
+        "bullish": 1
+      },
+      "co_occurrences": {
+        "oil": 3,
+        "tensions escalate": 3,
+        "crude": 3,
+        "pipeline explosion": 3,
+        "pipeline": 3,
+        "explosion": 3,
+        "nigeria": 3,
+        "force majeure": 3,
+        "shutdown": 3
+      },
+      "market_correlations": [
+        2.5
+      ],
+      "cluster_id": null,
+      "importance_score": 1.0416666666666667,
+      "last_updated": "2025-09-15T08:35:55.180793"
+    },
+    "force majeure": {
+      "frequency": 3,
+      "impact_scores": [
+        0.0,
+        0.0,
+        3.125
+      ],
+      "sentiment_associations": {
+        "neutral": 1,
+        "BULLISH": 1,
+        "bullish": 1
+      },
+      "co_occurrences": {
+        "oil": 3,
+        "tensions escalate": 3,
+        "crude": 3,
+        "pipeline explosion": 3,
+        "pipeline": 3,
+        "explosion": 3,
+        "nigeria": 3,
+        "terminal": 3,
+        "shutdown": 3
+      },
+      "market_correlations": [
+        2.5
+      ],
+      "cluster_id": null,
+      "importance_score": 1.0416666666666667,
+      "last_updated": "2025-09-15T08:35:55.180801"
+    },
+    "shutdown": {
+      "frequency": 3,
+      "impact_scores": [
+        0.0,
+        0.0,
+        3.125
+      ],
+      "sentiment_associations": {
+        "neutral": 1,
+        "BULLISH": 1,
+        "bullish": 1
+      },
+      "co_occurrences": {
+        "oil": 3,
+        "tensions escalate": 3,
+        "crude": 3,
+        "pipeline explosion": 3,
+        "pipeline": 3,
+        "explosion": 3,
+        "nigeria": 3,
+        "terminal": 3,
+        "force majeure": 3
+      },
+      "market_correlations": [
+        2.5
+      ],
+      "cluster_id": null,
+      "importance_score": 1.0416666666666667,
+      "last_updated": "2025-09-15T08:35:55.180808"
+    },
+    "expected": {
+      "frequency": 2,
+      "impact_scores": [
+        0.0,
+        0.0
+      ],
+      "sentiment_associations": {
+        "neutral": 1,
+        "BULLISH": 1
+      },
+      "co_occurrences": {
+        "oil": 2,
+        "tensions escalate": 2,
+        "crude": 2,
+        "pipeline explosion": 2,
+        "pipeline": 2,
+        "explosion": 2,
+        "nigeria": 2,
+        "terminal": 2,
+        "force majeure": 2,
+        "shutdown": 2
+      },
+      "market_correlations": [],
+      "cluster_id": null,
+      "importance_score": 0.0,
+      "last_updated": "2025-09-15T08:35:55.180653"
+    },
+    "china": {
+      "frequency": 3,
+      "impact_scores": [
+        0.0,
+        0.0,
+        4.224
+      ],
+      "sentiment_associations": {
+        "neutral": 1,
+        "BEARISH": 1,
+        "bearish": 1
+      },
+      "co_occurrences": {
+        "demand": 3,
+        "petroleum": 3,
+        "demand destruction": 3,
+        "tin": 3,
+        "production increase": 3,
+        "weakening demand": 3,
+        "surprise production": 3,
+        "recession": 3,
+        "oversupply": 3
+      },
+      "market_correlations": [
+        -3.2
+      ],
+      "cluster_id": null,
+      "importance_score": 1.4080000000000001,
+      "last_updated": "2025-09-15T08:35:55.183459"
+    },
+    "petroleum": {
+      "frequency": 3,
+      "impact_scores": [
+        0.0,
+        0.0,
+        4.224
+      ],
+      "sentiment_associations": {
+        "neutral": 1,
+        "BEARISH": 1,
+        "bearish": 1
+      },
+      "co_occurrences": {
+        "demand": 3,
+        "china": 3,
+        "demand destruction": 3,
+        "tin": 3,
+        "production increase": 3,
+        "weakening demand": 3,
+        "surprise production": 3,
+        "recession": 3,
+        "oversupply": 3
+      },
+      "market_correlations": [
+        -3.2
+      ],
+      "cluster_id": null,
+      "importance_score": 1.4080000000000001,
+      "last_updated": "2025-09-15T08:35:55.183467"
+    },
+    "demand destruction": {
+      "frequency": 3,
+      "impact_scores": [
+        0.0,
+        0.0,
+        4.224
+      ],
+      "sentiment_associations": {
+        "neutral": 1,
+        "BEARISH": 1,
+        "bearish": 1
+      },
+      "co_occurrences": {
+        "demand": 3,
+        "china": 3,
+        "petroleum": 3,
+        "tin": 3,
+        "production increase": 3,
+        "weakening demand": 3,
+        "surprise production": 3,
+        "recession": 3,
+        "oversupply": 3
+      },
+      "market_correlations": [
+        -3.2
+      ],
+      "cluster_id": null,
+      "importance_score": 1.4080000000000001,
+      "last_updated": "2025-09-15T08:35:55.183514"
+    },
+    "tin": {
+      "frequency": 3,
+      "impact_scores": [
+        0.0,
+        0.0,
+        4.224
+      ],
+      "sentiment_associations": {
+        "neutral": 1,
+        "BEARISH": 1,
+        "bearish": 1
+      },
+      "co_occurrences": {
+        "demand": 3,
+        "china": 3,
+        "petroleum": 3,
+        "demand destruction": 3,
+        "production increase": 3,
+        "weakening demand": 3,
+        "surprise production": 3,
+        "recession": 3,
+        "oversupply": 3
+      },
+      "market_correlations": [
+        -3.2
+      ],
+      "cluster_id": null,
+      "importance_score": 1.4080000000000001,
+      "last_updated": "2025-09-15T08:35:55.183521"
+    },
+    "inflation demand": {
+      "frequency": 2,
+      "impact_scores": [
+        0.0,
+        0.0
+      ],
+      "sentiment_associations": {
+        "neutral": 1,
+        "BEARISH": 1
+      },
+      "co_occurrences": {
+        "demand": 2,
+        "china": 2,
+        "petroleum": 2,
+        "demand destruction": 2,
+        "tin": 2,
+        "production increase": 2,
+        "weakening demand": 2,
+        "surprise production": 2,
+        "recession": 2,
+        "oversupply": 2
+      },
+      "market_correlations": [],
+      "cluster_id": null,
+      "importance_score": 0.0,
+      "last_updated": "2025-09-15T08:35:55.183407"
+    }
+  },
+  "keyword_clusters": {},
+  "keyword_graph": {
+    "oil": "{'wheat', 'recession', 'prices plunge', 'oil prices', 'opec', 'expected', 'tin', 'tensions escalate', 'nigeria', 'with production', 'demand destruction', 'saudi arabia', 'severe drought', 'production cuts', 'drought', 'production increase', 'oversupply', 'crude', 'rice', 'supply disruption', 'production cut', 'petroleum', 'explosion', 'iran', 'ukraine', 'imposed', 'blockade', 'demand', 'oversupply fears', 'pipeline', 'force majeure', 'russia', 'surprise production', 'weakening demand', 'ice', 'pipeline explosion', 'terminal', 'major supply', 'china', 'shutdown', 'disruption', 'harvest', 'sanctions', 'port'}",
+    "iran": "{'wheat', 'oil', 'tensions escalate', 'with production', 'saudi arabia', 'severe drought', 'production cuts', 'drought', 'crude', 'supply disruption', 'production cut', 'ukraine', 'imposed', 'blockade', 'russia', 'major supply', 'disruption', 'harvest', 'sanctions', 'port'}",
+    "major supply": "{'wheat', 'oil', 'tensions escalate', 'with production', 'saudi arabia', 'severe drought', 'production cuts', 'drought', 'crude', 'supply disruption', 'production cut', 'iran', 'ukraine', 'imposed', 'blockade', 'russia', 'disruption', 'harvest', 'sanctions', 'port'}",
+    "supply disruption": "{'wheat', 'oil', 'tensions escalate', 'with production', 'saudi arabia', 'severe drought', 'production cuts', 'drought', 'crude', 'production cut', 'iran', 'ukraine', 'imposed', 'blockade', 'russia', 'major supply', 'disruption', 'harvest', 'sanctions', 'port'}",
+    "disruption": "{'wheat', 'oil', 'tensions escalate', 'with production', 'saudi arabia', 'severe drought', 'production cuts', 'drought', 'crude', 'supply disruption', 'production cut', 'iran', 'ukraine', 'imposed', 'blockade', 'russia', 'major supply', 'harvest', 'sanctions', 'port'}",
+    "tensions escalate": "{'wheat', 'recession', 'prices plunge', 'oil', 'oil prices', 'opec', 'expected', 'tin', 'nigeria', 'with production', 'demand destruction', 'saudi arabia', 'severe drought', 'production cuts', 'drought', 'production increase', 'oversupply', 'crude', 'rice', 'supply disruption', 'production cut', 'petroleum', 'explosion', 'iran', 'ukraine', 'imposed', 'blockade', 'demand', 'oversupply fears', 'pipeline', 'force majeure', 'russia', 'surprise production', 'weakening demand', 'ice', 'pipeline explosion', 'terminal', 'major supply', 'china', 'shutdown', 'disruption', 'harvest', 'sanctions', 'port'}",
+    "sanctions": "{'wheat', 'oil', 'tensions escalate', 'with production', 'saudi arabia', 'severe drought', 'production cuts', 'drought', 'crude', 'supply disruption', 'production cut', 'iran', 'ukraine', 'imposed', 'blockade', 'russia', 'major supply', 'disruption', 'harvest', 'port'}",
+    "imposed": "{'wheat', 'oil', 'tensions escalate', 'with production', 'saudi arabia', 'severe drought', 'production cuts', 'drought', 'crude', 'supply disruption', 'production cut', 'iran', 'ukraine', 'blockade', 'russia', 'major supply', 'disruption', 'harvest', 'sanctions', 'port'}",
+    "russia": "{'wheat', 'oil', 'tensions escalate', 'with production', 'saudi arabia', 'severe drought', 'production cuts', 'drought', 'crude', 'supply disruption', 'production cut', 'iran', 'ukraine', 'imposed', 'blockade', 'major supply', 'disruption', 'harvest', 'sanctions', 'port'}",
+    "port": "{'wheat', 'oil', 'tensions escalate', 'with production', 'saudi arabia', 'severe drought', 'production cuts', 'drought', 'crude', 'supply disruption', 'production cut', 'ukraine', 'imposed', 'blockade', 'russia', 'major supply', 'disruption', 'harvest', 'sanctions', 'iran'}",
+    "saudi arabia": "{'russia', 'port', 'supply disruption', 'tensions escalate', 'major supply', 'oil', 'disruption', 'imposed', 'sanctions', 'iran'}",
+    "with production": "{'russia', 'port', 'supply disruption', 'tensions escalate', 'major supply', 'oil', 'disruption', 'imposed', 'sanctions', 'iran'}",
+    "production cuts": "{'russia', 'port', 'supply disruption', 'tensions escalate', 'major supply', 'oil', 'disruption', 'imposed', 'sanctions', 'iran'}",
+    "production cut": "{'russia', 'port', 'supply disruption', 'tensions escalate', 'major supply', 'oil', 'disruption', 'imposed', 'sanctions', 'iran'}",
+    "crude": "{'recession', 'wheat', 'oil', 'opec', 'expected', 'tensions escalate', 'nigeria', 'severe drought', 'supply disruption', 'explosion', 'iran', 'imposed', 'pipeline', 'force majeure', 'russia', 'pipeline explosion', 'terminal', 'major supply', 'shutdown', 'disruption', 'sanctions', 'port'}",
+    "severe drought": "{'wheat', 'oil', 'tensions escalate', 'nigeria', 'drought', 'crude', 'supply disruption', 'explosion', 'iran', 'ukraine', 'imposed', 'pipeline', 'blockade', 'force majeure', 'russia', 'pipeline explosion', 'terminal', 'major supply', 'shutdown', 'harvest', 'disruption', 'sanctions', 'port'}",
+    "drought": "{'russia', 'wheat', 'sanctions', 'imposed', 'supply disruption', 'tensions escalate', 'major supply', 'oil', 'harvest', 'disruption', 'iran', 'ukraine', 'blockade', 'severe drought', 'port'}",
+    "wheat": "{'recession', 'oil', 'opec', 'tensions escalate', 'nigeria', 'severe drought', 'drought', 'production increase', 'oversupply', 'crude', 'supply disruption', 'explosion', 'iran', 'ukraine', 'imposed', 'blockade', 'demand', 'oversupply fears', 'pipeline', 'force majeure', 'russia', 'surprise production', 'weakening demand', 'pipeline explosion', 'terminal', 'major supply', 'shutdown', 'harvest', 'disruption', 'sanctions', 'port'}",
+    "harvest": "{'russia', 'wheat', 'sanctions', 'port', 'imposed', 'supply disruption', 'tensions escalate', 'major supply', 'oil', 'disruption', 'iran', 'ukraine', 'blockade', 'severe drought', 'drought'}",
+    "ukraine": "{'russia', 'wheat', 'port', 'imposed', 'supply disruption', 'tensions escalate', 'major supply', 'oil', 'harvest', 'disruption', 'iran', 'severe drought', 'blockade', 'sanctions', 'drought'}",
+    "blockade": "{'russia', 'wheat', 'port', 'ukraine', 'supply disruption', 'tensions escalate', 'major supply', 'oil', 'harvest', 'disruption', 'iran', 'severe drought', 'imposed', 'sanctions', 'drought'}",
+    "opec": "{'recession', 'wheat', 'prices plunge', 'oil', 'oil prices', 'tin', 'tensions escalate', 'nigeria', 'demand destruction', 'production increase', 'oversupply', 'crude', 'rice', 'petroleum', 'explosion', 'oversupply fears', 'pipeline', 'demand', 'force majeure', 'weakening demand', 'surprise production', 'ice', 'pipeline explosion', 'terminal', 'china', 'shutdown'}",
+    "surprise production": "{'recession', 'wheat', 'prices plunge', 'oil', 'oil prices', 'opec', 'tin', 'tensions escalate', 'demand destruction', 'production increase', 'oversupply', 'rice', 'inflation demand', 'petroleum', 'oversupply fears', 'demand', 'weakening demand', 'ice', 'china'}",
+    "production increase": "{'recession', 'wheat', 'prices plunge', 'oil', 'oil prices', 'opec', 'tin', 'tensions escalate', 'demand destruction', 'oversupply', 'rice', 'inflation demand', 'petroleum', 'oversupply fears', 'demand', 'weakening demand', 'surprise production', 'ice', 'china'}",
+    "weakening demand": "{'recession', 'wheat', 'prices plunge', 'oil', 'oil prices', 'opec', 'tin', 'tensions escalate', 'demand destruction', 'production increase', 'oversupply', 'rice', 'inflation demand', 'petroleum', 'oversupply fears', 'demand', 'surprise production', 'ice', 'china'}",
+    "demand": "{'recession', 'wheat', 'prices plunge', 'oil', 'oil prices', 'opec', 'tin', 'tensions escalate', 'demand destruction', 'production increase', 'oversupply', 'rice', 'inflation demand', 'petroleum', 'oversupply fears', 'weakening demand', 'surprise production', 'ice', 'china'}",
+    "oversupply": "{'recession', 'wheat', 'prices plunge', 'oil', 'oil prices', 'opec', 'tin', 'tensions escalate', 'demand destruction', 'production increase', 'rice', 'inflation demand', 'petroleum', 'oversupply fears', 'demand', 'weakening demand', 'surprise production', 'ice', 'china'}",
+    "oversupply fears": "{'production increase', 'weakening demand', 'surprise production', 'oversupply', 'recession', 'opec', 'ice', 'wheat', 'rice', 'tin', 'tensions escalate', 'china', 'prices plunge', 'oil', 'demand destruction', 'petroleum', 'oil prices', 'demand'}",
+    "recession": "{'wheat', 'prices plunge', 'oil', 'oil prices', 'opec', 'tin', 'tensions escalate', 'nigeria', 'demand destruction', 'production increase', 'oversupply', 'crude', 'rice', 'inflation demand', 'petroleum', 'explosion', 'oversupply fears', 'pipeline', 'demand', 'force majeure', 'weakening demand', 'surprise production', 'ice', 'pipeline explosion', 'terminal', 'china', 'shutdown'}",
+    "oil prices": "{'production increase', 'weakening demand', 'surprise production', 'oversupply', 'recession', 'opec', 'tensions escalate', 'oil', 'oversupply fears', 'demand'}",
+    "prices plunge": "{'production increase', 'weakening demand', 'surprise production', 'oversupply', 'recession', 'opec', 'tensions escalate', 'oil', 'oversupply fears', 'demand'}",
+    "rice": "{'production increase', 'weakening demand', 'surprise production', 'oversupply', 'recession', 'opec', 'tensions escalate', 'oil', 'oversupply fears', 'demand'}",
+    "ice": "{'production increase', 'weakening demand', 'surprise production', 'oversupply', 'recession', 'opec', 'tensions escalate', 'oil', 'oversupply fears', 'demand'}",
+    "pipeline explosion": "{'force majeure', 'recession', 'wheat', 'crude', 'expected', 'opec', 'tensions escalate', 'nigeria', 'terminal', 'oil', 'shutdown', 'explosion', 'severe drought', 'pipeline'}",
+    "pipeline": "{'force majeure', 'recession', 'wheat', 'crude', 'expected', 'opec', 'pipeline explosion', 'tensions escalate', 'nigeria', 'terminal', 'oil', 'shutdown', 'explosion', 'severe drought'}",
+    "explosion": "{'force majeure', 'recession', 'wheat', 'crude', 'expected', 'opec', 'pipeline explosion', 'tensions escalate', 'nigeria', 'terminal', 'oil', 'shutdown', 'severe drought', 'pipeline'}",
+    "nigeria": "{'force majeure', 'recession', 'wheat', 'crude', 'expected', 'opec', 'pipeline explosion', 'tensions escalate', 'terminal', 'oil', 'shutdown', 'explosion', 'severe drought', 'pipeline'}",
+    "terminal": "{'force majeure', 'recession', 'wheat', 'crude', 'expected', 'opec', 'pipeline explosion', 'tensions escalate', 'nigeria', 'oil', 'shutdown', 'explosion', 'severe drought', 'pipeline'}",
+    "force majeure": "{'recession', 'wheat', 'crude', 'expected', 'opec', 'pipeline explosion', 'tensions escalate', 'nigeria', 'terminal', 'oil', 'shutdown', 'explosion', 'severe drought', 'pipeline'}",
+    "shutdown": "{'force majeure', 'recession', 'wheat', 'crude', 'expected', 'opec', 'pipeline explosion', 'tensions escalate', 'nigeria', 'terminal', 'oil', 'explosion', 'severe drought', 'pipeline'}",
+    "expected": "{'force majeure', 'crude', 'pipeline explosion', 'tensions escalate', 'nigeria', 'terminal', 'oil', 'shutdown', 'explosion', 'pipeline'}",
+    "china": "{'production increase', 'weakening demand', 'surprise production', 'recession', 'oversupply', 'opec', 'tin', 'inflation demand', 'tensions escalate', 'oil', 'demand destruction', 'petroleum', 'oversupply fears', 'demand'}",
+    "petroleum": "{'production increase', 'weakening demand', 'surprise production', 'recession', 'oversupply', 'opec', 'tin', 'inflation demand', 'tensions escalate', 'china', 'oil', 'demand destruction', 'oversupply fears', 'demand'}",
+    "demand destruction": "{'production increase', 'weakening demand', 'surprise production', 'recession', 'oversupply', 'opec', 'tin', 'inflation demand', 'tensions escalate', 'china', 'oil', 'petroleum', 'oversupply fears', 'demand'}",
+    "tin": "{'production increase', 'weakening demand', 'surprise production', 'recession', 'oversupply', 'opec', 'inflation demand', 'tensions escalate', 'china', 'oil', 'demand destruction', 'petroleum', 'oversupply fears', 'demand'}",
+    "inflation demand": "{'production increase', 'weakening demand', 'surprise production', 'recession', 'oversupply', 'tin', 'china', 'demand destruction', 'petroleum', 'demand'}"
+  },
+  "event_patterns": {},
+  "market_impact_history": [],
+  "last_saved": "2025-09-15T08:35:55.185401"
+}

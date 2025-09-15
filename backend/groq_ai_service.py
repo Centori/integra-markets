@@ -110,12 +110,13 @@ class GroqAIService:
         else:
             self.client = None
             
-        # Model options
+        # Model options (updated Jan 2025 for available models)
         self.models = {
-            "llama": "llama-3.3-70b-versatile",  # 128k context
-            "gpt-oss": "openai/gpt-oss-120b"      # 120B parameter model
+            "llama": "llama-3.3-70b-versatile",  # Latest Llama 3.3 model
+            "llama-fast": "llama-3.1-8b-instant",  # Fast model for quick responses
+            "gemma": "gemma2-9b-it"                # Google's Gemma 2 model
         }
-        self.default_model = "gpt-oss"  # Use GPT-OSS-120B by default
+        self.default_model = "llama"  # Use Llama 3.3 by default
         self.search_engine = DDGS() if SEARCH_AVAILABLE else None
         
         # Define available tools

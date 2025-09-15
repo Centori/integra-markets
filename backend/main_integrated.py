@@ -64,7 +64,7 @@ try:
     if groq_api_key:
         groq_client = Groq(api_key=groq_api_key)
         GROQ_AVAILABLE = True
-        logger.info("✓ GROQ AI (GPT-OSS-120B) connected")
+        logger.info("✓ GROQ AI (Llama 3.3 70B) connected")
     else:
         GROQ_AVAILABLE = False
         logger.warning("GROQ API key not found")
@@ -193,7 +193,7 @@ Provide:
 4. Market impact assessment"""
 
             completion = groq_client.chat.completions.create(
-                model="openai/gpt-oss-120b",
+                model="llama-3.3-70b-versatile",
                 messages=[
                     {"role": "system", "content": "You are a financial analyst specializing in commodity markets."},
                     {"role": "user", "content": prompt}

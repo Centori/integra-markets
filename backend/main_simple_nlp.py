@@ -171,6 +171,8 @@ class NewsRequest(BaseModel):
     hours_back: Optional[int] = Field(24, ge=1, le=168, description="Hours back to fetch news from")
     enhanced_content: Optional[bool] = Field(False, description="Enable full HTML content extraction and NLTK summarization")
     max_enhanced: Optional[int] = Field(3, ge=1, le=10, description="Maximum number of articles to enhance with full content")
+    alert_frequency: Optional[str] = Field("realtime", description="Alert frequency preference (realtime, daily, weekly)")
+    min_impact: Optional[str] = Field("LOW", description="Minimum impact level for alerts (LOW, MEDIUM, HIGH)")
 
 class UserNewsRequest(BaseModel):
     user_id: str = Field(..., description="User ID in Supabase")
@@ -425,6 +427,8 @@ async def get_news_feed(request: NewsRequest):
                 tasks.append(news_sources.fetch_iea_news())
             if not request.sources or 'bloomberg' in (request.sources or []):
                 tasks.append(news_sources.fetch_bloomberg_commodities())
+            if not request.sources or 'oilprice' in (request.sources or []):
+                tasks.append(news_sources.fetch_oilprice_news())
             
             # Execute all fetching tasks concurrently
             results = await asyncio.gather(*tasks, return_exceptions=True)
@@ -435,6 +439,75 @@ async def get_news_feed(request: NewsRequest):
                     all_articles.extend(result)
                 elif isinstance(result, Exception):
                     logger.error(f"Error fetching news: {result}")
+        
+        # Determine time window based on alert frequency
+        hours_back = request.hours_back or {
+            'realtime': 4,  # Last 4 hours for realtime
+            'daily': 24,    # Last 24 hours for daily
+            'weekly': 168   # Last week for weekly
+        }.get(request.alert_frequency, 24)
+        
+        # Filter articles by date
+            cutoff_time = datetime.datetime.now() - datetime.timedelta(hours=request.hours_back)
+            time_filtered_articles = []
+            for article in all_articles:
+                try:
+                    # Parse the published date
+                    published_str = article.get('published', '')
+                    if published_str:
+                        # Handle both datetime objects and strings
+                        if isinstance(published_str, datetime.datetime):
+                            published_date = published_str
+                        else:
+                            published_date = datetime.datetime.fromisoformat(published_str.replace('Z', '+00:00'))
+                        
+                        # Only include articles within the time window
+                        if published_date >= cutoff_time:
+                            time_filtered_articles.append(article)
+                        else:
+                            logger.debug(f"Filtering out old article: {article.get('title', '')[:50]} from {published_str}")
+                except Exception as e:
+                    # If date parsing fails, include the article (better to show than hide)
+                    logger.warning(f"Could not parse date for article: {e}")
+                    time_filtered_articles.append(article)
+            
+            all_articles = time_filtered_articles
+            logger.info(f"After time filtering ({request.hours_back}h): {len(all_articles)} articles remain")
+            
+            # If we have too few articles, progressively expand the time window
+            min_articles = 5  # Minimum articles we want to show
+            if len(all_articles) < min_articles:
+                logger.info(f"Only {len(all_articles)} articles found in {request.hours_back}h window, expanding search...")
+                
+                # Try expanding to 24 hours, then 48 hours
+                for expanded_hours in [24, 48]:
+                    if expanded_hours <= request.hours_back:
+                        continue  # Skip if we're already searching this far back
+                    
+                    expanded_cutoff = datetime.datetime.now() - datetime.timedelta(hours=expanded_hours)
+                    expanded_articles = []
+                    
+                    for article in results[0] if isinstance(results[0], list) else []:
+                        try:
+                            published_str = article.get('published', '')
+                            if published_str:
+                                if isinstance(published_str, datetime.datetime):
+                                    published_date = published_str
+                                else:
+                                    published_date = datetime.datetime.fromisoformat(published_str.replace('Z', '+00:00'))
+                                
+                                if published_date >= expanded_cutoff:
+                                    # Check if not already in our list
+                                    if not any(a.get('title') == article.get('title') for a in all_articles):
+                                        expanded_articles.append(article)
+                        except:
+                            pass
+                    
+                    all_articles.extend(expanded_articles)
+                    logger.info(f"Expanded to {expanded_hours}h: now have {len(all_articles)} articles")
+                    
+                    if len(all_articles) >= min_articles:
+                        break
         
         # Filter articles by commodity if specified
         if request.commodity_filter:
@@ -447,8 +520,44 @@ async def get_news_feed(request: NewsRequest):
                     filtered_articles.append(article)
             all_articles = filtered_articles
         
-        # Sort by publication date (most recent first)
-        all_articles.sort(key=lambda x: x.get('published', ''), reverse=True)
+        # Filter by impact level if specified
+        if request.min_impact:
+            impact_levels = {'LOW': 0, 'MEDIUM': 1, 'HIGH': 2}
+            min_impact_level = impact_levels.get(request.min_impact.upper(), 0)
+            
+            impact_filtered = []
+            for article in all_articles:
+                article_impact = article.get('market_impact', 'LOW').upper()
+                if impact_levels.get(article_impact, 0) >= min_impact_level:
+                    impact_filtered.append(article)
+            all_articles = impact_filtered
+            logger.info(f"After impact filtering (min={request.min_impact}): {len(all_articles)} articles remain")
+        
+        # Sort by priority and date
+        def article_priority(article):
+            # High impact, recent articles get highest priority
+            impact_score = {
+                'HIGH': 3,
+                'MEDIUM': 2,
+                'LOW': 1
+            }.get(article.get('market_impact', 'LOW').upper(), 0)
+            
+            published = article.get('published', '')
+            if not published:
+                return (0, 0)  # Lowest priority for articles without dates
+            
+            if isinstance(published, str):
+                try:
+                    published = datetime.datetime.fromisoformat(published.replace('Z', '+00:00'))
+                except:
+                    return (0, 0)
+            
+            # Convert to timestamp for sorting
+            date_score = published.timestamp()
+            
+            return (impact_score, date_score)
+        
+        all_articles.sort(key=article_priority, reverse=True)
         
         # Limit to requested number of articles
         articles = all_articles[:request.max_articles]

@@ -260,54 +260,126 @@ class NewsAnalysisService {
      */
     extractKeyDrivers(article, sentiment) {
         const drivers = [];
+        const foundWords = new Set();
+        
+        // Extract from sentiment keywords if available (ML-enhanced)
+        if (sentiment && sentiment.keywords && Array.isArray(sentiment.keywords)) {
+            sentiment.keywords.forEach(keywordObj => {
+                const word = keywordObj.word || keywordObj.text;
+                if (word && !foundWords.has(word.toLowerCase())) {
+                    // Format for clean UI display - combine score and importance
+                    const mlScore = keywordObj.score || 0.85;
+                    const importance = keywordObj.importance || 0;
+                    // Weight the score based on ML importance
+                    const finalScore = importance > 0 
+                        ? Math.min(0.95, (mlScore * 0.7) + (importance * 0.3 / 3)) 
+                        : mlScore;
+                    
+                    drivers.push({
+                        text: word.toLowerCase(),
+                        score: finalScore
+                    });
+                    foundWords.add(word.toLowerCase());
+                }
+            });
+        }
         
         // Extract from commodities
         if (article.commodities && article.commodities.length > 0) {
             article.commodities.forEach(commodity => {
-                drivers.push({
-                    text: commodity.toLowerCase(),
-                    score: 0.8
-                });
+                if (!foundWords.has(commodity.toLowerCase())) {
+                    drivers.push({
+                        text: commodity.toLowerCase(),
+                        score: 0.8
+                    });
+                    foundWords.add(commodity.toLowerCase());
+                }
             });
         }
         
         // Extract from key drivers if available
         if (article.keyDrivers && article.keyDrivers.length > 0) {
             article.keyDrivers.forEach(driver => {
-                if (!drivers.find(d => d.text === driver.toLowerCase())) {
+                if (!foundWords.has(driver.toLowerCase())) {
                     drivers.push({
                         text: driver.toLowerCase(),
                         score: 0.7
                     });
+                    foundWords.add(driver.toLowerCase());
                 }
             });
         }
         
-        // Add sentiment as a driver
-        if (sentiment && sentiment.sentiment) {
-            drivers.push({
-                text: sentiment.sentiment.toLowerCase(),
-                score: sentiment.confidence || 0.5
-            });
-        }
-        
-        // Extract common keywords from title/summary
+        // Extract event-driven and geopolitical keywords from text
         const text = `${article.title} ${article.summary || ''}`.toLowerCase();
-        const keywords = ['supply', 'demand', 'price', 'production', 'inventory', 'storage', 'export', 'import'];
         
-        keywords.forEach(keyword => {
-            if (text.includes(keyword) && !drivers.find(d => d.text === keyword)) {
+        // Comprehensive keyword list including geopolitical and event terms
+        const comprehensiveKeywords = [
+            // Supply/demand fundamentals
+            'supply', 'demand', 'shortage', 'oversupply', 'surplus', 'deficit',
+            'inventory', 'stockpile', 'drawdown', 'build', 'storage',
+            
+            // Production and infrastructure
+            'production', 'output', 'capacity', 'refinery', 'pipeline', 'terminal',
+            'facilities', 'shutdown', 'outage', 'disruption', 'maintenance',
+            
+            // Geopolitical events
+            'sanctions', 'tensions', 'attacks', 'conflict', 'war', 'military',
+            'iran', 'russia', 'saudi', 'opec', 'embargo', 'blockade', 'crisis',
+            
+            // Natural events
+            'drought', 'flood', 'hurricane', 'freeze', 'weather',
+            
+            // Price movements
+            'price', 'surge', 'crash', 'rally', 'decline', 'volatility',
+            
+            // Trade and policy
+            'export', 'import', 'tariff', 'quota', 'ban', 'restriction', 'policy'
+        ];
+        
+        // Look for comprehensive keywords in text
+        comprehensiveKeywords.forEach(keyword => {
+            if (text.includes(keyword) && !foundWords.has(keyword)) {
+                // Calculate relevance score based on frequency
+                const count = (text.match(new RegExp(keyword, 'g')) || []).length;
+                const score = Math.min(0.6 + (count * 0.1), 0.9);
+                
                 drivers.push({
                     text: keyword,
-                    score: 0.6
+                    score: score
                 });
+                foundWords.add(keyword);
             }
         });
         
-        // Limit to top 5 drivers
-        return drivers
+        // Add sentiment as a driver only if it's strong
+        if (sentiment && sentiment.sentiment && sentiment.confidence > 0.6) {
+            const sentimentText = sentiment.sentiment.toLowerCase();
+            if (!foundWords.has(sentimentText)) {
+                drivers.push({
+                    text: sentimentText,
+                    score: sentiment.confidence || 0.5
+                });
+            }
+        }
+        
+        // Sort by score and format for UI display
+        // Prioritize ML-derived keywords with high importance
+        const sortedDrivers = drivers
             .sort((a, b) => b.score - a.score)
-            .slice(0, 5);
+            .slice(0, 8)  // Take top 8 for UI space
+            .map(driver => ({
+                text: driver.text,
+                score: parseFloat(driver.score.toFixed(1))  // Clean decimal for display
+            }));
+        
+        // Ensure we have meaningful keywords, not just generic terms
+        const meaningfulDrivers = sortedDrivers.filter(d => 
+            d.text.length > 2 && 
+            !['the', 'and', 'or', 'but', 'in', 'on', 'at', 'to', 'for'].includes(d.text)
+        );
+        
+        return meaningfulDrivers.length >= 3 ? meaningfulDrivers : sortedDrivers;
     }
     
     /**

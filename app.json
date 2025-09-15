@@ -20,7 +20,7 @@
     ],
     "ios": {
       "bundleIdentifier": "com.centori.integramarkets",
-      "buildNumber": "30",
+      "buildNumber": "31",
       "deploymentTarget": "13.0",
       "supportsTablet": true,
       "requireFullScreen": false,
@@ -98,10 +98,7 @@
         {
           "icon": "./assets/notification-icon-new.png",
           "color": "#4ECCA3",
-          "defaultChannel": "default",
-          "sounds": [
-            "./assets/sounds/notification.wav"
-          ]
+          "defaultChannel": "default"
         }
       ],
       [

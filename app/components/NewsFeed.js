@@ -14,6 +14,9 @@ import { MaterialIcons } from '@expo/vector-icons';
 import NewsCard from './NewsCard';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { api } from '../services/apiClient';
+import useAlertPreferences from '../hooks/useAlertPreferences';
+import { isBreakingNews, sortNewsWithBreaking } from '../utils/newsUtils';
+import BreakingNewsIndicator from './BreakingNewsIndicator';
 
 const { height: SCREEN_HEIGHT } = Dimensions.get('window');
 
@@ -46,6 +49,9 @@ const NewsFeed = ({
   const [showScrollButtons, setShowScrollButtons] = useState(false);
   const [isNearTop, setIsNearTop] = useState(true);
   const [isNearBottom, setIsNearBottom] = useState(false);
+  
+  // Alert preferences
+  const { preferences, shouldShowAlert } = useAlertPreferences();
   
   // Refs for optimization
   const flatListRef = useRef(null);
@@ -176,6 +182,10 @@ const NewsFeed = ({
     
     return rawNews
       .map((item, index) => {
+        // Check if we should show this item based on preferences
+        if (!shouldShowAlert(item)) {
+          return null;
+        }
         // Parse date with multiple fallbacks
         let articleDate = null;
         const dateFields = [
@@ -228,6 +238,24 @@ const NewsFeed = ({
           }
         }
         
+        // Calculate age category for visual indicators
+        const sixHoursAgo = new Date(now - 6 * 60 * 60 * 1000);
+        const twelveHoursAgo = new Date(now - 12 * 60 * 60 * 1000);
+        const oneDayAgo = new Date(now - 24 * 60 * 60 * 1000);
+        
+        let ageCategory = 'older';
+        const isBreaking = isBreakingNews(item);
+        
+        if (isBreaking) {
+          ageCategory = 'breaking';
+        } else if (articleDate >= sixHoursAgo) {
+          ageCategory = 'fresh';
+        } else if (articleDate >= twelveHoursAgo) {
+          ageCategory = 'recent';
+        } else if (articleDate >= oneDayAgo) {
+          ageCategory = 'today';
+        }
+        
         return {
           id: item.id || `news-${Date.now()}-${index}`,
           title: item.title || item.headline || 'Untitled',
@@ -242,10 +270,12 @@ const NewsFeed = ({
           keyDrivers: item.key_drivers || item.keywords || [],
           marketImpact: item.market_impact || item.impact || 'MEDIUM',
           commodities: item.commodities || item.tickers || [],
-          isBreaking: articleDate >= oneHourAgo,
+          isBreaking: isBreaking,
+          ageCategory: ageCategory,
           articleDate,
         };
       })
+      .filter(Boolean)
       .sort((a, b) => b.articleDate - a.articleDate);
   };
 

@@ -17,6 +17,7 @@ feedparser==6.0.10
 
 # NLP & ML
 nltk==3.8.1  # Includes VADER sentiment analyzer
+numpy==1.24.3  # Required for NLTK and data processing
 
 # AI Services
 groq==0.9.0  # For Groq AI service
