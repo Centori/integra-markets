@@ -1,18 +1,19 @@
 # Integra Markets Backend Status
 
-## ✅ Current Status: FULLY OPERATIONAL
+## ⚠️ Current Status: PARTIALLY OPERATIONAL
 
 ### Live Services
 - ✅ **Real-time Market Data**: Connected to Alpha Vantage API
-- ✅ **AI Sentiment Analysis**: GROQ AI (GPT-OSS-120B model) active
+- ⚠️ **AI Sentiment Analysis**: Basic sentiment analysis only (Enhanced ML features temporarily disabled)
 - ✅ **Database**: Supabase connected
 - ✅ **Alert System**: Working with default preferences
 - ✅ **Notifications**: Ready for push notifications
-- ✅ **NLTK Sentiment**: Backup sentiment analysis available
+- ✅ **NLTK Sentiment**: Primary sentiment analysis active
 
 ## Backend URL
-- **Local IP**: `http://192.168.0.208:8000`
-- **Status**: Running on PID 21248
+- **Production**: `https://integra-markets-backend.fly.dev`
+- **Status**: Deployed on Fly.io
+- **Health**: Operational (core features)
 
 ## How the App Switches Between Mock and Live Data
 

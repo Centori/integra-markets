@@ -99,6 +99,27 @@ For immediate testing while setting up a proper deployment:
 
 3. **Use the ngrok URL** (e.g., `https://abc123.ngrok.io`)
 
+## Important Deployment Notes
+
+### ML Features Deployment
+When deploying with ML features (PyTorch):
+1. Ensure these dependencies are in requirements.txt:
+   ```
+   torch==2.1.0
+   torchvision==0.16.0
+   scikit-learn==1.3.0
+   ```
+2. Be aware of increased deployment time and container size (~3.2GB)
+3. Consider using a larger instance size on Fly.io
+4. Monitor memory usage carefully
+
+### Temporary ML Feature Disabling
+If experiencing deployment issues:
+1. Comment out enhanced sentiment analysis imports
+2. Modify affected endpoints to return basic responses
+3. Update status in BACKEND_STATUS.md
+4. Re-enable features gradually after successful deployment
+
 ## After Deployment
 
 Once deployed, update your `app.json`:
@@ -122,4 +143,13 @@ curl YOUR_BACKEND_URL/health
 Should return:
 ```json
 {"status": "healthy", "timestamp": "2024-01-01T00:00:00Z"}
+```
+
+Test specific endpoints:
+```bash
+# Get latest news
+curl YOUR_BACKEND_URL/api/news/latest
+
+# Refresh news (POST request)
+curl -X POST YOUR_BACKEND_URL/api/news/refresh
 ```
