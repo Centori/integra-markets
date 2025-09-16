@@ -16,6 +16,66 @@ import logging
 import socket
 import asyncio
 import random
+from typing import Dict, List, Optional, Set
+from dataclasses import dataclass
+from datetime import datetime, timedelta
+
+@dataclass
+class SourceStatus:
+    """Tracks the status of a news source"""
+    name: str
+    last_check: datetime
+    is_available: bool
+    error_count: int = 0
+    last_error: Optional[str] = None
+    anti_scraping_detected: bool = False
+    recommendations: List[str] = None
+    
+    def update(self, success: bool, error: Optional[str] = None, anti_scraping: bool = False, recommendations: List[str] = None):
+        self.last_check = datetime.now()
+        self.is_available = success
+        if not success:
+            self.error_count += 1
+            self.last_error = error
+            self.anti_scraping_detected = anti_scraping
+            self.recommendations = recommendations
+        else:
+            self.error_count = 0
+            self.last_error = None
+            self.anti_scraping_detected = False
+            self.recommendations = None
+
+class SourceTracker:
+    """Tracks the status of all news sources"""
+    def __init__(self):
+        self.sources: Dict[str, SourceStatus] = {}
+        
+    def get_status(self, source_name: str) -> SourceStatus:
+        """Get the current status of a source"""
+        if source_name not in self.sources:
+            self.sources[source_name] = SourceStatus(
+                name=source_name,
+                last_check=datetime.now(),
+                is_available=True
+            )
+        return self.sources[source_name]
+    
+    def update_status(self, source_name: str, success: bool, error: Optional[str] = None,
+                      anti_scraping: bool = False, recommendations: List[str] = None):
+        """Update the status of a source"""
+        status = self.get_status(source_name)
+        status.update(success, error, anti_scraping, recommendations)
+    
+    def get_unavailable_sources(self) -> List[SourceStatus]:
+        """Get list of sources that are currently unavailable"""
+        return [s for s in self.sources.values() if not s.is_available]
+    
+    def get_anti_scraping_sources(self) -> List[SourceStatus]:
+        """Get list of sources that have detected anti-scraping measures"""
+        return [s for s in self.sources.values() if s.anti_scraping_detected]
+
+# Global source tracker
+source_tracker = SourceTracker()
 
 # Import content extraction utilities
 try:
@@ -32,21 +92,31 @@ logger = logging.getLogger(__name__)
 class NewsDataSources:
     """Handles fetching news from multiple sources"""
     
-    def __init__(self, enable_full_content=False, enable_nltk_summary=False, user_sources=None):
+    def __init__(self, enable_full_content=False, enable_nltk_summary=False, user_sources=None, credentials=None):
         self.session = None
         self.enable_full_content = enable_full_content and CONTENT_EXTRACTION_AVAILABLE
         self.enable_nltk_summary = enable_nltk_summary and CONTENT_EXTRACTION_AVAILABLE
         self.content_extractor = None
         self.nltk_summarizer = None
         self.user_sources = user_sources or []  # List of sources user has enabled
+        self.credentials = credentials or {}  # Dict of source credentials
         
         self.headers = {
             'User-Agent': 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
-            'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,*/*;q=0.8',
-            'Accept-Language': 'en-US,en;q=0.5',
-            'Accept-Encoding': 'gzip, deflate',
+            'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,image/apng,*/*;q=0.8',
+            'Accept-Language': 'en-US,en;q=0.9',
+            'Accept-Encoding': 'gzip, deflate, br',
             'Connection': 'keep-alive',
+            'Cache-Control': 'max-age=0',
+            'Sec-Ch-Ua': '"Not A(Brand";v="99", "Chrome";v="120"',
+            'Sec-Ch-Ua-Mobile': '?0',
+            'Sec-Ch-Ua-Platform': '"macOS"',
+            'Sec-Fetch-Dest': 'document',
+            'Sec-Fetch-Mode': 'navigate',
+            'Sec-Fetch-Site': 'none',
+            'Sec-Fetch-User': '?1',
             'Upgrade-Insecure-Requests': '1',
+            'Priority': 'u=0, i'
         }
         
         if self.enable_nltk_summary:
@@ -133,7 +203,23 @@ class NewsDataSources:
             try:
                 content = await self._get_text_with_retry(url, verify_ssl=False)  # Skip SSL for test
             except Exception as e:
-                logger.error(f"Error fetching Reuters news: {e}")
+                # Check for anti-scraping measures
+                status = check_anti_scraping_status(e)
+                source_tracker.update_status(
+                    'Reuters',
+                    success=False,
+                    error=str(e),
+                    anti_scraping=status['has_anti_scraping'],
+                    recommendations=status['recommendations']
+                )
+                
+                if status['has_anti_scraping']:
+                    logger.warning(f"Reuters appears to have anti-scraping protection: {status['details']}")
+                    logger.info("Recommendations:")
+                    for rec in status['recommendations']:
+                        logger.info(f"- {rec}")
+                else:
+                    logger.error(f"Error fetching Reuters news: {e}")
                 return []
 
             feed = feedparser.parse(content)
@@ -156,6 +242,7 @@ class NewsDataSources:
                     })
             
             logger.info(f"Fetched {len(articles)} Reuters articles")
+            source_tracker.update_status('Reuters', success=True)
             return articles
                     
             
@@ -172,7 +259,23 @@ class NewsDataSources:
             try:
                 content = await self._get_text_with_retry(url)
             except Exception as e:
-                logger.error(f"Error fetching OilPrice.com news: {e}")
+                # Check for anti-scraping measures
+                status = check_anti_scraping_status(e)
+                source_tracker.update_status(
+                    'OilPrice.com',
+                    success=False,
+                    error=str(e),
+                    anti_scraping=status['has_anti_scraping'],
+                    recommendations=status['recommendations']
+                )
+                
+                if status['has_anti_scraping']:
+                    logger.warning(f"OilPrice.com appears to have anti-scraping protection: {status['details']}")
+                    logger.info("Recommendations:")
+                    for rec in status['recommendations']:
+                        logger.info(f"- {rec}")
+                else:
+                    logger.error(f"Error fetching OilPrice.com news: {e}")
                 return []
 
             feed = feedparser.parse(content)
@@ -189,6 +292,7 @@ class NewsDataSources:
                 })
             
             logger.info(f"Fetched {len(articles)} OilPrice.com articles")
+            source_tracker.update_status('OilPrice.com', success=True)
             return articles
                     
             
@@ -311,7 +415,15 @@ class NewsDataSources:
             try:
                 content = await self._get_text_with_retry(url)
             except Exception as e:
-                logger.error(f"Error fetching Bloomberg news: {e}")
+                # Check for anti-scraping measures
+                status = check_anti_scraping_status(e)
+                if status['has_anti_scraping']:
+                    logger.warning(f"Bloomberg appears to have anti-scraping protection: {status['details']}")
+                    logger.info("Recommendations:")
+                    for rec in status['recommendations']:
+                        logger.info(f"- {rec}")
+                else:
+                    logger.error(f"Error fetching Bloomberg news: {e}")
                 return []
 
             feed = feedparser.parse(content)
@@ -334,109 +446,126 @@ class NewsDataSources:
                     })
             
             logger.info(f"Fetched {len(articles)} Bloomberg articles")
+            source_tracker.update_status('Bloomberg', success=True)
             return articles
                     
             
         except Exception as e:
             logger.error(f"Error fetching Bloomberg news: {e}")
+            source_tracker.update_status('Bloomberg', success=False, error=str(e))
             return []
 
     async def fetch_sp_global_platts(self) -> List[Dict]:
-        """Fetch S&P Global Platts energy news"""
+        """Fetch S&P Global Platts energy news
+        
+        If credentials are provided, uses the Platts API. Otherwise, attempts web scraping
+        which will likely be blocked.
+        
+        Required credentials:
+        - api_key: Platts API key
+        - username: Platts username
+        - password: Platts password
+        """
         try:
-            # S&P Global Platts commodity feeds
-            urls = [
-                "https://www.spglobal.com/platts/en/rss-feed/oil",  # Oil
-                "https://www.spglobal.com/platts/en/rss-feed/natural-gas",  # Natural Gas
-                "https://www.spglobal.com/platts/en/rss-feed/petrochemicals",  # Petrochemicals
-                "https://www.spglobal.com/platts/en/rss-feed/metals",  # Metals
-                "https://www.spglobal.com/platts/en/rss-feed/agriculture",  # Agriculture
-                "https://www.spglobal.com/platts/en/rss-feed/coal",  # Coal
-                "https://www.spglobal.com/platts/en/rss-feed/shipping"  # Shipping
-            ]
-            
-            articles = []
-            for url in urls:
-                try:
-                    content = await self._get_text_with_retry(url, retries=2)
-                    feed = feedparser.parse(content)
-                    
-                    # Extract category from URL
-                    category = url.split('/')[-1].replace('-', ' ').title()
-                    
-                    for entry in feed.entries[:3]:  # Get top 3 from each feed
-                        articles.append({
-                            'source': 'S&P Global Platts',
-                            'title': entry.title,
-                            'summary': getattr(entry, 'summary', ''),
-                            'url': entry.link,
-                            'published': self._parse_date(entry.published),
-                            'category': category
-                        })
-                except Exception as e:
-                    logger.warning(f"Error fetching Platts feed {url}: {e}")
-                    continue
-            
-            # Sort by date
-            articles.sort(key=lambda x: x['published'], reverse=True)
-            
-            logger.info(f"Fetched {len(articles)} S&P Global Platts articles")
-            return articles
+            # Check if we have API credentials
+            platts_creds = self.credentials.get('platts', {})
+            if platts_creds.get('api_key') and platts_creds.get('username') and platts_creds.get('password'):
+                return await self._fetch_platts_api(
+                    api_key=platts_creds['api_key'],
+                    username=platts_creds['username'],
+                    password=platts_creds['password']
+                )
+            else:
+                # No credentials - warn about API requirement
+                logger.warning(
+                    "S&P Global Platts blocks web scraping. To access Platts content, "
+                    "you need API credentials. Please provide:"
+                )
+                logger.info("- Platts API key")
+                logger.info("- Platts username")
+                logger.info("- Platts password")
+                logger.info("Contact your Platts account representative for API access.")
+                return []
             
         except Exception as e:
             logger.error(f"Error fetching S&P Global Platts news: {e}")
             return []
-
-    async def fetch_additional_sources(self) -> List[Dict]:
-        """Fetch from additional reliable commodity news sources"""
-        articles = []
+    
+    async def _fetch_platts_api(self, api_key: str, username: str, password: str) -> List[Dict]:
+        """Fetch news using the Platts API
         
+        Documentation: https://developer.platts.com
+        """
         try:
-            # CNBC commodities
-            cnbc_url = "https://search.cnbc.com/rs/search/combinedcms/view.xml?partnerId=wrss01&id=10000664"
-            async with self.session.get(cnbc_url) as response:
-                if response.status == 200:
-                    content = await response.text()
-                    feed = feedparser.parse(content)
+            # Platts API endpoint for news
+            url = "https://api.platts.com/commodityinsights/v1/news"
+            
+            # Platts requires OAuth2 authentication
+            auth_url = "https://api.platts.com/auth/v1/token"
+            
+            # Get auth token
+            async with self.session.post(
+                auth_url,
+                headers={
+                    'Content-Type': 'application/x-www-form-urlencoded',
+                    'Authorization': f'Basic {api_key}'
+                },
+                data={
+                    'grant_type': 'password',
+                    'username': username,
+                    'password': password
+                }
+            ) as response:
+                if response.status != 200:
+                    logger.error(f"Failed to authenticate with Platts API: {response.status}")
+                    return []
                     
-                    for entry in feed.entries[:5]:
-                        title = entry.title.lower()
-                        if any(keyword in title for keyword in ['oil', 'gas', 'gold', 'commodity', 'energy']):
-                            articles.append({
-                                'source': 'CNBC',
-                                'title': entry.title,
-                                'summary': getattr(entry, 'summary', ''),
-                                'url': entry.link,
-                                'published': self._parse_date(entry.published),
-                                'category': 'commodities'
-                            })
+                auth_data = await response.json()
+                access_token = auth_data['access_token']
             
-            # Financial Times markets (limited free access)
-            ft_url = "https://www.ft.com/markets?format=rss"
-            async with self.session.get(ft_url) as response:
-                if response.status == 200:
-                    content = await response.text()
-                    feed = feedparser.parse(content)
+            # Fetch news with auth token
+            async with self.session.get(
+                url,
+                headers={
+                    'Authorization': f'Bearer {access_token}',
+                    'Content-Type': 'application/json'
+                },
+                params={
+                    'start_date': (datetime.now() - timedelta(days=1)).isoformat(),
+                    'end_date': datetime.now().isoformat(),
+                    'page_size': 15,
+                    'sort': '-publishDate'
+                }
+            ) as response:
+                if response.status != 200:
+                    logger.error(f"Failed to fetch news from Platts API: {response.status}")
+                    return []
                     
-                    for entry in feed.entries[:5]:
-                        title = entry.title.lower()
-                        if any(keyword in title for keyword in ['oil', 'gas', 'gold', 'commodity', 'energy', 'metal']):
-                            articles.append({
-                                'source': 'Financial Times',
-                                'title': entry.title,
-                                'summary': getattr(entry, 'summary', ''),
-                                'url': entry.link,
-                                'published': self._parse_date(entry.published),
-                                'category': 'markets'
-                            })
-            
-            logger.info(f"Fetched {len(articles)} additional source articles")
-            
+                data = await response.json()
+                
+                articles = []
+                for item in data.get('items', []):
+                    articles.append({
+                        'source': 'S&P Global Platts',
+                        'title': item['headline'],
+                        'summary': item.get('summary', ''),
+                        'url': item['url'],
+                        'published': self._parse_date(item['publishDate']),
+                        'category': item.get('category', 'Commodity Insights')
+                    })
+                
+                logger.info(f"Fetched {len(articles)} articles via Platts API")
+                source_tracker.update_status('S&P Global Platts', success=True)
+                return articles
+                
         except Exception as e:
-            logger.error(f"Error fetching additional sources: {e}")
-            
-        return articles
-
+            logger.error(f"Error accessing Platts API: {e}")
+            source_tracker.update_status(
+                'S&P Global Platts',
+                success=False,
+                error=str(e)
+            )
+            return []
     def _parse_date(self, date_string: str) -> datetime:
         """Parse various date formats to datetime object"""
         try:
@@ -518,6 +647,193 @@ class NewsDataSources:
             logger.error(f"Error fetching Mining Weekly news: {e}")
             return []
 
+    async def fetch_ngi_news(self) -> List[Dict]:
+        """Fetch Natural Gas Intelligence news via RSS"""
+        try:
+            url = "https://www.naturalgasintel.com/feed/"
+            try:
+                content = await self._get_text_with_retry(url)
+            except Exception as e:
+                status = check_anti_scraping_status(e)
+                source_tracker.update_status(
+                    'NGI',
+                    success=False,
+                    error=str(e),
+                    anti_scraping=status['has_anti_scraping'],
+                    recommendations=status['recommendations']
+                )
+                if status['has_anti_scraping']:
+                    logger.warning(f"NGI appears to have anti-scraping protection: {status['details']}")
+                    logger.info("Recommendations:")
+                    for rec in status['recommendations']:
+                        logger.info(f"- {rec}")
+                else:
+                    logger.error(f"Error fetching NGI news: {e}")
+                return []
+
+            feed = feedparser.parse(content)
+            articles = []
+            for entry in feed.entries[:15]:  # Get latest 15 articles
+                articles.append({
+                    'source': 'Natural Gas Intelligence',
+                    'title': entry.title,
+                    'summary': getattr(entry, 'summary', ''),
+                    'url': entry.link,
+                    'published': self._parse_date(entry.published),
+                    'category': 'natural_gas'
+                })
+            
+            logger.info(f"Fetched {len(articles)} NGI articles")
+            source_tracker.update_status('NGI', success=True)
+            return articles
+
+        except Exception as e:
+            logger.error(f"Error fetching NGI news: {e}")
+            return []
+
+    async def fetch_kitco_news(self) -> List[Dict]:
+        """Fetch Kitco metals news via RSS"""
+        try:
+            urls = [
+                "https://www.kitco.com/rss/headlines/gold.xml",
+                "https://www.kitco.com/rss/headlines/silver.xml",
+                "https://www.kitco.com/rss/headlines/metals.xml"
+            ]
+            
+            all_articles = []
+            for url in urls:
+                try:
+                    content = await self._get_text_with_retry(url)
+                    feed = feedparser.parse(content)
+                    
+                    for entry in feed.entries[:5]:  # Top 5 from each feed
+                        # Determine category from URL
+                        if 'gold' in url:
+                            category = 'gold'
+                        elif 'silver' in url:
+                            category = 'silver'
+                        else:
+                            category = 'metals'
+                            
+                        all_articles.append({
+                            'source': 'Kitco News',
+                            'title': entry.title,
+                            'summary': getattr(entry, 'summary', ''),
+                            'url': entry.link,
+                            'published': self._parse_date(entry.published),
+                            'category': category
+                        })
+                except Exception as e:
+                    logger.warning(f"Error fetching Kitco feed {url}: {e}")
+                    continue
+            
+            logger.info(f"Fetched {len(all_articles)} Kitco articles")
+            source_tracker.update_status('Kitco', success=True)
+            return all_articles
+
+        except Exception as e:
+            logger.error(f"Error fetching Kitco news: {e}")
+            return []
+
+    async def fetch_metal_bulletin_news(self) -> List[Dict]:
+        """Fetch Metal Bulletin news via RSS"""
+        try:
+            url = "https://www.metalbulletin.com/rss/"
+            try:
+                content = await self._get_text_with_retry(url)
+            except Exception as e:
+                status = check_anti_scraping_status(e)
+                source_tracker.update_status(
+                    'Metal Bulletin',
+                    success=False,
+                    error=str(e),
+                    anti_scraping=status['has_anti_scraping'],
+                    recommendations=status['recommendations']
+                )
+                if status['has_anti_scraping']:
+                    logger.warning(f"Metal Bulletin appears to have anti-scraping protection: {status['details']}")
+                    logger.info("Recommendations:")
+                    for rec in status['recommendations']:
+                        logger.info(f"- {rec}")
+                else:
+                    logger.error(f"Error fetching Metal Bulletin news: {e}")
+                return []
+
+            feed = feedparser.parse(content)
+            articles = []
+            for entry in feed.entries[:15]:
+                articles.append({
+                    'source': 'Metal Bulletin',
+                    'title': entry.title,
+                    'summary': getattr(entry, 'summary', ''),
+                    'url': entry.link,
+                    'published': self._parse_date(entry.published),
+                    'category': 'metals'
+                })
+            
+            logger.info(f"Fetched {len(articles)} Metal Bulletin articles")
+            source_tracker.update_status('Metal Bulletin', success=True)
+            return articles
+
+        except Exception as e:
+            logger.error(f"Error fetching Metal Bulletin news: {e}")
+            return []
+
+    async def fetch_energy_gov_news(self) -> List[Dict]:
+        """Fetch Energy.gov press releases via RSS"""
+        try:
+            url = "https://www.energy.gov/news/rss.xml"
+            try:
+                content = await self._get_text_with_retry(url)
+            except Exception as e:
+                status = check_anti_scraping_status(e)
+                source_tracker.update_status(
+                    'Energy.gov',
+                    success=False,
+                    error=str(e),
+                    anti_scraping=status['has_anti_scraping'],
+                    recommendations=status['recommendations']
+                )
+                if status['has_anti_scraping']:
+                    logger.warning(f"Energy.gov appears to have anti-scraping protection: {status['details']}")
+                    logger.info("Recommendations:")
+                    for rec in status['recommendations']:
+                        logger.info(f"- {rec}")
+                else:
+                    logger.error(f"Error fetching Energy.gov news: {e}")
+                return []
+
+            feed = feedparser.parse(content)
+            articles = []
+            
+            # Keywords to filter relevant energy/commodity content
+            energy_keywords = ['oil', 'gas', 'coal', 'nuclear', 'renewable', 
+                             'solar', 'wind', 'battery', 'storage', 'hydrogen',
+                             'carbon', 'emission', 'climate', 'energy']
+                             
+            for entry in feed.entries[:20]:  # Check more entries since we're filtering
+                title = entry.title.lower()
+                summary = getattr(entry, 'summary', '').lower()
+                
+                # Only include entries related to energy/commodities
+                if any(keyword in title or keyword in summary for keyword in energy_keywords):
+                    articles.append({
+                        'source': 'Energy.gov',
+                        'title': entry.title,
+                        'summary': getattr(entry, 'summary', ''),
+                        'url': entry.link,
+                        'published': self._parse_date(entry.published),
+                        'category': 'energy_policy'
+                    })
+            
+            logger.info(f"Fetched {len(articles)} Energy.gov articles")
+            source_tracker.update_status('Energy.gov', success=True)
+            return articles
+
+        except Exception as e:
+            logger.error(f"Error fetching Energy.gov news: {e}")
+            return []
+
     async def fetch_all_sources(self) -> List[Dict]:
         """Fetch news from all sources concurrently"""
         tasks = [
@@ -527,9 +843,13 @@ class NewsDataSources:
             self.fetch_iea_news(),
             self.fetch_bloomberg_commodities(),
             self.fetch_sp_global_platts(),
-            self.fetch_additional_sources(),
             self.fetch_investing_news(),
             self.fetch_mining_weekly(),
+            # New sources
+            self.fetch_ngi_news(),
+            self.fetch_kitco_news(),
+            self.fetch_metal_bulletin_news(),
+            self.fetch_energy_gov_news(),
         ]
         
         results = await asyncio.gather(*tasks, return_exceptions=True)
@@ -674,6 +994,64 @@ class NewsDataSources:
         return enhanced_articles
 
 
+def check_anti_scraping_status(error: Exception) -> dict:
+    """Analyze error responses to detect anti-scraping measures.
+    
+    Args:
+        error: The exception that occurred during the request
+        
+    Returns:
+        Dict containing:
+            - has_anti_scraping (bool): Whether anti-scraping measures were detected
+            - details (str): Description of the protection type detected
+            - recommendations (list): List of possible workarounds
+    """
+    result = {
+        'has_anti_scraping': False,
+        'details': '',
+        'recommendations': []
+    }
+    
+    error_str = str(error).lower()
+    
+    # Check for common anti-scraping indicators
+    if any(x in error_str for x in ['403', 'forbidden']):
+        result['has_anti_scraping'] = True
+        result['details'] = 'Access forbidden - likely due to anti-scraping protection'
+        result['recommendations'] = [
+            'Consider reducing request frequency',
+            'Check if an official API is available',
+            'Review the site\'s terms of service and robots.txt'
+        ]
+    
+    elif any(x in error_str for x in ['429', 'too many requests']):
+        result['has_anti_scraping'] = True
+        result['details'] = 'Rate limiting detected'
+        result['recommendations'] = [
+            'Implement rate limiting in your requests',
+            'Add delays between requests',
+            'Consider using multiple proxy servers'
+        ]
+        
+    elif any(x in error_str for x in ['captcha', 'recaptcha', 'security challenge']):
+        result['has_anti_scraping'] = True
+        result['details'] = 'CAPTCHA or security challenge detected'
+        result['recommendations'] = [
+            'Check if an official API is available',
+            'Review the site\'s terms of service'
+        ]
+    
+    elif 'security controls triggered' in error_str:
+        result['has_anti_scraping'] = True
+        result['details'] = 'Security controls triggered - likely automated access detection'
+        result['recommendations'] = [
+            'Check if an official API is available',
+            'Consider implementing browser-like headers',
+            'Review the site\'s terms of service'
+        ]
+    
+    return result
+
 # Singleton instance
 news_sources = NewsDataSources()
 
@@ -712,10 +1090,23 @@ async def test_news_sources():
         sp = await sources.fetch_sp_global_platts()
         print(f"S&P Global: {len(sp)} articles")
         
-        print("Testing additional sources...")
-        additional = await sources.fetch_additional_sources()
-        print(f"Additional: {len(additional)} articles")
+        print("Testing NGI...")
+        ngi = await sources.fetch_ngi_news()
+        print(f"NGI: {len(ngi)} articles")
         
+        print("Testing Kitco...")
+        kitco = await sources.fetch_kitco_news()
+        print(f"Kitco: {len(kitco)} articles")
+        
+        print("Testing Metal Bulletin...")
+        mb = await sources.fetch_metal_bulletin_news()
+        print(f"Metal Bulletin: {len(mb)} articles")
+        
+        print("Testing Energy.gov...")
+        eg = await sources.fetch_energy_gov_news()
+        print(f"Energy.gov: {len(eg)} articles")
+        
+        print("\nFetching all sources together...")
         print("\nFetching all sources together...")
         all_news = await sources.fetch_all_sources()
         print(f"Total unique articles: {len(all_news)}")

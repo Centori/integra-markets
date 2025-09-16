@@ -19,7 +19,9 @@ from backend.db import init_db, close_db
 from pydantic import BaseModel, Field
 
 # Import routers
-from api.notifications import router as notifications_router
+from backend.api.notifications import router as notifications_router
+from backend.api.market_data import router as market_data_router
+from backend.api.news import router as news_router
 
 # Load environment variables
 parent_dir = Path(__file__).parent.parent
@@ -64,6 +66,8 @@ app = FastAPI(
 
 # Include API routers
 app.include_router(notifications_router, prefix="/api")
+app.include_router(market_data_router)
+app.include_router(news_router)
 
 # CORS middleware
 app.add_middleware(

@@ -11,9 +11,8 @@ from .db import init_db, close_db
 
 # Routers
 from backend.api.notifications import router as notifications_router
-
-# Routers
-from api.notifications import router as notifications_router
+from backend.api.market_data import router as market_data_router
+from backend.api.news import router as news_router
 
 # Load environment variables from parent directory's .env file
 parent_dir = Path(__file__).parent.parent
@@ -33,9 +32,8 @@ async def shutdown_event():
 
 # Mount routers
 app.include_router(notifications_router)
-
-# Mount routers
-app.include_router(notifications_router)
+app.include_router(market_data_router)
+app.include_router(news_router)
 
 # Add CORS middleware to allow requests from your React Native app
 app.add_middleware(
@@ -75,12 +73,13 @@ def read_root():
             "/analyze-sentiment",
             "/health",
             "/api/notifications/register-token",
-            "/api/notifications/test"
-        ]
-    }
-            "/health",
-            "/api/notifications/register-token",
-            "/api/notifications/test"
+            "/api/notifications/test",
+            "/api/market-data/fx/rate",
+            "/api/market-data/fx/series",
+            "/api/market-data/commodities/rate",
+            "/api/market-data/commodities/series",
+            "/api/news/latest",
+            "/api/news/refresh"
         ]
     }
 
