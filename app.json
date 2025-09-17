@@ -20,7 +20,7 @@
     ],
     "ios": {
       "bundleIdentifier": "com.centori.integramarkets",
-      "buildNumber": "31",
+      "buildNumber": "32",
       "deploymentTarget": "13.0",
       "supportsTablet": true,
       "requireFullScreen": false,
