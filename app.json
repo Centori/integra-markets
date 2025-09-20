@@ -98,7 +98,6 @@
         {
           "icon": "./assets/notification-icon-new.png",
           "color": "#4ECCA3",
-          "sounds": ["default"],
           "defaultChannel": "default",
           "channels": [
             {

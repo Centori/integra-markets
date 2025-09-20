@@ -455,116 +455,46 @@ class NewsDataSources:
             source_tracker.update_status('Bloomberg', success=False, error=str(e))
             return []
 
-    async def fetch_sp_global_platts(self) -> List[Dict]:
-        """Fetch S&P Global Platts energy news
-        
-        If credentials are provided, uses the Platts API. Otherwise, attempts web scraping
-        which will likely be blocked.
-        
-        Required credentials:
-        - api_key: Platts API key
-        - username: Platts username
-        - password: Platts password
-        """
+    async def fetch_trading_economics(self) -> List[Dict]:
+        """Fetch TradingEconomics commodity and forex news via RSS feed"""
         try:
-            # Check if we have API credentials
-            platts_creds = self.credentials.get('platts', {})
-            if platts_creds.get('api_key') and platts_creds.get('username') and platts_creds.get('password'):
-                return await self._fetch_platts_api(
-                    api_key=platts_creds['api_key'],
-                    username=platts_creds['username'],
-                    password=platts_creds['password']
-                )
-            else:
-                # No credentials - warn about API requirement
-                logger.warning(
-                    "S&P Global Platts blocks web scraping. To access Platts content, "
-                    "you need API credentials. Please provide:"
-                )
-                logger.info("- Platts API key")
-                logger.info("- Platts username")
-                logger.info("- Platts password")
-                logger.info("Contact your Platts account representative for API access.")
-                return []
+            # TradingEconomics RSS feeds
+            urls = [
+                "https://tradingeconomics.com/rss/news.aspx?i=commodities+news",  # Commodities feed
+                "https://tradingeconomics.com/rss/news.aspx?i=forex+news"         # Forex feed
+            ]
+            
+            all_articles = []
+            for url in urls:
+                try:
+                    async with self.session.get(url) as response:
+                        if response.status == 200:
+                            content = await response.text()
+                            feed = feedparser.parse(content)
+                            
+                            # Determine category from URL
+                            category = 'commodities' if 'commodities' in url else 'forex'
+                            
+                            for entry in feed.entries[:10]:  # Get latest 10 articles from each feed
+                                all_articles.append({
+                                    'source': 'Trading Economics',
+                                    'title': entry.title,
+                                    'summary': getattr(entry, 'summary', ''),
+                                    'url': entry.link,
+                                    'published': self._parse_date(entry.published),
+                                    'category': category
+                                })
+                except Exception as e:
+                    logger.warning(f"Error fetching TradingEconomics feed {url}: {e}")
+                    continue
+            
+            logger.info(f"Fetched {len(all_articles)} Trading Economics articles")
+            source_tracker.update_status('Trading Economics', success=True)
+            return all_articles
             
         except Exception as e:
-            logger.error(f"Error fetching S&P Global Platts news: {e}")
-            return []
-    
-    async def _fetch_platts_api(self, api_key: str, username: str, password: str) -> List[Dict]:
-        """Fetch news using the Platts API
-        
-        Documentation: https://developer.platts.com
-        """
-        try:
-            # Platts API endpoint for news
-            url = "https://api.platts.com/commodityinsights/v1/news"
-            
-            # Platts requires OAuth2 authentication
-            auth_url = "https://api.platts.com/auth/v1/token"
-            
-            # Get auth token
-            async with self.session.post(
-                auth_url,
-                headers={
-                    'Content-Type': 'application/x-www-form-urlencoded',
-                    'Authorization': f'Basic {api_key}'
-                },
-                data={
-                    'grant_type': 'password',
-                    'username': username,
-                    'password': password
-                }
-            ) as response:
-                if response.status != 200:
-                    logger.error(f"Failed to authenticate with Platts API: {response.status}")
-                    return []
-                    
-                auth_data = await response.json()
-                access_token = auth_data['access_token']
-            
-            # Fetch news with auth token
-            async with self.session.get(
-                url,
-                headers={
-                    'Authorization': f'Bearer {access_token}',
-                    'Content-Type': 'application/json'
-                },
-                params={
-                    'start_date': (datetime.now() - timedelta(days=1)).isoformat(),
-                    'end_date': datetime.now().isoformat(),
-                    'page_size': 15,
-                    'sort': '-publishDate'
-                }
-            ) as response:
-                if response.status != 200:
-                    logger.error(f"Failed to fetch news from Platts API: {response.status}")
-                    return []
-                    
-                data = await response.json()
-                
-                articles = []
-                for item in data.get('items', []):
-                    articles.append({
-                        'source': 'S&P Global Platts',
-                        'title': item['headline'],
-                        'summary': item.get('summary', ''),
-                        'url': item['url'],
-                        'published': self._parse_date(item['publishDate']),
-                        'category': item.get('category', 'Commodity Insights')
-                    })
-                
-                logger.info(f"Fetched {len(articles)} articles via Platts API")
-                source_tracker.update_status('S&P Global Platts', success=True)
-                return articles
-                
-        except Exception as e:
-            logger.error(f"Error accessing Platts API: {e}")
-            source_tracker.update_status(
-                'S&P Global Platts',
-                success=False,
-                error=str(e)
-            )
+            logger.error(f"Error fetching Trading Economics news: {e}")
+            source_tracker.update_status('Trading Economics', success=False, error=str(e))
             return []
     def _parse_date(self, date_string: str) -> datetime:
         """Parse various date formats to datetime object"""
@@ -842,7 +772,7 @@ class NewsDataSources:
             self.fetch_eia_reports(),
             self.fetch_iea_news(),
             self.fetch_bloomberg_commodities(),
-            self.fetch_sp_global_platts(),
+            self.fetch_trading_economics(),
             self.fetch_investing_news(),
             self.fetch_mining_weekly(),
             # New sources

@@ -18,6 +18,7 @@ import {
 import { MaterialIcons, MaterialCommunityIcons } from '@expo/vector-icons';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { registerForPushNotificationsAsync, setupNotificationListeners } from './services/notificationService';
+import { debugNotificationPermissions, testRequestPermissions } from './debug_notifications';
 
 // Ensure dev tools are disabled in production
 if (!__DEV__) {
@@ -226,8 +227,14 @@ const App = () => {
   // Initialize notifications
   const initializeNotifications = async () => {
     try {
+      // Debug notification permissions first
+      await debugNotificationPermissions();
+      
       // Register for push notifications
       await registerForPushNotificationsAsync();
+      
+      // Debug again after registration
+      await debugNotificationPermissions();
       
       // Set up notification listeners
       setupNotificationListeners(

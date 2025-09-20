@@ -8,10 +8,21 @@ import {
   TouchableOpacity,
   ScrollView,
   Switch,
+  RefreshControl,
+  Alert,
 } from 'react-native';
 import { MaterialIcons } from '@expo/vector-icons';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import HollowCircularIcon from './HollowCircularIcon';
+import {
+  getCurrentAlerts,
+  markAlertAsRead,
+  deleteAlert,
+  clearAllAlerts,
+  getTimeAgo,
+  initializeSampleAlerts,
+  monitorAlerts,
+} from '../services/alertService';
 
 // Color Palette
 const colors = {
@@ -45,41 +56,27 @@ const AlertsScreen = ({ onNavigateToAlertPreferences, onNavigateToBookmarks }) =
   const [emailAlerts, setEmailAlerts] = useState(false);
   const [priceAlerts, setPriceAlerts] = useState(true);
   const [newsAlerts, setNewsAlerts] = useState(true);
-
-  // Sample alerts data
-  const [alerts] = useState([
-    {
-      id: '1',
-      title: 'Gold Price Alert',
-      message: 'Gold has increased by 2.5% in the last hour',
-      time: '2 min ago',
-      type: 'price',
-      severity: 'high',
-      read: false,
-    },
-    {
-      id: '2',
-      title: 'Oil Market Update',
-      message: 'Crude oil futures showing volatility due to geopolitical tensions',
-      time: '15 min ago',
-      type: 'news',
-      severity: 'medium',
-      read: true,
-    },
-    {
-      id: '3',
-      title: 'Copper Supply Chain',
-      message: 'Major copper mine disruption reported in Chile',
-      time: '1 hour ago',
-      type: 'news',
-      severity: 'high',
-      read: false,
-    },
-  ]);
+  const [alerts, setAlerts] = useState([]);
+  const [refreshing, setRefreshing] = useState(false);
+  const [alertsLoaded, setAlertsLoaded] = useState(false);
 
   useEffect(() => {
     loadAlertPreferences();
+    loadAlerts();
+    initializeSampleAlerts(); // Initialize with sample data if no alerts exist
   }, []);
+
+  // Monitor for new alerts periodically
+  useEffect(() => {
+    if (preferencesLoaded && alertPreferences) {
+      const interval = setInterval(() => {
+        monitorAlerts(alertPreferences);
+        loadAlerts(); // Refresh alerts
+      }, 30000); // Check every 30 seconds
+
+      return () => clearInterval(interval);
+    }
+  }, [preferencesLoaded, alertPreferences]);
 
   const loadAlertPreferences = async () => {
     try {
@@ -93,6 +90,27 @@ const AlertsScreen = ({ onNavigateToAlertPreferences, onNavigateToBookmarks }) =
     } finally {
       setPreferencesLoaded(true);
     }
+  };
+
+  const loadAlerts = async () => {
+    try {
+      const currentAlerts = await getCurrentAlerts();
+      setAlerts(currentAlerts);
+    } catch (error) {
+      console.error('Error loading alerts:', error);
+    } finally {
+      setAlertsLoaded(true);
+    }
+  };
+
+  const handleRefresh = async () => {
+    setRefreshing(true);
+    await loadAlerts();
+    if (preferencesLoaded && alertPreferences) {
+      await monitorAlerts(alertPreferences);
+      await loadAlerts(); // Load again after monitoring
+    }
+    setRefreshing(false);
   };
 
   const getSeverityColor = (severity) => {
@@ -121,8 +139,54 @@ const AlertsScreen = ({ onNavigateToAlertPreferences, onNavigateToBookmarks }) =
     }
   };
 
-  const handleAlertTap = (alertId) => {
-    console.log('Alert tapped:', alertId);
+  const handleAlertTap = async (alertId) => {
+    try {
+      await markAlertAsRead(alertId);
+      await loadAlerts(); // Refresh to show updated read status
+    } catch (error) {
+      console.error('Error marking alert as read:', error);
+    }
+  };
+
+  const handleDeleteAlert = async (alertId) => {
+    Alert.alert(
+      'Delete Alert',
+      'Are you sure you want to delete this alert?',
+      [
+        { text: 'Cancel', style: 'cancel' },
+        {
+          text: 'Delete',
+          style: 'destructive',
+          onPress: async () => {
+            await deleteAlert(alertId);
+            await loadAlerts();
+          },
+        },
+      ]
+    );
+  };
+
+  const handleClearAllAlerts = () => {
+    if (alerts.length === 0) {
+      Alert.alert('No Alerts', 'There are no alerts to clear.');
+      return;
+    }
+
+    Alert.alert(
+      'Clear All Alerts',
+      `Are you sure you want to clear all ${alerts.length} alerts?`,
+      [
+        { text: 'Cancel', style: 'cancel' },
+        {
+          text: 'Clear All',
+          style: 'destructive',
+          onPress: async () => {
+            await clearAllAlerts();
+            await loadAlerts();
+          },
+        },
+      ]
+    );
   };
 
   const handleSettingChange = (setting, value) => {
@@ -177,7 +241,18 @@ const AlertsScreen = ({ onNavigateToAlertPreferences, onNavigateToBookmarks }) =
         </TouchableOpacity>
       </View>
 
-      <ScrollView style={styles.content} showsVerticalScrollIndicator={false}>
+      <ScrollView 
+        style={styles.content} 
+        showsVerticalScrollIndicator={false}
+        refreshControl={
+          <RefreshControl
+            refreshing={refreshing}
+            onRefresh={handleRefresh}
+            tintColor={colors.accentPositive}
+            colors={[colors.accentPositive]}
+          />
+        }
+      >
         {/* Alert Preferences Section */}
         <View style={styles.section}>
           <Text style={styles.sectionTitle}>Alert Preferences</Text>
@@ -278,48 +353,90 @@ const AlertsScreen = ({ onNavigateToAlertPreferences, onNavigateToBookmarks }) =
 
         {/* Recent Alerts */}
         <View style={styles.section}>
-          <Text style={styles.sectionTitle}>Recent Alerts</Text>
-          {alerts.map((alert) => (
-            <TouchableOpacity
-              key={alert.id}
-              style={[styles.alertItem, !alert.read && styles.unreadAlert]}
-              onPress={() => handleAlertTap(alert.id)}
-            >
-              <View style={styles.alertIcon}>
-                <HollowCircularIcon
-                  name={getTypeIcon(alert.type)}
-                  size={20}
-                  color={getSeverityColor(alert.severity)}
-                  padding={4}
-                />
-              </View>
-              <View style={styles.alertContent}>
-                <Text style={styles.alertTitle}>{alert.title}</Text>
-                <Text style={styles.alertMessage}>{alert.message}</Text>
-                <Text style={styles.alertTime}>{alert.time}</Text>
-              </View>
-              {!alert.read && <View style={styles.unreadDot} />}
-            </TouchableOpacity>
-          ))}
+          <View style={styles.sectionHeader}>
+            <Text style={styles.sectionTitle}>Recent Alerts</Text>
+            {alerts.length > 0 && (
+              <TouchableOpacity
+                style={styles.clearAllButton}
+                onPress={handleClearAllAlerts}
+              >
+                <Text style={styles.clearAllText}>Clear All</Text>
+              </TouchableOpacity>
+            )}
+          </View>
+          
+          {!alertsLoaded ? (
+            <View style={styles.loadingContainer}>
+              <Text style={styles.loadingText}>Loading alerts...</Text>
+            </View>
+          ) : alerts.length === 0 ? (
+            <View style={styles.emptyAlertsContainer}>
+              <MaterialIcons name="notifications-none" size={48} color={colors.textSecondary} />
+              <Text style={styles.emptyAlertsText}>No alerts yet</Text>
+              <Text style={styles.emptyAlertsSubtext}>
+                You'll see market alerts and notifications here based on your preferences.
+              </Text>
+            </View>
+          ) : (
+            alerts.map((alert) => (
+              <TouchableOpacity
+                key={alert.id}
+                style={[styles.alertItem, !alert.read && styles.unreadAlert]}
+                onPress={() => handleAlertTap(alert.id)}
+              >
+                <View style={styles.alertIcon}>
+                  <HollowCircularIcon
+                    name={getTypeIcon(alert.type)}
+                    size={20}
+                    color={getSeverityColor(alert.severity)}
+                    padding={4}
+                  />
+                </View>
+                <View style={styles.alertContent}>
+                  <Text style={styles.alertTitle}>{alert.title}</Text>
+                  <Text style={styles.alertMessage}>{alert.message}</Text>
+                  <Text style={styles.alertTime}>{getTimeAgo(alert.timestamp)}</Text>
+                </View>
+                <View style={styles.alertActions}>
+                  {!alert.read && <View style={styles.unreadDot} />}
+                  <TouchableOpacity
+                    style={styles.deleteButton}
+                    onPress={() => handleDeleteAlert(alert.id)}
+                  >
+                    <MaterialIcons name="close" size={16} color={colors.textSecondary} />
+                  </TouchableOpacity>
+                </View>
+              </TouchableOpacity>
+            ))
+          )}
         </View>
 
         {/* Quick Actions */}
         <View style={styles.section}>
           <Text style={styles.sectionTitle}>Quick Actions</Text>
           
-          <TouchableOpacity style={styles.actionButton}>
+          <TouchableOpacity 
+            style={styles.actionButton}
+            onPress={onNavigateToAlertPreferences}
+          >
             <HollowCircularIcon name="add" size={20} color={colors.accentData} padding={4} />
-            <Text style={styles.actionText}>Add New Alert</Text>
+            <Text style={styles.actionText}>Edit Alert Preferences</Text>
           </TouchableOpacity>
           
-          <TouchableOpacity style={styles.actionButton}>
-            <HollowCircularIcon name="settings" size={20} color={colors.accentData} padding={4} />
-            <Text style={styles.actionText}>Manage Alerts</Text>
+          <TouchableOpacity 
+            style={styles.actionButton}
+            onPress={handleRefresh}
+          >
+            <HollowCircularIcon name="refresh" size={20} color={colors.accentData} padding={4} />
+            <Text style={styles.actionText}>Refresh Alerts</Text>
           </TouchableOpacity>
           
-          <TouchableOpacity style={styles.actionButton}>
-            <HollowCircularIcon name="history" size={20} color={colors.accentData} padding={4} />
-            <Text style={styles.actionText}>View Alert History</Text>
+          <TouchableOpacity 
+            style={styles.actionButton}
+            onPress={handleClearAllAlerts}
+          >
+            <HollowCircularIcon name="clear-all" size={20} color={colors.accentNegative} padding={4} />
+            <Text style={[styles.actionText, { color: colors.accentNegative }]}>Clear All Alerts</Text>
           </TouchableOpacity>
         </View>
       </ScrollView>

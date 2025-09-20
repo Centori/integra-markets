@@ -9,6 +9,9 @@ RUN apt-get update && apt-get install -y \
     g++ \
     git \
     curl \
+    libblas-dev \
+    liblapack-dev \
+    gfortran \
     && rm -rf /var/lib/apt/lists/*
 
 # Copy requirements file from backend directory
@@ -29,6 +32,8 @@ WORKDIR /app
 RUN apt-get update && apt-get install -y \
     libgomp1 \
     curl \
+    libblas3 \
+    liblapack3 \
     && rm -rf /var/lib/apt/lists/*
 
 # Copy Python packages from builder

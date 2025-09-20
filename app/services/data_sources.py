@@ -208,42 +208,44 @@ class NewsDataSources:
             logger.error(f"Error fetching Bloomberg news: {e}")
             return []
 
-    async def fetch_sp_global_platts(self) -> List[Dict]:
-        """Fetch S&P Global Platts energy news"""
+    async def fetch_trading_economics(self) -> List[Dict]:
+        """Fetch TradingEconomics commodity and forex news via RSS feed"""
         try:
-            # S&P Global Platts RSS feed
-            url = "https://www.spglobal.com/commodityinsights/en/rss-feeds"
+            # TradingEconomics RSS feeds
+            urls = [
+                "https://tradingeconomics.com/rss/news.aspx?i=commodities+news",  # Commodities feed
+                "https://tradingeconomics.com/rss/news.aspx?i=forex+news"         # Forex feed
+            ]
             
-            # Alternative: Use MarketWatch commodities which is owned by S&P
-            marketwatch_url = "https://feeds.marketwatch.com/marketwatch/realtimeheadlines/"
+            all_articles = []
+            for url in urls:
+                try:
+                    async with self.session.get(url) as response:
+                        if response.status == 200:
+                            content = await response.text()
+                            feed = feedparser.parse(content)
+                            
+                            # Determine category from URL
+                            category = 'commodities' if 'commodities' in url else 'forex'
+                            
+                            for entry in feed.entries[:10]:  # Get latest 10 articles from each feed
+                                all_articles.append({
+                                    'source': 'Trading Economics',
+                                    'title': entry.title,
+                                    'summary': getattr(entry, 'summary', ''),
+                                    'url': entry.link,
+                                    'published': self._parse_date(entry.published),
+                                    'category': category
+                                })
+                except Exception as e:
+                    logger.warning(f"Error fetching TradingEconomics feed {url}: {e}")
+                    continue
             
-            async with self.session.get(marketwatch_url) as response:
-                if response.status == 200:
-                    content = await response.text()
-                    feed = feedparser.parse(content)
-                    
-                    articles = []
-                    for entry in feed.entries[:12]:
-                        title = entry.title.lower()
-                        summary = getattr(entry, 'summary', '').lower()
-                        
-                        # Filter for energy and commodities
-                        keywords = ['oil', 'gas', 'energy', 'crude', 'natural gas', 'commodity', 'futures', 'gold', 'silver', 'copper']
-                        if any(keyword in title or keyword in summary for keyword in keywords):
-                            articles.append({
-                                'source': 'MarketWatch/S&P',
-                                'title': entry.title,
-                                'summary': getattr(entry, 'summary', ''),
-                                'url': entry.link,
-                                'published': self._parse_date(entry.published),
-                                'category': 'commodities'
-                            })
-                    
-                    logger.info(f"Fetched {len(articles)} S&P/MarketWatch articles")
-                    return articles
-                    
+            logger.info(f"Fetched {len(all_articles)} Trading Economics articles")
+            return all_articles
+            
         except Exception as e:
-            logger.error(f"Error fetching S&P Global Platts news: {e}")
+            logger.error(f"Error fetching Trading Economics news: {e}")
             return []
 
     async def fetch_additional_sources(self) -> List[Dict]:
@@ -327,7 +329,7 @@ class NewsDataSources:
             self.fetch_eia_reports(),
             self.fetch_iea_news(),
             self.fetch_bloomberg_commodities(),
-            self.fetch_sp_global_platts(),
+            self.fetch_trading_economics(),
             self.fetch_additional_sources(),
         ]
         
