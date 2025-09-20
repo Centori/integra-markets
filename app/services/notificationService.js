@@ -1,6 +1,7 @@
 import * as Notifications from 'expo-notifications';
 import { Platform, Alert, Linking } from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import { addAlert } from './alertService';
 
 // Configure how notifications are handled when the app is running
 Notifications.setNotificationHandler({
@@ -408,12 +409,34 @@ export async function sendMarketAlert(commodity, change, price) {
   const title = `${commodity} Alert`;
   const body = `Price ${change > 0 ? 'increased' : 'decreased'} to $${price}`;
   
-  return await scheduleLocalNotification(title, body, {
-    type: 'market_alert',
-    commodity,
-    change,
-    price,
-  });
+  try {
+    // Send notification
+    const notificationId = await scheduleLocalNotification(title, body, {
+      type: 'market_alert',
+      commodity,
+      change,
+      price,
+    });
+    
+    // Add to alert history
+    await addAlert({
+      type: 'market',
+      severity: Math.abs(change) > 5 ? 'high' : 'medium',
+      title,
+      message: body,
+      data: {
+        commodity,
+        change,
+        price,
+        notificationId
+      }
+    });
+    
+    return notificationId;
+  } catch (error) {
+    console.error('Error sending market alert:', error);
+    return null;
+  }
 }
 
 /**
@@ -429,10 +452,30 @@ export async function sendBreakingNewsAlert(headline, source) {
   const title = 'Breaking News';
   const body = headline;
   
-  return await scheduleLocalNotification(title, body, {
-    type: 'breaking_news',
-    source,
-  });
+  try {
+    // Send notification
+    const notificationId = await scheduleLocalNotification(title, body, {
+      type: 'breaking_news',
+      source,
+    });
+    
+    // Add to alert history
+    await addAlert({
+      type: 'news',
+      severity: 'high',
+      title,
+      message: body,
+      data: {
+        source,
+        notificationId
+      }
+    });
+    
+    return notificationId;
+  } catch (error) {
+    console.error('Error sending breaking news alert:', error);
+    return null;
+  }
 }
 
 /**

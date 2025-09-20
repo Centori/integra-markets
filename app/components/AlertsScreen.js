@@ -14,6 +14,7 @@ import {
 import { MaterialIcons } from '@expo/vector-icons';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import HollowCircularIcon from './HollowCircularIcon';
+import alertMonitoringService from '../services/alertMonitoringService';
 import {
   getCurrentAlerts,
   markAlertAsRead,
@@ -59,11 +60,26 @@ const AlertsScreen = ({ onNavigateToAlertPreferences, onNavigateToBookmarks }) =
   const [alerts, setAlerts] = useState([]);
   const [refreshing, setRefreshing] = useState(false);
   const [alertsLoaded, setAlertsLoaded] = useState(false);
+  const [monitoringStatus, setMonitoringStatus] = useState({ isMonitoring: false });
 
   useEffect(() => {
     loadAlertPreferences();
     loadAlerts();
     initializeSampleAlerts(); // Initialize with sample data if no alerts exist
+    updateMonitoringStatus();
+    
+    // Start monitoring service
+    alertMonitoringService.startMonitoring();
+    
+    // Set up periodic status updates
+    const statusInterval = setInterval(() => {
+      updateMonitoringStatus();
+    }, 5000); // Check status every 5 seconds
+    
+    return () => {
+      clearInterval(statusInterval);
+      // Don't stop monitoring on unmount to keep it running in background
+    };
   }, []);
 
   // Monitor for new alerts periodically
@@ -106,11 +122,28 @@ const AlertsScreen = ({ onNavigateToAlertPreferences, onNavigateToBookmarks }) =
   const handleRefresh = async () => {
     setRefreshing(true);
     await loadAlerts();
+    await updateMonitoringStatus();
+    // Trigger manual market check
+    await alertMonitoringService.triggerManualCheck();
     if (preferencesLoaded && alertPreferences) {
       await monitorAlerts(alertPreferences);
       await loadAlerts(); // Load again after monitoring
     }
     setRefreshing(false);
+  };
+  
+  const updateMonitoringStatus = async () => {
+    const status = alertMonitoringService.getStatus();
+    setMonitoringStatus(status);
+  };
+  
+  const toggleMonitoring = async () => {
+    if (monitoringStatus.isMonitoring) {
+      await alertMonitoringService.stopMonitoring();
+    } else {
+      await alertMonitoringService.startMonitoring();
+    }
+    await updateMonitoringStatus();
   };
 
   const getSeverityColor = (severity) => {
@@ -309,6 +342,33 @@ const AlertsScreen = ({ onNavigateToAlertPreferences, onNavigateToBookmarks }) =
         {/* Notification Settings */}
         <View style={styles.section}>
           <Text style={styles.sectionTitle}>Notification Settings</Text>
+          
+          {/* Monitoring Status */}
+          <View style={styles.statusContainer}>
+            <View style={styles.statusIndicator}>
+              <View style={[
+                styles.statusDot, 
+                { backgroundColor: monitoringStatus.isMonitoring ? colors.accentPositive : colors.accentNegative }
+              ]} />
+              <Text style={styles.statusText}>
+                Real-time Monitoring: {monitoringStatus.isMonitoring ? 'Active' : 'Inactive'}
+              </Text>
+            </View>
+            <TouchableOpacity
+              style={[
+                styles.toggleButton,
+                { backgroundColor: monitoringStatus.isMonitoring ? colors.accentNegative + '20' : colors.accentPositive + '20' }
+              ]}
+              onPress={toggleMonitoring}
+            >
+              <Text style={[
+                styles.toggleButtonText,
+                { color: monitoringStatus.isMonitoring ? colors.accentNegative : colors.accentPositive }
+              ]}>
+                {monitoringStatus.isMonitoring ? 'Stop' : 'Start'}
+              </Text>
+            </TouchableOpacity>
+          </View>
           
           <View style={styles.settingRow}>
             <Text style={styles.settingLabel}>Push Notifications</Text>
@@ -580,6 +640,54 @@ const styles = StyleSheet.create({
     borderRadius: 4,
     backgroundColor: colors.accentPositive,
   },
+  sectionHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 12,
+  },
+  clearAllButton: {
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    backgroundColor: colors.accentNegative + '20',
+    borderRadius: 6,
+  },
+  clearAllText: {
+    color: colors.accentNegative,
+    fontSize: 12,
+    fontWeight: '600',
+  },
+  loadingContainer: {
+    padding: 20,
+    alignItems: 'center',
+  },
+  emptyAlertsContainer: {
+    padding: 40,
+    alignItems: 'center',
+  },
+  emptyAlertsText: {
+    color: colors.textPrimary,
+    fontSize: 16,
+    fontWeight: '600',
+    marginTop: 12,
+  },
+  emptyAlertsSubtext: {
+    color: colors.textSecondary,
+    fontSize: 14,
+    textAlign: 'center',
+    marginTop: 8,
+    lineHeight: 20,
+  },
+  alertActions: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+  },
+  deleteButton: {
+    padding: 4,
+    borderRadius: 4,
+    backgroundColor: colors.bgSecondary,
+  },
   actionButton: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -593,6 +701,40 @@ const styles = StyleSheet.create({
     color: colors.accentData,
     marginLeft: 10,
     fontWeight: '500',
+  },
+  statusContainer: {
+    backgroundColor: colors.bgSecondary,
+    borderRadius: 12,
+    padding: 15,
+    marginBottom: 15,
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+  },
+  statusIndicator: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    flex: 1,
+  },
+  statusDot: {
+    width: 8,
+    height: 8,
+    borderRadius: 4,
+    marginRight: 8,
+  },
+  statusText: {
+    fontSize: 14,
+    color: colors.textPrimary,
+    fontWeight: '500',
+  },
+  toggleButton: {
+    paddingHorizontal: 16,
+    paddingVertical: 8,
+    borderRadius: 6,
+  },
+  toggleButtonText: {
+    fontSize: 14,
+    fontWeight: '600',
   },
 });
 
