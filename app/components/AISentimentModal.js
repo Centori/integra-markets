@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import {
   StyleSheet,
   Text,
@@ -7,7 +7,12 @@ import {
   Modal,
   ScrollView,
   Animated,
+  TextInput,
 } from 'react-native';
+import * as Clipboard from 'expo-clipboard';
+// Import local components
+import AILoadingText from './AILoadingText';
+import useSentimentAnalysis from '../services/useSentimentAnalysis';
 import { MaterialIcons } from '@expo/vector-icons';
 import EnhancedNewsAnalysis, { preprocessNews } from './EnhancedNewsAnalysis';
 import useSentimentAnalysis from '../services/useSentimentAnalysis';
@@ -28,7 +33,10 @@ const colors = {
 const AISentimentModal = ({ visible, onClose, newsItem }) => {
   const [showEnhancedAnalysis, setShowEnhancedAnalysis] = useState(false);
   const [realSentimentData, setRealSentimentData] = useState(null);
-  const { analyzeText, loading, error } = useSentimentAnalysis();
+  const { analyzeText, error } = useSentimentAnalysis();
+  const [loading, setLoading] = useState(false);
+  const [inputText, setInputText] = useState('');
+  const abortController = useRef(null);
 
   useEffect(() => {
     if (visible && newsItem) {
@@ -36,16 +44,49 @@ const AISentimentModal = ({ visible, onClose, newsItem }) => {
     }
   }, [visible, newsItem]);
 
-  const performRealAnalysis = async () => {
-    const fullText = `${newsItem.headline}. ${newsItem.summary}`;
-    const result = await analyzeText(fullText, {
-      enhanced: true,
-      includePreprocessing: true,
-      commodity: newsItem.preprocessing?.commodity
-    });
+  const handleInputSubmit = async () => {
+    if (!inputText.trim() || (loading && !abortController.current)) return;
+    
+    if (loading && abortController.current) {
+      abortController.current.abort();
+      abortController.current = null;
+      return;
+    }
 
-    if (result && result.analysis) {
-      setRealSentimentData(result.analysis);
+    // TODO: Implement actual chat API call
+    try {
+      abortController.current = new AbortController();
+      // Add your API implementation here
+      await new Promise(res => setTimeout(res, 2000));
+      setInputText('');
+    } catch (error) {
+      if (error.name === 'AbortError') {
+        console.log('Request aborted');
+      } else {
+        console.error('Chat error:', error);
+      }
+    } finally {
+      abortController.current = null;
+    }
+  };
+
+  const performRealAnalysis = async () => {
+    try {
+      setLoading(true);
+      const fullText = `${newsItem.headline}. ${newsItem.summary}`;
+      const result = await analyzeText(fullText, {
+        enhanced: true,
+        includePreprocessing: true,
+        commodity: newsItem.preprocessing?.commodity
+      });
+
+      if (result && result.analysis) {
+        setRealSentimentData(result.analysis);
+      }
+    } catch (error) {
+      console.error('Analysis error:', error);
+    } finally {
+      setLoading(false);
     }
   };
 
@@ -87,7 +128,17 @@ const AISentimentModal = ({ visible, onClose, newsItem }) => {
             {loading && (
               <View style={styles.loadingContainer}>
                 <MaterialIcons name="auto-awesome" size={48} color={colors.accentData} />
-                <Text style={styles.loadingText}>Processing with FinBERT & VADER...</Text>
+                <AILoadingText
+                  textStyle={styles.loadingText}
+                  style={styles.loadingTextContainer}
+                  texts={[
+                    'Analyzing with FinBERT...',
+                    'Processing with VADER...',
+                    'Computing sentiment...',
+                    'Analyzing drivers...',
+                    'Almost done...'
+                  ]}
+                />
               </View>
             )}
 
@@ -142,6 +193,29 @@ const AISentimentModal = ({ visible, onClose, newsItem }) => {
               </>
             )}
           </ScrollView>
+
+          <View style={styles.inputContainer}>
+            <TextInput
+              style={styles.input}
+              placeholder="Ask about market trends, analysis..."
+              placeholderTextColor={colors.textSecondary}
+              value={inputText}
+              onChangeText={setInputText}
+              multiline
+              maxHeight={100}
+            />
+            <TouchableOpacity
+              style={[styles.sendButton, (!inputText.trim() || (loading && !abortController.current)) && styles.sendButtonDisabled]}
+              onPress={handleInputSubmit}
+              disabled={!inputText.trim() && !loading}
+            >
+              <MaterialIcons 
+                name={loading && abortController.current ? "stop" : "send"} 
+                size={24} 
+                color={colors.bgPrimary} 
+              />
+            </TouchableOpacity>
+          </View>
         </View>
       </View>
     </Modal>
@@ -149,6 +223,38 @@ const AISentimentModal = ({ visible, onClose, newsItem }) => {
 };
 
 const styles = StyleSheet.create({
+  inputContainer: {
+    flexDirection: 'row',
+    alignItems: 'flex-end',
+    padding: 15,
+    borderTopWidth: 1,
+    borderTopColor: colors.divider,
+    backgroundColor: colors.bgSecondary,
+  },
+  input: {
+    flex: 1,
+    backgroundColor: colors.bgPrimary,
+    borderRadius: 20,
+    padding: 12,
+    color: colors.textPrimary,
+    fontSize: 14,
+    maxHeight: 100,
+    marginRight: 10,
+  },
+  sendButton: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    backgroundColor: colors.accentData,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  sendButtonDisabled: {
+    opacity: 0.5,
+  },
+  loadingTextContainer: {
+    marginTop: 12,
+  },
   modalOverlay: {
     flex: 1,
     backgroundColor: 'rgba(0, 0, 0, 0.8)',
