@@ -1,4 +1,4 @@
-import React, { useState } from "react";
+import React, { useEffect, useState } from "react";
 import { 
   StyleSheet, 
   Text, 
@@ -7,10 +7,12 @@ import {
   TouchableOpacity, 
   Alert,
   SafeAreaView,
-  StatusBar 
+  StatusBar, 
+  ActivityIndicator
 } from "react-native";
 import { MaterialIcons } from '@expo/vector-icons';
 import { useBookmarks } from '../providers/BookmarkProvider';
+import { userService } from '@/app/services/userService';
 
 // Use the same color palette as the main app
 const colors = {
@@ -57,8 +59,35 @@ export default function ProfileScreen({ userProfile, alertPreferences, apiKeys, 
   const [showAPIKeySetup, setShowAPIKeySetup] = useState(false);
   const [showAlertPreferences, setShowAlertPreferences] = useState(false);
   const [showAllBookmarks, setShowAllBookmarks] = useState(false);
+  const [loadingProfile, setLoadingProfile] = useState(true);
+  const [profileError, setProfileError] = useState(null);
+  const [resolvedProfile, setResolvedProfile] = useState(userProfile || null);
   
   const { bookmarks, removeBookmark } = useBookmarks();
+
+  useEffect(() => {
+    let mounted = true;
+    const loadProfile = async () => {
+      try {
+        setLoadingProfile(true);
+        setProfileError(null);
+        const profile = await userService.getCurrentUser();
+        if (mounted) {
+          if (profile) {
+            setResolvedProfile(profile);
+          } else {
+            setProfileError('Unable to load user profile.');
+          }
+        }
+      } catch (e) {
+        if (mounted) setProfileError('An unexpected error occurred loading the profile.');
+      } finally {
+        if (mounted) setLoadingProfile(false);
+      }
+    };
+    loadProfile();
+    return () => { mounted = false; };
+  }, []);
 
   const handleDeleteKey = (keyId, keyName) => {
     Alert.alert(
@@ -82,15 +111,8 @@ export default function ProfileScreen({ userProfile, alertPreferences, apiKeys, 
     setSelectedProvider(provider);
   };
 
-  // Default values for demo
-  const defaultUserProfile = userProfile || {
-    username: 'GodModeTrader301',
-    role: 'trader',
-    institution: 'Goldman Sachs',
-    bio: 'Oil Trader at Hedge Fund with 10+ years experience',
-    marketFocus: ['Oil & Oil Products', 'Metals & Minerals'],
-    experience: '10+'
-  };
+// Remove demo defaults; derive from resolvedProfile
+  const effectiveUserProfile = resolvedProfile || null;
 
   const defaultAlertPreferences = alertPreferences || {
     commodities: ['Crude Oil', 'Gold', 'Natural Gas'],
@@ -148,64 +170,88 @@ export default function ProfileScreen({ userProfile, alertPreferences, apiKeys, 
         <View style={styles.headerSpacer} />
       </View>
 
-      <ScrollView style={styles.container} contentContainerStyle={styles.content}>
-        {/* User Profile Section */}
-        <View style={styles.section}>
-          <View style={styles.sectionHeader}>
-            <View style={styles.sectionTitleContainer}>
-              <MaterialIcons name="person" color={colors.accentPositive} size={20} />
-              <Text style={styles.sectionTitle}>Profile</Text>
-            </View>
-          </View>
-
-          <View style={styles.profileCard}>
-            <View style={styles.profileHeader}>
-              <View style={styles.profileAvatar}>
-                <Text style={styles.profileAvatarText}>
-                  {defaultUserProfile.username?.charAt(0)?.toUpperCase() || 'U'}
-                </Text>
-              </View>
-              <View style={styles.profileInfo}>
-                <Text style={styles.profileName}>
-                  {defaultUserProfile.username || 'User'}
-                </Text>
-                <Text style={styles.profileRole}>
-                  {getRoleLabel(defaultUserProfile.role)}
-                </Text>
-                {defaultUserProfile.institution && (
-                  <Text style={styles.profileInstitution}>
-                    {defaultUserProfile.institution}
-                  </Text>
-                )}
-              </View>
-            </View>
-            
-            {defaultUserProfile.bio && (
-              <Text style={styles.profileBio}>{defaultUserProfile.bio}</Text>
-            )}
-            
-            <View style={styles.profileStats}>
-              <View style={styles.profileStat}>
-                <Text style={styles.profileStatValue}>
-                  {defaultUserProfile.marketFocus?.length || 0}
-                </Text>
-                <Text style={styles.profileStatLabel}>Market Focus</Text>
-              </View>
-              <View style={styles.profileStat}>
-                <Text style={styles.profileStatValue}>
-                  {defaultUserProfile.experience}
-                </Text>
-                <Text style={styles.profileStatLabel}>Experience</Text>
-              </View>
-              <View style={styles.profileStat}>
-                <Text style={styles.profileStatValue}>
-                  {defaultAlertPreferences.commodities.length}
-                </Text>
-                <Text style={styles.profileStatLabel}>Alerts</Text>
-              </View>
-            </View>
-          </View>
+      {loadingProfile ? (
+        <View style={{ flex: 1, alignItems: 'center', justifyContent: 'center', backgroundColor: colors.bgPrimary }}>
+          <ActivityIndicator size="large" color={colors.accentPositive} />
+          <Text style={{ color: colors.textSecondary, marginTop: 12 }}>Loading profile…</Text>
         </View>
+      ) : profileError ? (
+        <View style={{ flex: 1, alignItems: 'center', justifyContent: 'center', padding: 24 }}>
+          <Text style={{ color: colors.textSecondary, textAlign: 'center', marginBottom: 12 }}>{profileError}</Text>
+          <TouchableOpacity onPress={() => {
+            setLoadingProfile(true);
+            setProfileError(null);
+            // Trigger reload
+            (async () => {
+              const profile = await userService.getCurrentUser();
+              if (profile) setResolvedProfile(profile); else setProfileError('Unable to load user profile.');
+              setLoadingProfile(false);
+            })();
+          }} style={[styles.viewAllButton, { paddingHorizontal: 24 }]}>
+            <Text style={styles.viewAllText}>Retry</Text>
+          </TouchableOpacity>
+        </View>
+      ) : (
+        <ScrollView style={styles.container} contentContainerStyle={styles.content}>
+          {/* User Profile Section */}
+          <View style={styles.section}>
+            <View style={styles.sectionHeader}>
+              <View style={styles.sectionTitleContainer}>
+                <MaterialIcons name="person" color={colors.accentPositive} size={20} />
+                <Text style={styles.sectionTitle}>Profile</Text>
+              </View>
+            </View>
+
+            <View style={styles.profileCard}>
+              <View style={styles.profileHeader}>
+                <View style={styles.profileAvatar}>
+                  <Text style={styles.profileAvatarText}>
+                    {effectiveUserProfile?.username?.charAt(0)?.toUpperCase() || 'U'}
+                  </Text>
+                </View>
+                <View style={styles.profileInfo}>
+                  <Text style={styles.profileName}>
+                    {effectiveUserProfile?.username || effectiveUserProfile?.email || 'User'}
+                  </Text>
+                  {effectiveUserProfile?.role ? (
+                    <Text style={styles.profileRole}>
+                      {getRoleLabel(effectiveUserProfile.role)}
+                    </Text>
+                  ) : null}
+                  {effectiveUserProfile?.institution && (
+                    <Text style={styles.profileInstitution}>
+                      {effectiveUserProfile.institution}
+                    </Text>
+                  )}
+                </View>
+              </View>
+              
+              {effectiveUserProfile?.bio ? (
+                <Text style={styles.profileBio}>{effectiveUserProfile.bio}</Text>
+              ) : null}
+              
+              <View style={styles.profileStats}>
+                <View style={styles.profileStat}>
+                  <Text style={styles.profileStatValue}>
+                    {effectiveUserProfile?.marketFocus?.length || 0}
+                  </Text>
+                  <Text style={styles.profileStatLabel}>Market Focus</Text>
+                </View>
+                <View style={styles.profileStat}>
+                  <Text style={styles.profileStatValue}>
+                    {effectiveUserProfile?.experience || '-'}
+                  </Text>
+                  <Text style={styles.profileStatLabel}>Experience</Text>
+                </View>
+                <View style={styles.profileStat}>
+                  <Text style={styles.profileStatValue}>
+                    {defaultAlertPreferences.commodities.length}
+                  </Text>
+                  <Text style={styles.profileStatLabel}>Alerts</Text>
+                </View>
+              </View>
+            </View>
+          </View>
 
         {/* Alert Preferences Section */}
         <View style={styles.section}>
@@ -418,7 +464,8 @@ export default function ProfileScreen({ userProfile, alertPreferences, apiKeys, 
             </TouchableOpacity>
           </View>
         </View>
-      </ScrollView>
+        </ScrollView>
+      )}
     </SafeAreaView>
   );
 }

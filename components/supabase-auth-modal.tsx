@@ -2,7 +2,7 @@
 
 import type React from "react"
 import { useState } from "react"
-import { X, Mail, Lock, User, Eye, EyeOff, Loader2 } from "lucide-react"
+import { X, Mail, Lock, User, Eye, EyeOff, Loader2, ArrowLeft } from "lucide-react"
 import { signUp, signIn, signInWithGoogle, supabase } from "@/lib/supabase"
 
 interface AuthModalProps {
@@ -17,6 +17,8 @@ export default function SupabaseAuthModal({ isOpen, onClose, mode, onSwitchMode 
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [success, setSuccess] = useState<string | null>(null)
+  const [isResettingPassword, setIsResettingPassword] = useState(false)
+  const [resetEmailSent, setResetEmailSent] = useState(false)
   const [formData, setFormData] = useState({
     email: "",
     password: "",
@@ -29,6 +31,35 @@ export default function SupabaseAuthModal({ isOpen, onClose, mode, onSwitchMode 
 
   // Check if Supabase is configured
   const isSupabaseConfigured = !!supabase
+
+  const handlePasswordReset = async (e: React.FormEvent) => {
+    e.preventDefault()
+    
+    if (!formData.email) {
+      setError("Please enter your email address")
+      return
+    }
+
+    setLoading(true)
+    setError(null)
+
+    try {
+      const { error } = await supabase.auth.resetPasswordForEmail(formData.email, {
+        redirectTo: `${window.location.origin}/auth/reset-password`,
+      })
+
+      if (error) {
+        setError(error.message)
+      } else {
+        setResetEmailSent(true)
+        setSuccess("Password reset instructions have been sent to your email")
+      }
+    } catch (err) {
+      setError("Failed to send reset instructions")
+    } finally {
+      setLoading(false)
+    }
+  }
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
@@ -106,6 +137,76 @@ export default function SupabaseAuthModal({ isOpen, onClose, mode, onSwitchMode 
       ...prev,
       [e.target.name]: e.target.value,
     }))
+  }
+
+  if (isResettingPassword) {
+    return (
+      <div className="fixed inset-0 bg-black/80 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+        <div className="bg-black border border-emerald-500/20 rounded-2xl w-full max-w-md relative">
+          <button onClick={() => setIsResettingPassword(false)} className="absolute top-4 left-4 text-gray-400 hover:text-white transition-colors">
+            <ArrowLeft size={24} />
+          </button>
+          <button onClick={onClose} className="absolute top-4 right-4 text-gray-400 hover:text-white transition-colors">
+            <X size={24} />
+          </button>
+
+          <div className="p-8 pb-6">
+            <h2 className="text-2xl font-thin text-white text-center mb-2">Reset Password</h2>
+            <p className="text-gray-400 text-center text-sm font-thin">
+              {resetEmailSent
+                ? "Check your email for reset instructions"
+                : "Enter your email to receive password reset instructions"}
+            </p>
+          </div>
+
+          <form onSubmit={handlePasswordReset} className="px-8 pb-8">
+            {error && (
+              <div className="mb-4 p-3 bg-red-500/10 border border-red-500/20 rounded-lg text-red-400 text-sm">
+                {error}
+              </div>
+            )}
+            {success && (
+              <div className="mb-4 p-3 bg-emerald-500/10 border border-emerald-500/20 rounded-lg text-emerald-400 text-sm">
+                {success}
+              </div>
+            )}
+
+            <div className="space-y-4">
+              <div className="relative">
+                <Mail className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400" size={20} />
+                <input
+                  type="email"
+                  name="email"
+                  placeholder="Email Address"
+                  value={formData.email}
+                  onChange={handleInputChange}
+                  className="w-full bg-gray-900/50 border border-gray-700 rounded-lg pl-10 pr-4 py-3 text-white placeholder-gray-400 focus:border-emerald-500 focus:outline-none transition-colors font-thin"
+                  required
+                  disabled={loading || resetEmailSent}
+                />
+              </div>
+            </div>
+
+            <button
+              type="submit"
+              disabled={loading || resetEmailSent || !formData.email}
+              className="w-full bg-emerald-500 hover:bg-emerald-600 disabled:bg-emerald-500/50 text-black py-3 rounded-lg mt-6 transition-colors font-normal flex items-center justify-center"
+            >
+              {loading ? (
+                <>
+                  <Loader2 className="animate-spin mr-2" size={16} />
+                  Sending Instructions...
+                </>
+              ) : resetEmailSent ? (
+                "Instructions Sent"
+              ) : (
+                "Send Reset Instructions"
+              )}
+            </button>
+          </form>
+        </div>
+      </div>
+    )
   }
 
   return (
@@ -237,6 +338,11 @@ export default function SupabaseAuthModal({ isOpen, onClose, mode, onSwitchMode 
             <div className="flex justify-end mt-4">
               <button
                 type="button"
+                onClick={() => {
+                  setError(null)
+                  setSuccess(null)
+                  setIsResettingPassword(true)
+                }}
                 className="text-emerald-500 text-sm hover:text-emerald-400 transition-colors font-thin"
               >
                 Forgot Password?
