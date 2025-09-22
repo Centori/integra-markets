@@ -1,0 +1,53 @@
+WARNING:root:DuckDuckGo search not available. Install with: pip install duckduckgo-search
+INFO:     Started server process [2775]
+INFO:     Waiting for application startup.
+INFO:     Application startup complete.
+INFO:     Uvicorn running on http://0.0.0.0:8000 (Press CTRL+C to quit)
+INFO:     127.0.0.1:54337 - "GET /health HTTP/1.1" 200 OK
+INFO:     127.0.0.1:54357 - "POST /api/user/market-data HTTP/1.1" 200 OK
+INFO:     127.0.0.1:58215 - "POST /ai/chat HTTP/1.1" 200 OK
+INFO:     127.0.0.1:58980 - "POST /ai/chat HTTP/1.1" 200 OK
+INFO:     127.0.0.1:59041 - "POST /ai/chat HTTP/1.1" 200 OK
+INFO:     127.0.0.1:59190 - "POST /ai/chat HTTP/1.1" 200 OK
+INFO:     127.0.0.1:60058 - "POST /ai/chat HTTP/1.1" 200 OK
+INFO:     127.0.0.1:63611 - "POST /ai/chat HTTP/1.1" 200 OK
+INFO:     127.0.0.1:65036 - "POST /ai/chat HTTP/1.1" 200 OK
+INFO:     127.0.0.1:51469 - "POST /ai/chat HTTP/1.1" 200 OK
+INFO:     127.0.0.1:57272 - "POST /ai/chat HTTP/1.1" 200 OK
+INFO:     127.0.0.1:61302 - "POST /ai/chat HTTP/1.1" 200 OK
+ERROR:groq_ai_service:Chat with tools error: Error code: 403 - {'error': {'message': 'Access denied. Please check your network settings.'}}
+INFO:     127.0.0.1:63548 - "POST /ai/chat HTTP/1.1" 200 OK
+ERROR:groq_ai_service:Chat with tools error: Error code: 403 - {'error': {'message': 'Access denied. Please check your network settings.'}}
+INFO:     127.0.0.1:63594 - "POST /ai/chat HTTP/1.1" 200 OK
+ERROR:groq_ai_service:Chat with tools error: Error code: 403 - {'error': {'message': 'Access denied. Please check your network settings.'}}
+INFO:     127.0.0.1:64384 - "POST /ai/chat HTTP/1.1" 200 OK
+INFO:     127.0.0.1:50397 - "GET / HTTP/1.1" 200 OK
+INFO:     127.0.0.1:50416 - "GET /api/test/groq HTTP/1.1" 404 Not Found
+ERROR:groq_ai_service:Chat with tools error: Error code: 403 - {'error': {'message': 'Access denied. Please check your network settings.'}}
+INFO:     127.0.0.1:50443 - "POST /ai/chat HTTP/1.1" 200 OK
+INFO:     127.0.0.1:50681 - "POST /ai/chat HTTP/1.1" 200 OK
+INFO:     127.0.0.1:50709 - "POST /ai/analyze HTTP/1.1" 200 OK
+INFO:     127.0.0.1:64850 - "POST /ai/chat HTTP/1.1" 200 OK
+INFO:     127.0.0.1:50504 - "POST /ai/chat HTTP/1.1" 200 OK
+INFO:     127.0.0.1:51940 - "POST /ai/chat HTTP/1.1" 200 OK
+INFO:     127.0.0.1:54256 - "POST /ai/chat HTTP/1.1" 200 OK
+INFO:     127.0.0.1:58835 - "POST /ai/chat HTTP/1.1" 200 OK
+INFO:     127.0.0.1:58972 - "POST /ai/chat HTTP/1.1" 200 OK
+INFO:     127.0.0.1:61258 - "POST /ai/chat HTTP/1.1" 200 OK
+INFO:     127.0.0.1:51429 - "POST /ai/chat HTTP/1.1" 200 OK
+INFO:     127.0.0.1:52820 - "POST /ai/chat HTTP/1.1" 200 OK
+INFO:     192.168.0.208:53645 - "GET /docs HTTP/1.1" 200 OK
+INFO:     192.168.0.208:56798 - "GET /health HTTP/1.1" 200 OK
+INFO:     127.0.0.1:57512 - "POST /ai/chat HTTP/1.1" 200 OK
+INFO:     127.0.0.1:57773 - "GET /api/news/analysis HTTP/1.1" 405 Method Not Allowed
+INFO:     127.0.0.1:57773 - "POST /ai/report HTTP/1.1" 422 Unprocessable Content
+INFO:     127.0.0.1:57811 - "GET /api/news/analysis HTTP/1.1" 405 Method Not Allowed
+INFO:     127.0.0.1:57811 - "POST /ai/report HTTP/1.1" 422 Unprocessable Content
+INFO:     127.0.0.1:57814 - "GET /api/news/analysis HTTP/1.1" 405 Method Not Allowed
+INFO:     127.0.0.1:57814 - "POST /ai/report HTTP/1.1" 422 Unprocessable Content
+INFO:     127.0.0.1:60047 - "GET /api/news/analysis HTTP/1.1" 405 Method Not Allowed
+INFO:     127.0.0.1:60047 - "POST /ai/report HTTP/1.1" 422 Unprocessable Content
+INFO:     127.0.0.1:60054 - "GET /api/news/analysis HTTP/1.1" 405 Method Not Allowed
+INFO:     127.0.0.1:60054 - "POST /ai/report HTTP/1.1" 422 Unprocessable Content
+INFO:     127.0.0.1:60093 - "GET /api/news/analysis HTTP/1.1" 405 Method Not Allowed
+INFO:     127.0.0.1:60093 - "POST /ai/report HTTP/1.1" 422 Unprocessable Content
