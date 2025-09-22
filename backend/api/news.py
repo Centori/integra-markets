@@ -4,11 +4,16 @@ News API routes
 
 from fastapi import APIRouter, Depends, HTTPException
 from typing import List, Dict, Any
-from ..news_aggregator.news_fetcher import NewsItem, get_news_fetcher, NewsFetcher
+from news_aggregator.news_fetcher import NewsItem, get_news_fetcher, NewsFetcher
 from pydantic import BaseModel
 from datetime import datetime
-from ..services.enhanced_sentiment import enhanced_analyzer
-from ..app.services.keyword_ml_processor import train_on_market_outcome
+from services.enhanced_sentiment import enhanced_analyzer
+try:
+    from app.services.keyword_ml_processor import train_on_market_outcome
+except ImportError:
+    # Fallback if the module doesn't exist
+    def train_on_market_outcome(*args, **kwargs):
+        return {"status": "training_unavailable"}
 
 class TrainingRequest(BaseModel):
     news_id: str

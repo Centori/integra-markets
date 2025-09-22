@@ -5,19 +5,43 @@ from pathlib import Path
 from dotenv import load_dotenv
 from supabase import create_client, Client
 from pydantic import BaseModel
+from typing import Optional
 
 # DB
-from .db import init_db, close_db
+try:
+    from db import init_db, close_db
+except ImportError:
+    # Fallback for deployment
+    async def init_db():
+        pass
+    async def close_db():
+        pass
 
 # Routers
-from backend.api.notifications import router as notifications_router
-from backend.api.market_data import router as market_data_router
-from backend.api.news import router as news_router
+try:
+    from api.notifications import router as notifications_router
+    notifications_available = True
+except ImportError:
+    notifications_available = False
 
-# Load environment variables from parent directory's .env file
+try:
+    from api.market_data import router as market_data_router
+    market_data_available = True
+except ImportError:
+    market_data_available = False
+
+try:
+    from api.news import router as news_router
+    news_available = True
+except ImportError:
+    news_available = False
+
+# Load environment variables
+# Try multiple paths for different deployment environments
+load_dotenv()  # Load from current directory first
 parent_dir = Path(__file__).parent.parent
 env_path = parent_dir / '.env'
-load_dotenv(env_path)
+load_dotenv(env_path)  # Also try parent directory
 
 app = FastAPI(title="Integra AI Backend", description="Financial AI Analysis API")
 
@@ -30,10 +54,13 @@ async def startup_event():
 async def shutdown_event():
     await close_db()
 
-# Mount routers
-app.include_router(notifications_router)
-app.include_router(market_data_router)
-app.include_router(news_router)
+# Mount routers conditionally
+if notifications_available:
+    app.include_router(notifications_router)
+if market_data_available:
+    app.include_router(market_data_router)
+if news_available:
+    app.include_router(news_router)
 
 # Add CORS middleware to allow requests from your React Native app
 app.add_middleware(
@@ -48,10 +75,10 @@ app.add_middleware(
 supabase_url: str = os.getenv("SUPABASE_URL")
 supabase_key: str = os.getenv("SUPABASE_KEY")
 
-if not supabase_url or not supabase_key:
-    raise ValueError("Missing SUPABASE_URL or SUPABASE_KEY environment variables")
-
-supabase: Client = create_client(supabase_url, supabase_key)
+# Gracefully handle missing Supabase credentials in production
+supabase: Optional[Client] = None
+if supabase_url and supabase_key:
+    supabase = create_client(supabase_url, supabase_key)
 
 # Pydantic models for request/response
 class SentimentRequest(BaseModel):
@@ -93,34 +120,103 @@ def analyze_sentiment(request: SentimentRequest):
         if not request.text or len(request.text.strip()) == 0:
             raise HTTPException(status_code=400, detail="Text cannot be empty")
         
-        # TODO: Replace with actual NLTK and FinBERT implementation
-        # For now, return mock data
         import datetime
+        import requests
+        import json
         
-        # Simple mock sentiment analysis
-        positive_words = ['good', 'great', 'excellent', 'amazing', 'wonderful', 'profit', 'gain']
-        negative_words = ['bad', 'terrible', 'awful', 'loss', 'deficit', 'poor']
+        # Try FinBERT via Hugging Face API first
+        hf_token = os.getenv("HUGGING_FACE_TOKEN")
+        if hf_token:
+            try:
+                headers = {"Authorization": f"Bearer {hf_token}"}
+                api_url = "https://api-inference.huggingface.co/models/ProsusAI/finbert"
+                
+                response = requests.post(
+                    api_url,
+                    headers=headers,
+                    json={"inputs": request.text},
+                    timeout=10
+                )
+                
+                if response.status_code == 200:
+                    result = response.json()
+                    if isinstance(result, list) and len(result) > 0:
+                        # FinBERT returns labels: positive, negative, neutral
+                        scores = {item['label'].lower(): item['score'] for item in result[0]}
+                        
+                        # Get the highest confidence prediction
+                        best_sentiment = max(scores.keys(), key=lambda k: scores[k])
+                        confidence = scores[best_sentiment]
+                        
+                        return SentimentResponse(
+                            text=request.text,
+                            sentiment=best_sentiment,
+                            confidence=round(confidence, 3),
+                            timestamp=datetime.datetime.now().isoformat()
+                        )
+            except Exception as e:
+                print(f"FinBERT API error: {e}")
         
-        text_lower = request.text.lower()
-        positive_count = sum(1 for word in positive_words if word in text_lower)
-        negative_count = sum(1 for word in negative_words if word in text_lower)
-        
-        if positive_count > negative_count:
-            sentiment = "positive"
-            confidence = min(0.95, 0.6 + (positive_count * 0.1))
-        elif negative_count > positive_count:
-            sentiment = "negative"
-            confidence = min(0.95, 0.6 + (negative_count * 0.1))
-        else:
-            sentiment = "neutral"
-            confidence = 0.5
-        
-        return SentimentResponse(
-            text=request.text,
-            sentiment=sentiment,
-            confidence=round(confidence, 3),
-            timestamp=datetime.datetime.now().isoformat()
-        )
+        # Fallback to NLTK VADER sentiment analysis
+        try:
+            import nltk
+            from nltk.sentiment import SentimentIntensityAnalyzer
+            
+            # Download required data if not present
+            try:
+                nltk.data.find('vader_lexicon')
+            except LookupError:
+                nltk.download('vader_lexicon', quiet=True)
+            
+            sia = SentimentIntensityAnalyzer()
+            scores = sia.polarity_scores(request.text)
+            
+            # Convert VADER compound score to sentiment
+            compound = scores['compound']
+            if compound >= 0.05:
+                sentiment = "positive"
+                confidence = min(0.95, abs(compound))
+            elif compound <= -0.05:
+                sentiment = "negative"
+                confidence = min(0.95, abs(compound))
+            else:
+                sentiment = "neutral"
+                confidence = 1 - abs(compound)
+            
+            return SentimentResponse(
+                text=request.text,
+                sentiment=sentiment,
+                confidence=round(confidence, 3),
+                timestamp=datetime.datetime.now().isoformat()
+            )
+            
+        except Exception as nltk_error:
+            print(f"NLTK error: {nltk_error}")
+            
+            # Final fallback to basic analysis
+            financial_positive = ['bullish', 'gain', 'profit', 'surge', 'rally', 'rise', 'increase', 'boost', 'strong', 'growth']
+            financial_negative = ['bearish', 'loss', 'deficit', 'fall', 'drop', 'decline', 'crash', 'weak', 'recession', 'downturn']
+            
+            text_lower = request.text.lower()
+            positive_count = sum(1 for word in financial_positive if word in text_lower)
+            negative_count = sum(1 for word in financial_negative if word in text_lower)
+            
+            if positive_count > negative_count:
+                sentiment = "positive"
+                confidence = min(0.85, 0.6 + (positive_count * 0.1))
+            elif negative_count > positive_count:
+                sentiment = "negative"
+                confidence = min(0.85, 0.6 + (negative_count * 0.1))
+            else:
+                sentiment = "neutral"
+                confidence = 0.5
+            
+            return SentimentResponse(
+                text=request.text,
+                sentiment=sentiment,
+                confidence=round(confidence, 3),
+                timestamp=datetime.datetime.now().isoformat()
+            )
         
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Analysis failed: {str(e)}")

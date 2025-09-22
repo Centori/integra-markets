@@ -448,66 +448,66 @@ async def get_news_feed(request: NewsRequest):
         }.get(request.alert_frequency, 24)
         
         # Filter articles by date
-            cutoff_time = datetime.datetime.now() - datetime.timedelta(hours=request.hours_back)
-            time_filtered_articles = []
-            for article in all_articles:
-                try:
-                    # Parse the published date
-                    published_str = article.get('published', '')
-                    if published_str:
-                        # Handle both datetime objects and strings
-                        if isinstance(published_str, datetime.datetime):
-                            published_date = published_str
-                        else:
-                            published_date = datetime.datetime.fromisoformat(published_str.replace('Z', '+00:00'))
-                        
-                        # Only include articles within the time window
-                        if published_date >= cutoff_time:
-                            time_filtered_articles.append(article)
-                        else:
-                            logger.debug(f"Filtering out old article: {article.get('title', '')[:50]} from {published_str}")
-                except Exception as e:
-                    # If date parsing fails, include the article (better to show than hide)
-                    logger.warning(f"Could not parse date for article: {e}")
-                    time_filtered_articles.append(article)
+        cutoff_time = datetime.datetime.now() - datetime.timedelta(hours=request.hours_back)
+        time_filtered_articles = []
+        for article in all_articles:
+            try:
+                # Parse the published date
+                published_str = article.get('published', '')
+                if published_str:
+                    # Handle both datetime objects and strings
+                    if isinstance(published_str, datetime.datetime):
+                        published_date = published_str
+                    else:
+                        published_date = datetime.datetime.fromisoformat(published_str.replace('Z', '+00:00'))
+                    
+                    # Only include articles within the time window
+                    if published_date >= cutoff_time:
+                        time_filtered_articles.append(article)
+                    else:
+                        logger.debug(f"Filtering out old article: {article.get('title', '')[:50]} from {published_str}")
+            except Exception as e:
+                # If date parsing fails, include the article (better to show than hide)
+                logger.warning(f"Could not parse date for article: {e}")
+                time_filtered_articles.append(article)
+        
+        all_articles = time_filtered_articles
+        logger.info(f"After time filtering ({request.hours_back}h): {len(all_articles)} articles remain")
+        
+        # If we have too few articles, progressively expand the time window
+        min_articles = 5  # Minimum articles we want to show
+        if len(all_articles) < min_articles:
+            logger.info(f"Only {len(all_articles)} articles found in {request.hours_back}h window, expanding search...")
             
-            all_articles = time_filtered_articles
-            logger.info(f"After time filtering ({request.hours_back}h): {len(all_articles)} articles remain")
-            
-            # If we have too few articles, progressively expand the time window
-            min_articles = 5  # Minimum articles we want to show
-            if len(all_articles) < min_articles:
-                logger.info(f"Only {len(all_articles)} articles found in {request.hours_back}h window, expanding search...")
+            # Try expanding to 24 hours, then 48 hours
+            for expanded_hours in [24, 48]:
+                if expanded_hours <= request.hours_back:
+                    continue  # Skip if we're already searching this far back
                 
-                # Try expanding to 24 hours, then 48 hours
-                for expanded_hours in [24, 48]:
-                    if expanded_hours <= request.hours_back:
-                        continue  # Skip if we're already searching this far back
-                    
-                    expanded_cutoff = datetime.datetime.now() - datetime.timedelta(hours=expanded_hours)
-                    expanded_articles = []
-                    
-                    for article in results[0] if isinstance(results[0], list) else []:
-                        try:
-                            published_str = article.get('published', '')
-                            if published_str:
-                                if isinstance(published_str, datetime.datetime):
-                                    published_date = published_str
-                                else:
-                                    published_date = datetime.datetime.fromisoformat(published_str.replace('Z', '+00:00'))
-                                
-                                if published_date >= expanded_cutoff:
-                                    # Check if not already in our list
-                                    if not any(a.get('title') == article.get('title') for a in all_articles):
-                                        expanded_articles.append(article)
-                        except:
-                            pass
-                    
-                    all_articles.extend(expanded_articles)
-                    logger.info(f"Expanded to {expanded_hours}h: now have {len(all_articles)} articles")
-                    
-                    if len(all_articles) >= min_articles:
-                        break
+                expanded_cutoff = datetime.datetime.now() - datetime.timedelta(hours=expanded_hours)
+                expanded_articles = []
+                
+                for article in results[0] if isinstance(results[0], list) else []:
+                    try:
+                        published_str = article.get('published', '')
+                        if published_str:
+                            if isinstance(published_str, datetime.datetime):
+                                published_date = published_str
+                            else:
+                                published_date = datetime.datetime.fromisoformat(published_str.replace('Z', '+00:00'))
+                            
+                            if published_date >= expanded_cutoff:
+                                # Check if not already in our list
+                                if not any(a.get('title') == article.get('title') for a in all_articles):
+                                    expanded_articles.append(article)
+                    except:
+                        pass
+                
+                all_articles.extend(expanded_articles)
+                logger.info(f"Expanded to {expanded_hours}h: now have {len(all_articles)} articles")
+                
+                if len(all_articles) >= min_articles:
+                    break
         
         # Filter articles by commodity if specified
         if request.commodity_filter:
@@ -843,62 +843,59 @@ def extract_commodity_tickers(text: str) -> List[str]:
     
     return list(set(tickers))  # Remove duplicates
 
-def get_mock_news_data(max_articles: int = 20) -> dict:
-    """Return mock news data as fallback"""
-    mock_articles = [
-        {
-            'id': 1,
-            'title': 'Oil Prices Surge on OPEC Production Cuts',
-            'summary': 'Crude oil futures jumped 3.2% after OPEC announced additional production cuts, tightening global supply.',
-            'source': 'Reuters',
-            'source_url': 'https://reuters.com',
-            'time_published': (datetime.datetime.now() - datetime.timedelta(hours=2)).isoformat(),
-            'sentiment': 'BULLISH',
-            'sentiment_score': 0.78,
-            'categories': ['energy'],
-            'tickers': ['WTI', 'BRENT'],
-            'keywords': ['oil', 'opec', 'production', 'cuts']
-        },
-        {
-            'id': 2,
-            'title': 'Gold Holds Near Record High as Fed Signals Pause',
-            'summary': 'Gold prices remained stable near record levels as Federal Reserve officials indicated a potential pause in rate hikes.',
-            'source': 'Bloomberg',
-            'source_url': 'https://bloomberg.com',
-            'time_published': (datetime.datetime.now() - datetime.timedelta(hours=4)).isoformat(),
-            'sentiment': 'NEUTRAL',
-            'sentiment_score': 0.52,
-            'categories': ['metals'],
-            'tickers': ['GOLD'],
-            'keywords': ['gold', 'fed', 'rates']
-        },
-        {
-            'id': 3,
-            'title': 'Wheat Futures Drop on Improved Weather Outlook',
-            'summary': 'Chicago wheat futures declined 2.1% as meteorologists predicted favorable weather conditions for major growing regions.',
-            'source': 'MarketWatch',
-            'source_url': 'https://marketwatch.com',
-            'time_published': (datetime.datetime.now() - datetime.timedelta(hours=6)).isoformat(),
-            'sentiment': 'BEARISH',
-            'sentiment_score': 0.67,
-            'categories': ['agriculture'],
-            'tickers': ['WHEAT'],
-            'keywords': ['wheat', 'weather', 'forecast']
+async def get_live_news_data(max_articles: int = 20) -> dict:
+    """Fetch live news data from RSS feeds with fallback"""
+    try:
+        if not NEWS_SOURCES_AVAILABLE:
+            logger.error("News sources module not available - check data_sources.py import")
+            raise ImportError("NewsDataSources not available")
+        
+        # Fetch live news from RSS feeds
+        async with NewsDataSources() as news_sources:
+            all_articles = await news_sources.fetch_all_sources()
+            
+            # Limit to requested number and add required fields
+            articles = []
+            for i, article in enumerate(all_articles[:max_articles]):
+                # Ensure all required fields are present
+                processed_article = {
+                    'id': i + 1,
+                    'title': article.get('title', 'No Title'),
+                    'summary': article.get('summary', ''),
+                    'source': article.get('source', 'Unknown'),
+                    'source_url': article.get('url', ''),
+                    'time_published': article.get('published', datetime.datetime.now().isoformat()),
+                    'sentiment': 'NEUTRAL',  # Will be analyzed separately
+                    'sentiment_score': 0.5,
+                    'categories': [article.get('category', 'general')],
+                    'tickers': [],  # Will be extracted from content
+                    'keywords': []  # Will be extracted from content
+                }
+                articles.append(processed_article)
+            
+            return {
+                'status': 'live',
+                'articles': articles,
+                'total_fetched': len(articles),
+                'sources_used': list(set([a.get('source', 'Unknown') for a in all_articles])),
+                'timestamp': datetime.datetime.now().isoformat(),
+                'analysis_method': 'live_rss_feeds',
+                'message': f'Fetched {len(articles)} live articles from RSS feeds'
+            }
+            
+    except Exception as e:
+        logger.error(f"Failed to fetch live news: {e}")
+        # Minimal fallback with error message
+        return {
+            'status': 'error',
+            'articles': [],
+            'total_fetched': 0,
+            'sources_used': [],
+            'timestamp': datetime.datetime.now().isoformat(),
+            'analysis_method': 'error_fallback',
+            'message': f'Error fetching live news: {str(e)}',
+            'error': str(e)
         }
-    ]
-    
-    # Limit to requested number
-    articles = mock_articles[:min(max_articles, len(mock_articles))]
-    
-    return {
-        'status': 'fallback',
-        'articles': articles,
-        'total_fetched': len(articles),
-        'sources_used': ['Reuters', 'Bloomberg', 'MarketWatch'],
-        'timestamp': datetime.datetime.now().isoformat(),
-        'analysis_method': 'mock_data',
-        'message': 'Using mock data - news sources not available'
-    }
 
 # Article summarization endpoint
 @app.post('/api/summarize/article')

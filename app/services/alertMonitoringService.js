@@ -2,39 +2,90 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import { sendMarketAlert, sendNewsAlert } from './notificationService';
 import { addAlert } from './alertService';
 
-// Mock market data - in a real app, this would come from an API
-const mockMarketData = {
-  'Gold': { price: 2050, change: 2.5, volume: 1250000 },
-  'Silver': { price: 24.80, change: -1.2, volume: 850000 },
-  'Oil': { price: 78.50, change: 3.1, volume: 2100000 },
-  'Bitcoin': { price: 43500, change: -2.8, volume: 15000000 },
-  'Ethereum': { price: 2650, change: 1.9, volume: 8500000 },
-  'S&P 500': { price: 4750, change: 0.8, volume: 3200000 },
-  'NASDAQ': { price: 15200, change: 1.4, volume: 2800000 },
-  'EUR/USD': { price: 1.0850, change: -0.3, volume: 5500000 }
+// API configuration
+const API_BASE_URL = 'http://localhost:8000';
+const API_URL = `${API_BASE_URL}/api`;
+
+// Market data symbols mapping
+const MARKET_SYMBOLS = {
+  'Gold': { type: 'commodity', symbol: 'XAU' },
+  'Silver': { type: 'commodity', symbol: 'XAG' },
+  'Oil': { type: 'commodity', symbol: 'WTI' },
+  'EUR/USD': { type: 'fx', from: 'EUR', to: 'USD' },
+  'GBP/USD': { type: 'fx', from: 'GBP', to: 'USD' },
+  'USD/JPY': { type: 'fx', from: 'USD', to: 'JPY' }
 };
 
-// Mock news data
-const mockNewsData = [
-  {
-    headline: 'Federal Reserve announces interest rate decision',
-    source: 'Reuters',
-    impact: 'high',
-    category: 'monetary_policy'
-  },
-  {
-    headline: 'Major tech earnings beat expectations',
-    source: 'Bloomberg',
-    impact: 'medium',
-    category: 'earnings'
-  },
-  {
-    headline: 'Oil prices surge on supply concerns',
-    source: 'CNBC',
-    impact: 'high',
-    category: 'commodities'
+// Fetch real market data from backend API
+async function fetchRealMarketData() {
+  const marketData = {};
+  
+  try {
+    // Fetch commodity and FX data from backend
+    for (const [name, config] of Object.entries(MARKET_SYMBOLS)) {
+      try {
+        let response;
+        if (config.type === 'commodity') {
+          response = await fetch(`${API_URL}/market-data/commodities/rate`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ symbol: config.symbol })
+          });
+        } else if (config.type === 'fx') {
+          response = await fetch(`${API_URL}/market-data/fx/rate`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ 
+              from_symbol: config.from, 
+              to_symbol: config.to 
+            })
+          });
+        }
+        
+        if (response && response.ok) {
+          const data = await response.json();
+          marketData[name] = {
+            price: parseFloat(data.price || data.rate || 0),
+            change: parseFloat(data.change_percent || 0),
+            volume: parseInt(data.volume || 0)
+          };
+        }
+      } catch (error) {
+        console.warn(`Failed to fetch data for ${name}:`, error);
+        // Keep previous data if available
+      }
+    }
+    
+    return marketData;
+  } catch (error) {
+    console.error('Error fetching real market data:', error);
+    return {};
   }
-];
+}
+
+// Fetch real news data from backend API
+async function fetchRealNewsData() {
+  try {
+    const response = await fetch(`${API_URL}/news/latest`, {
+      method: 'GET',
+      headers: { 'Content-Type': 'application/json' }
+    });
+    
+    if (response.ok) {
+      const newsData = await response.json();
+      return newsData.slice(0, 10).map(article => ({
+        headline: article.title,
+        source: article.source,
+        impact: article.sentiment === 'bullish' || article.sentiment === 'bearish' ? 'high' : 'medium',
+        category: article.category || 'general'
+      }));
+    }
+  } catch (error) {
+    console.error('Error fetching real news data:', error);
+  }
+  
+  return [];
+}
 
 class AlertMonitoringService {
   constructor() {
@@ -60,8 +111,9 @@ class AlertMonitoringService {
       this.isMonitoring = true;
       console.log('Starting alert monitoring service...');
 
-      // Initialize last prices
-      this.lastPrices = { ...mockMarketData };
+      // Initialize last prices with real market data
+      const initialData = await fetchRealMarketData();
+      this.lastPrices = { ...initialData };
 
       // Start monitoring interval
       this.monitoringInterval = setInterval(async () => {
@@ -109,8 +161,8 @@ class AlertMonitoringService {
   // Check market conditions and generate alerts
   async checkMarketConditions(preferences) {
     try {
-      // Simulate price changes
-      const updatedData = this.simulateMarketChanges();
+      // Fetch real market data
+      const updatedData = await fetchRealMarketData();
 
       for (const [commodity, data] of Object.entries(updatedData)) {
         const lastPrice = this.lastPrices[commodity]?.price || data.price;
@@ -163,18 +215,21 @@ class AlertMonitoringService {
     }
 
     try {
-      // Simulate random news alerts
-      if (Math.random() < 0.1) { // 10% chance per check
-        const randomNews = mockNewsData[Math.floor(Math.random() * mockNewsData.length)];
-        
+      // Fetch real news data
+      const newsData = await fetchRealNewsData();
+      
+      // Check for high-impact news
+      const highImpactNews = newsData.filter(news => news.impact === 'high');
+      
+      for (const news of highImpactNews.slice(0, 3)) { // Limit to 3 alerts per check
         await sendNewsAlert(
           'Breaking News',
-          randomNews.headline,
+          news.headline,
           {
-            source: randomNews.source,
-            impact: randomNews.impact,
-            category: randomNews.category,
-            severity: randomNews.impact === 'high' ? 'high' : 'medium'
+            source: news.source,
+            impact: news.impact,
+            category: news.category,
+            severity: news.impact === 'high' ? 'high' : 'medium'
           }
         );
       }
@@ -183,27 +238,24 @@ class AlertMonitoringService {
     }
   }
 
-  // Simulate market data changes
-  simulateMarketChanges() {
-    const updated = {};
+  // Calculate price changes from real market data
+  calculatePriceChanges(currentData, previousData) {
+    const changes = {};
     
-    for (const [commodity, data] of Object.entries(mockMarketData)) {
-      // Simulate price changes (-3% to +3%)
-      const changePercent = (Math.random() - 0.5) * 6;
-      const newPrice = data.price * (1 + changePercent / 100);
-      
-      // Simulate volume changes
-      const volumeChange = (Math.random() - 0.5) * 0.4; // -20% to +20%
-      const newVolume = Math.floor(data.volume * (1 + volumeChange));
-      
-      updated[commodity] = {
-        price: Math.round(newPrice * 100) / 100,
-        change: changePercent,
-        volume: newVolume
-      };
+    for (const [commodity, current] of Object.entries(currentData)) {
+      const previous = previousData[commodity];
+      if (previous && previous.price > 0) {
+        const changePercent = ((current.price - previous.price) / previous.price) * 100;
+        changes[commodity] = {
+          ...current,
+          change: changePercent
+        };
+      } else {
+        changes[commodity] = current;
+      }
     }
     
-    return updated;
+    return changes;
   }
 
   // Load alert preferences
@@ -248,17 +300,35 @@ class AlertMonitoringService {
   async triggerManualCheck() {
     try {
       const preferences = await this.loadAlertPreferences();
+      
+      // Fetch current market data
+      const currentData = await fetchRealMarketData();
+      if (Object.keys(currentData).length === 0) {
+        throw new Error('Failed to fetch market data');
+      }
+      
+      // Calculate changes and check conditions
+      const updatedData = this.calculatePriceChanges(currentData, this.lastPrices);
       await this.checkMarketConditions(preferences);
+      
+      // Update last prices and check news
+      this.lastPrices = currentData;
       await this.checkNewsAlerts(preferences);
       
       await addAlert({
         type: 'system',
         severity: 'low',
         title: 'Manual Check Completed',
-        message: 'Market conditions and news have been checked manually.'
+        message: 'Real-time market conditions and news have been checked.'
       });
     } catch (error) {
       console.error('Error in manual check:', error);
+      await addAlert({
+        type: 'system',
+        severity: 'high',
+        title: 'Manual Check Failed',
+        message: `Error checking market conditions: ${error.message}`
+      });
     }
   }
 }

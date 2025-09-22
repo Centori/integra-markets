@@ -369,7 +369,7 @@ export default function ProfileScreen({ userProfile, alertPreferences, apiKeys, 
                   <Text style={styles.viewAllText}>View all {bookmarks.length} bookmarks</Text>
                   <MaterialIcons name="chevron-right" color={colors.accentPositive} size={16} />
                 </TouchableOpacity>
-              )
+              )}
               {showAllBookmarks && bookmarks.length > 3 && (
                 <TouchableOpacity style={styles.viewAllButton} onPress={() => setShowAllBookmarks(false)}>
                   <Text style={styles.viewAllText}>Show less</Text>

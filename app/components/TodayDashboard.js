@@ -642,8 +642,8 @@ const renderNewsCard = (item) => {
       {renderSentimentModal()}
       <AIAnalysisOverlay 
         isVisible={aiOverlayVisible} 
-        onClose={() => setAiOverlayVisible(false)}
-        news={selectedNews}
+        onClose={() => setAiOverlayVisible(false)}
+        newsData={selectedNews}
       />
     </SafeAreaView>
   );

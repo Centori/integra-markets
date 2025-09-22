@@ -4,8 +4,8 @@
  * Implements robust error handling and retry logic
  */
 
-// Force production backend for TestFlight deployment
-const API_BASE_URL = 'https://integra-markets-backend.fly.dev';  // Always use Fly.io production URL
+// Use local backend for development
+const API_BASE_URL = 'http://localhost:8000';  // Local development backend
 const API_URL = `${API_BASE_URL}/api`;
 
 // Common API configuration

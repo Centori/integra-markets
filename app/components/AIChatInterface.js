@@ -14,10 +14,12 @@ import {
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { BlurView } from 'expo-blur';
+import * as Clipboard from 'expo-clipboard';
 import { api } from '../services/apiClient';
 import MarkdownMessage from './MarkdownMessage';
 import { cleanAIResponse, containsMarkdown } from '../utils/markdownUtils';
 import StructuredAnalysis from './StructuredAnalysis';
+import AITextLoading from './AITextLoading';
 
 // Tool selection modal
 const ToolSelectionModal = ({ visible, onClose, tools, selectedTools, onToggleTool }) => {
@@ -69,7 +71,18 @@ const ToolSelectionModal = ({ visible, onClose, tools, selectedTools, onToggleTo
 // Message component with enhanced features
 const MessageBubble = ({ message, isUser }) => {
   const [expanded, setExpanded] = useState(false);
+  const [isCopied, setIsCopied] = useState(false);
   
+  const copyContent = async () => {
+    try {
+      await Clipboard.setStringAsync(message.content);
+      setIsCopied(true);
+      setTimeout(() => setIsCopied(false), 2000);
+    } catch (err) {
+      console.error('Failed to copy:', err);
+    }
+  };
+
   const renderContent = () => {
     if (message.type === 'text') {
       // Use MarkdownMessage for AI responses that contain markdown
@@ -78,7 +91,22 @@ const MessageBubble = ({ message, isUser }) => {
         return <MarkdownMessage content={cleanedContent} isUser={isUser} isDarkMode={darkTheme} />;
       }
       // Plain text for user messages and non-markdown AI messages
-      return <Text style={styles.messageText}>{message.content}</Text>;
+      return (
+        <View>
+          <Text style={styles.messageText}>{message.content}</Text>
+          {!isUser && (
+            <View style={styles.messageActions}>
+              <TouchableOpacity onPress={copyContent} style={styles.messageAction}>
+                <Ionicons 
+                  name={isCopied ? "checkmark" : "copy-outline"} 
+                  size={16} 
+                  color={darkTheme ? '#999' : '#666'} 
+                />
+              </TouchableOpacity>
+            </View>
+          )}
+        </View>
+      );
     }
     
     if (message.type === 'analysis') {
@@ -142,6 +170,7 @@ export default function AIChatInterface({ commodity = null, onInsightGenerated, 
   const [darkTheme, setDarkTheme] = useState(isDarkMode);
   const scrollViewRef = useRef();
   const fadeAnim = useRef(new Animated.Value(0)).current;
+  const abortController = useRef(null);
   
   const availableTools = [
     {
@@ -194,8 +223,15 @@ export default function AIChatInterface({ commodity = null, onInsightGenerated, 
   }, [commodity]);
   
   const sendMessage = async () => {
-    if (!inputText.trim()) return;
+    if (!inputText.trim() || (loading && !abortController.current)) return;
     
+    if (loading && abortController.current) {
+      abortController.current.abort();
+      abortController.current = null;
+      setLoading(false);
+      return;
+    }
+
     const userMessage = {
       id: Date.now().toString(),
       type: 'text',
@@ -207,6 +243,8 @@ export default function AIChatInterface({ commodity = null, onInsightGenerated, 
     setMessages(prev => [...prev, userMessage]);
     setInputText('');
     setLoading(true);
+    
+    abortController.current = new AbortController();
     
     try {
       let response;
@@ -332,10 +370,10 @@ export default function AIChatInterface({ commodity = null, onInsightGenerated, 
   };
   
   const suggestedQueries = [
-    `What's the outlook for ${commodity || 'oil'} prices?`,
-    `Analyze recent ${commodity || 'gold'} market trends`,
-    `How will weather affect ${commodity || 'wheat'} supply?`,
-    `Generate a technical analysis for ${commodity || 'commodities'}`
+    "What's the market impact of this news?",
+    "Suggest trading strategies based on this",
+    "Analyze the sentiment and key drivers",
+    "What are the risks to consider?"
   ];
   
   return (
@@ -398,8 +436,10 @@ export default function AIChatInterface({ commodity = null, onInsightGenerated, 
         
         {loading && (
           <View style={styles.loadingContainer}>
-            <ActivityIndicator size="small" color="#4CAF50" />
-            <Text style={styles.loadingText}>AI is thinking...</Text>
+            <AITextLoading 
+              style={styles.loadingAnimation} 
+              textStyle={[styles.loadingText, darkTheme && styles.darkLoadingText]}
+            />
           </View>
         )}
       </ScrollView>
@@ -437,11 +477,15 @@ export default function AIChatInterface({ commodity = null, onInsightGenerated, 
           onSubmitEditing={sendMessage}
         />
         <TouchableOpacity
-          style={[styles.sendButton, loading && styles.sendButtonDisabled]}
+          style={[styles.sendButton, (!inputText.trim() || (loading && !abortController.current)) && styles.sendButtonDisabled]}
           onPress={sendMessage}
-          disabled={loading}
+          disabled={!inputText.trim() && !loading}
         >
-          <Ionicons name="send" size={20} color="#fff" />
+          <Ionicons 
+            name={loading ? "stop" : "send"} 
+            size={20} 
+            color="#fff" 
+          />
         </TouchableOpacity>
       </KeyboardAvoidingView>
       
@@ -459,28 +503,28 @@ export default function AIChatInterface({ commodity = null, onInsightGenerated, 
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#f5f5f5',
+    backgroundColor: '#000000',
   },
   darkContainer: {
-    backgroundColor: '#1C1C1E',
+    backgroundColor: '#000000',
   },
   header: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
     padding: 16,
-    backgroundColor: '#fff',
+    backgroundColor: '#000000',
     borderBottomWidth: 1,
-    borderBottomColor: '#e0e0e0',
+    borderBottomColor: '#333333',
   },
   darkHeader: {
-    backgroundColor: '#2C2C2E',
-    borderBottomColor: '#3A3A3C',
+    backgroundColor: '#000000',
+    borderBottomColor: '#333333',
   },
   headerTitle: {
-    fontSize: 18,
+    fontSize: 24,
     fontWeight: '600',
-    color: '#333',
+    color: '#ffffff',
   },
   darkHeaderTitle: {
     color: '#ffffff',
@@ -602,8 +646,15 @@ const styles = StyleSheet.create({
     padding: 16,
   },
   loadingText: {
-    fontSize: 14,
+    fontSize: 16,
     color: '#666',
+    fontWeight: '600',
+  },
+  darkLoadingText: {
+    color: '#999',
+  },
+  loadingAnimation: {
+    marginVertical: -8,
   },
   suggestionsContainer: {
     position: 'absolute',
@@ -613,24 +664,22 @@ const styles = StyleSheet.create({
     paddingHorizontal: 16,
   },
   suggestionChip: {
-    paddingHorizontal: 16,
-    paddingVertical: 8,
-    backgroundColor: '#fff',
+    paddingHorizontal: 20,
+    paddingVertical: 12,
+    backgroundColor: '#1C1C1E',
     borderRadius: 20,
-    borderWidth: 1,
-    borderColor: '#e0e0e0',
     marginRight: 8,
+    marginBottom: 8,
   },
   suggestionText: {
-    fontSize: 14,
-    color: '#666',
+    fontSize: 16,
+    color: '#ffffff',
   },
   inputContainer: {
     flexDirection: 'row',
     padding: 16,
-    backgroundColor: '#fff',
-    borderTopWidth: 1,
-    borderTopColor: '#e0e0e0',
+    backgroundColor: '#000000',
+    borderTopWidth: 0,
     alignItems: 'flex-end',
   },
   input: {
@@ -639,10 +688,10 @@ const styles = StyleSheet.create({
     maxHeight: 100,
     paddingHorizontal: 16,
     paddingVertical: 10,
-    backgroundColor: '#f5f5f5',
+    backgroundColor: '#1C1C1E',
     borderRadius: 20,
     fontSize: 16,
-    color: '#333',
+    color: '#ffffff',
     marginRight: 8,
   },
   sendButton: {
@@ -669,9 +718,9 @@ const styles = StyleSheet.create({
     padding: 20,
   },
   modalTitle: {
-    fontSize: 20,
+    fontSize: 24,
     fontWeight: '600',
-    color: '#333',
+    color: '#fff',
     marginBottom: 20,
     textAlign: 'center',
   },

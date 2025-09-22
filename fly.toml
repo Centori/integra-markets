@@ -8,7 +8,7 @@ kill_timeout = "5s"
   dockerfile = "Dockerfile"
 
 [processes]
-  app = "cd /app && uvicorn --app-dir /app backend.main:app --host 0.0.0.0 --port 8000"
+  app = "uvicorn main:app --host 0.0.0.0 --port 8000"
 
 [env]
   PORT = "8000"

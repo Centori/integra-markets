@@ -21,6 +21,7 @@ feedparser==6.0.10
 nltk==3.8.1  # Includes VADER sentiment analyzer
 numpy==1.24.3  # Required for NLTK and data processing
 torch==2.2.0  # Required for enhanced sentiment analysis
+textblob==0.17.1  # For sentiment analysis and NLP
 
 # AI Services
 groq==0.9.0  # For Groq AI service
@@ -31,6 +32,7 @@ exponent-server-sdk==2.0.0  # For mobile push notifications
 # Database ORM
 tortoise-orm==0.20.0
 aerich==0.7.2  # For database migrations
+aiosqlite==0.17.0  # Required by tortoise-orm for sqlite backend (compatible with <0.18.0)
 
 # Utilities
 python-dotenv==1.0.0

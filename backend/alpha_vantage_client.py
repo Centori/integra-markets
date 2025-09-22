@@ -81,9 +81,9 @@ class AlphaVantageClient:
     BASE_URL = "https://www.alphavantage.co/query"
     
     def __init__(self, cache_ttl: int = 300):
-        self.api_key = os.getenv('ALPHAVANTAGE_API_KEY')
+        self.api_key = os.getenv('ALPHA_VANTAGE_API_KEY')
         if not self.api_key:
-            raise ValueError("ALPHAVANTAGE_API_KEY environment variable not set")
+            raise ValueError("ALPHA_VANTAGE_API_KEY environment variable not set")
         
         self.rate_limiter = RateLimiter(RateLimitConfig())
         self.cache = Cache(ttl_seconds=cache_ttl)
