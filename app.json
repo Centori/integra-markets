@@ -5,7 +5,7 @@
     "version": "1.0.1",
     "orientation": "portrait",
     "icon": "./assets/icon.png",
-    "userInterfaceStyle": "light",
+"userInterfaceStyle": "dark",
     "description": "Professional financial markets analysis and news aggregation platform with AI-powered sentiment analysis for commodities trading.",
     "keywords": ["finance", "markets", "trading", "commodities", "news", "analysis", "AI", "sentiment"],
     "category": "finance",
@@ -13,7 +13,7 @@
     "splash": {
       "image": "./assets/splash.png",
       "resizeMode": "contain",
-      "backgroundColor": "#ffffff"
+"backgroundColor": "#121212"
     },
     "assetBundlePatterns": [
       "**/*"
@@ -82,7 +82,8 @@
       "output": "single",
       "baseUrl": "/integra-markets"
     },
-    "plugins": [
+"plugins": [
+      "expo-router",
       [
         "expo-notifications",
         {

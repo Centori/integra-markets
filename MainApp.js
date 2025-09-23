@@ -16,6 +16,11 @@ import IntegraLoadingPage from './app/components/IntegraLoadingPage';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { registerForPushNotificationsAsync } from './app/services/notificationService';
 
+// Ensure __DEV__ is defined
+if (typeof global.__DEV__ === 'undefined') {
+  global.__DEV__ = process.env.NODE_ENV === 'development';
+}
+
 const MainApp = () => {
   const [activeTab, setActiveTab] = useState('Today');
   const [isLoading, setIsLoading] = useState(true);

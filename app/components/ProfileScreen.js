@@ -14,7 +14,7 @@ import { MaterialIcons } from '@expo/vector-icons';
 import * as ImagePicker from 'expo-image-picker';
 import { Image } from 'react-native';
 import { useBookmarks } from '../providers/BookmarkProvider';
-import { userService } from '@/app/services/userService';
+import { userService } from '../services/userService';
 
 // Use the same color palette as the main app
 const colors = {
