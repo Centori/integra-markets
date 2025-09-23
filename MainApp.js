@@ -13,14 +13,30 @@ import TodayDashboard from './app/components/TodayDashboard';
 import AlertsScreen from './app/components/AlertsScreen';
 import ProfileScreen from './app/components/ProfileScreen';
 import IntegraLoadingPage from './app/components/IntegraLoadingPage';
+import AsyncStorage from '@react-native-async-storage/async-storage';
+import { registerForPushNotificationsAsync } from './app/services/notificationService';
 
 const MainApp = () => {
   const [activeTab, setActiveTab] = useState('Today');
   const [isLoading, setIsLoading] = useState(true);
   const [agentActive, setAgentActive] = useState(true);
 
+  const checkFirstLaunch = async () => {
+    try {
+      const hasLaunched = await AsyncStorage.getItem('has_launched');
+      if (!hasLaunched) {
+        // First launch - request notification permissions
+        await registerForPushNotificationsAsync();
+        await AsyncStorage.setItem('has_launched', 'true');
+      }
+    } catch (error) {
+      console.error('Error checking first launch:', error);
+    }
+  };
+
   useEffect(() => {
     // Simulate loading time
+    checkFirstLaunch();
     const timer = setTimeout(() => {
       setIsLoading(false);
     }, 2000);

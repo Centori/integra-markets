@@ -11,6 +11,8 @@ import {
   ActivityIndicator
 } from "react-native";
 import { MaterialIcons } from '@expo/vector-icons';
+import * as ImagePicker from 'expo-image-picker';
+import { Image } from 'react-native';
 import { useBookmarks } from '../providers/BookmarkProvider';
 import { userService } from '@/app/services/userService';
 
@@ -62,6 +64,66 @@ export default function ProfileScreen({ userProfile, alertPreferences, apiKeys, 
   const [loadingProfile, setLoadingProfile] = useState(true);
   const [profileError, setProfileError] = useState(null);
   const [resolvedProfile, setResolvedProfile] = useState(userProfile || null);
+  const [uploading, setUploading] = useState(false);
+
+  const pickImage = async () => {
+    try {
+      const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
+      if (status !== 'granted') {
+        Alert.alert('Permission Denied', 'Sorry, we need camera roll permissions to upload a profile photo.');
+        return;
+      }
+
+      const result = await ImagePicker.launchImagePickerAsync({
+        mediaTypes: ImagePicker.MediaTypeOptions.Images,
+        allowsEditing: true,
+        aspect: [1, 1],
+        quality: 0.8,
+      });
+
+      if (!result.canceled && result.assets && result.assets[0]) {
+        setUploading(true);
+        try {
+          // Upload to your backend/storage service
+          const formData = new FormData();
+          formData.append('photo', {
+            uri: result.assets[0].uri,
+            type: 'image/jpeg',
+            name: 'profile-photo.jpg',
+          });
+
+          // Update this with your actual API endpoint
+          const response = await fetch('YOUR_UPLOAD_ENDPOINT', {
+            method: 'POST',
+            body: formData,
+            headers: {
+              'Content-Type': 'multipart/form-data',
+            },
+          });
+
+          const uploadResult = await response.json();
+          
+          if (uploadResult.url) {
+            setResolvedProfile(prev => ({
+              ...prev,
+              photoUrl: uploadResult.url
+            }));
+            Alert.alert('Success', 'Profile photo updated successfully!');
+          } else {
+            throw new Error('Upload failed');
+          }
+        } catch (error) {
+          console.error('Error uploading photo:', error);
+          Alert.alert('Error', 'Failed to upload profile photo. Please try again.');
+        } finally {
+          setUploading(false);
+        }
+      }
+    } catch (error) {
+      console.error('Error picking image:', error);
+      Alert.alert('Error', 'Failed to select image. Please try again.');
+    }
+  };
   
   const { bookmarks, removeBookmark } = useBookmarks();
 
@@ -203,52 +265,93 @@ export default function ProfileScreen({ userProfile, alertPreferences, apiKeys, 
             </View>
 
             <View style={styles.profileCard}>
-              <View style={styles.profileHeader}>
-                <View style={styles.profileAvatar}>
+            <TouchableOpacity 
+              style={styles.profileHeader}
+              onPress={() => navigateToScreen('EditProfile')}
+              activeOpacity={0.7}
+            >
+              <TouchableOpacity 
+                style={styles.profileAvatar}
+                onPress={pickImage}
+                disabled={uploading}
+              >
+                {uploading ? (
+                  <ActivityIndicator color={colors.bgPrimary} />
+                ) : resolvedProfile?.photoUrl ? (
+                  <Image 
+                    source={{ uri: resolvedProfile.photoUrl }} 
+                    style={styles.avatarImage}
+                    defaultSource={require('../assets/default-avatar.png')}
+                  />
+                ) : (
                   <Text style={styles.profileAvatarText}>
                     {effectiveUserProfile?.username?.charAt(0)?.toUpperCase() || 'U'}
                   </Text>
+                )}
+                <View style={styles.cameraIconContainer}>
+                  <MaterialIcons 
+                    name="photo-camera" 
+                    size={16} 
+                    color={colors.bgPrimary} 
+                  />
                 </View>
-                <View style={styles.profileInfo}>
-                  <Text style={styles.profileName}>
-                    {effectiveUserProfile?.username || effectiveUserProfile?.email || 'User'}
+              </TouchableOpacity>
+              <View style={styles.profileInfo}>
+                <Text style={styles.profileName}>
+                  {effectiveUserProfile?.username || effectiveUserProfile?.email || 'User'}
+                </Text>
+                {effectiveUserProfile?.role ? (
+                  <Text style={styles.profileRole}>
+                    {getRoleLabel(effectiveUserProfile.role)}
                   </Text>
-                  {effectiveUserProfile?.role ? (
-                    <Text style={styles.profileRole}>
-                      {getRoleLabel(effectiveUserProfile.role)}
-                    </Text>
-                  ) : null}
-                  {effectiveUserProfile?.institution && (
-                    <Text style={styles.profileInstitution}>
-                      {effectiveUserProfile.institution}
-                    </Text>
-                  )}
-                </View>
+                ) : null}
+                {effectiveUserProfile?.institution && (
+                  <Text style={styles.profileInstitution}>
+                    {effectiveUserProfile.institution}
+                  </Text>
+                )}
               </View>
+              <MaterialIcons name="edit" size={20} color={colors.textSecondary} style={styles.editIcon} />
+            </TouchableOpacity>
               
               {effectiveUserProfile?.bio ? (
                 <Text style={styles.profileBio}>{effectiveUserProfile.bio}</Text>
               ) : null}
               
               <View style={styles.profileStats}>
-                <View style={styles.profileStat}>
+                <TouchableOpacity 
+                  style={styles.profileStat}
+                  onPress={() => navigateToScreen('MarketFocus')}
+                  activeOpacity={0.7}
+                >
                   <Text style={styles.profileStatValue}>
                     {effectiveUserProfile?.marketFocus?.length || 0}
                   </Text>
                   <Text style={styles.profileStatLabel}>Market Focus</Text>
-                </View>
-                <View style={styles.profileStat}>
+                  <MaterialIcons name="arrow-forward" size={16} color={colors.textSecondary} style={styles.statIcon} />
+                </TouchableOpacity>
+                <TouchableOpacity 
+                  style={styles.profileStat}
+                  onPress={() => navigateToScreen('Experience')}
+                  activeOpacity={0.7}
+                >
                   <Text style={styles.profileStatValue}>
                     {effectiveUserProfile?.experience || '-'}
                   </Text>
                   <Text style={styles.profileStatLabel}>Experience</Text>
-                </View>
-                <View style={styles.profileStat}>
+                  <MaterialIcons name="arrow-forward" size={16} color={colors.textSecondary} style={styles.statIcon} />
+                </TouchableOpacity>
+                <TouchableOpacity 
+                  style={styles.profileStat}
+                  onPress={() => setShowAlertPreferences(true)}
+                  activeOpacity={0.7}
+                >
                   <Text style={styles.profileStatValue}>
                     {defaultAlertPreferences.commodities.length}
                   </Text>
                   <Text style={styles.profileStatLabel}>Alerts</Text>
-                </View>
+                  <MaterialIcons name="arrow-forward" size={16} color={colors.textSecondary} style={styles.statIcon} />
+                </TouchableOpacity>
               </View>
             </View>
           </View>
@@ -269,24 +372,45 @@ export default function ProfileScreen({ userProfile, alertPreferences, apiKeys, 
           </View>
 
           <View style={styles.alertsCard}>
-            <View style={styles.alertRow}>
-              <Text style={styles.alertLabel}>Commodities</Text>
+          <TouchableOpacity 
+            style={styles.alertRow}
+            onPress={() => navigateToScreen('CommodityPreferences')}
+            activeOpacity={0.7}
+          >
+            <Text style={styles.alertLabel}>Commodities</Text>
+            <View style={styles.alertValueContainer}>
               <Text style={styles.alertValue}>
                 {defaultAlertPreferences.commodities.length} selected
               </Text>
+              <MaterialIcons name="chevron-right" size={16} color={colors.textSecondary} />
             </View>
-            <View style={styles.alertRow}>
-              <Text style={styles.alertLabel}>Frequency</Text>
+          </TouchableOpacity>
+          <TouchableOpacity 
+            style={styles.alertRow}
+            onPress={() => navigateToScreen('AlertFrequency')}
+            activeOpacity={0.7}
+          >
+            <Text style={styles.alertLabel}>Frequency</Text>
+            <View style={styles.alertValueContainer}>
               <Text style={styles.alertValue}>
                 {defaultAlertPreferences.frequency.charAt(0).toUpperCase() + defaultAlertPreferences.frequency.slice(1)}
               </Text>
+              <MaterialIcons name="chevron-right" size={16} color={colors.textSecondary} />
             </View>
-            <View style={styles.alertRow}>
-              <Text style={styles.alertLabel}>Notifications</Text>
+          </TouchableOpacity>
+          <TouchableOpacity 
+            style={styles.alertRow}
+            onPress={() => navigateToScreen('NotificationSettings')}
+            activeOpacity={0.7}
+          >
+            <Text style={styles.alertLabel}>Notifications</Text>
+            <View style={styles.alertValueContainer}>
               <Text style={styles.alertValue}>
                 {defaultAlertPreferences.notifications ? 'Enabled' : 'Disabled'}
               </Text>
+              <MaterialIcons name="chevron-right" size={16} color={colors.textSecondary} />
             </View>
+          </TouchableOpacity>
           </View>
         </View>
 
@@ -471,6 +595,20 @@ export default function ProfileScreen({ userProfile, alertPreferences, apiKeys, 
 }
 
 const styles = StyleSheet.create({
+  editIcon: {
+    position: 'absolute',
+    right: 12,
+    top: 12,
+    opacity: 0.6,
+  },
+  statIcon: {
+    marginTop: 4,
+  },
+  alertValueContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+  },
   safeArea: {
     flex: 1,
     backgroundColor: colors.bgPrimary,
@@ -563,6 +701,7 @@ const styles = StyleSheet.create({
     marginBottom: 16,
   },
   profileAvatar: {
+    position: 'relative',
     width: 60,
     height: 60,
     borderRadius: 30,
@@ -570,6 +709,24 @@ const styles = StyleSheet.create({
     alignItems: "center",
     justifyContent: "center",
     marginRight: 16,
+  },
+  avatarImage: {
+    width: 60,
+    height: 60,
+    borderRadius: 30,
+  },
+  cameraIconContainer: {
+    position: 'absolute',
+    right: -4,
+    bottom: -4,
+    backgroundColor: colors.accentPositive,
+    borderRadius: 12,
+    width: 24,
+    height: 24,
+    justifyContent: 'center',
+    alignItems: 'center',
+    borderWidth: 2,
+    borderColor: colors.bgPrimary,
   },
   profileAvatarText: {
     color: colors.bgPrimary,

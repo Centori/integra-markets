@@ -58,9 +58,7 @@
           "UNAuthorizationOptionProvidesAppNotificationSettings": true
         }
       },
-      "runtimeVersion": {
-        "policy": "appVersion"
-      },
+"runtimeVersion": "1.0.0",
       "jsEngine": "hermes"
     },
     "android": {
@@ -68,7 +66,7 @@
       "versionCode": 3,
       "adaptiveIcon": {
         "foregroundImage": "./assets/adaptive-icon.png",
-        "backgroundColor": "#000000"
+        "backgroundColor": "#4ECCA3"
       },
       "permissions": [
         "android.permission.CAMERA",

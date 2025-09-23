@@ -406,8 +406,8 @@ export async function sendMarketAlert(commodity, change, price) {
     return;
   }
 
-  const title = `${commodity} Alert`;
-  const body = `Price ${change > 0 ? 'increased' : 'decreased'} to $${price}`;
+  const title = 'Market Update';
+  const body = `${commodity}: ${change > 0 ? '+' : ''}${change.toFixed(1)}%`;
   
   try {
     // Send notification
