@@ -5,15 +5,24 @@
     "version": "1.0.1",
     "orientation": "portrait",
     "icon": "./assets/icon.png",
-"userInterfaceStyle": "dark",
+    "userInterfaceStyle": "dark",
     "description": "Professional financial markets analysis and news aggregation platform with AI-powered sentiment analysis for commodities trading.",
-    "keywords": ["finance", "markets", "trading", "commodities", "news", "analysis", "AI", "sentiment"],
+    "keywords": [
+      "finance",
+      "markets",
+      "trading",
+      "commodities",
+      "news",
+      "analysis",
+      "AI",
+      "sentiment"
+    ],
     "category": "finance",
     "privacy": "https://integramarkets.com/privacy",
     "splash": {
       "image": "./assets/splash.png",
       "resizeMode": "contain",
-"backgroundColor": "#121212"
+      "backgroundColor": "#121212"
     },
     "assetBundlePatterns": [
       "**/*"
@@ -21,18 +30,23 @@
     "ios": {
       "bundleIdentifier": "com.centori.integramarkets",
       "buildNumber": "32",
-      "deploymentTarget": "13.0",
+      "deploymentTarget": "15.1",
       "supportsTablet": true,
+      "privacyManifests": null,
       "requireFullScreen": false,
       "config": {
         "usesNonExemptEncryption": false
       },
       "appStoreUrl": "https://apps.apple.com/app/integra-markets/id123456789",
       "category": "finance",
+      "privacyManifestDetails": {
+        "NSPrivacyAccessedAPITypes": []
+      },
       "infoPlist": {
         "ITSAppUsesNonExemptEncryption": false,
-        "NSCameraUsageDescription": "This app uses the camera to capture financial documents and receipts.",
-        "NSPhotoLibraryUsageDescription": "This app accesses your photo library to select financial documents and receipts.",
+        "NSCameraUsageDescription": "This app uses the camera to scan documents and capture images for analysis.",
+        "NSPhotoLibraryUsageDescription": "This app accesses your photo library to select images for analysis.",
+        "NSMicrophoneUsageDescription": "This app uses the microphone for voice commands and audio analysis.",
         "NSFaceIDUsageDescription": "This app uses Face ID for secure authentication.",
         "NSAppTransportSecurity": {
           "NSAllowsArbitraryLoads": false,
@@ -44,7 +58,6 @@
           "$(AppIdentifierPrefix)com.centori.integramarkets"
         ],
         "UIBackgroundModes": [
-          "fetch",
           "remote-notification"
         ],
         "UIRequiresFullScreen": false,
@@ -58,7 +71,12 @@
           "UNAuthorizationOptionProvidesAppNotificationSettings": true
         }
       },
-"runtimeVersion": "1.0.0",
+      "entitlements": {
+        "com.apple.developer.applesignin": [
+          "Default"
+        ]
+      },
+      "runtimeVersion": "1.0.1",
       "jsEngine": "hermes"
     },
     "android": {
@@ -82,12 +100,13 @@
       "output": "single",
       "baseUrl": "/integra-markets"
     },
-"plugins": [
+    "plugins": [
       "expo-router",
+      "./expo-plugins/disable-privacy-aggregation",
       [
         "expo-notifications",
         {
-          "icon": "./assets/notification-icon-new.png",
+          "icon": "./assets/notification-icon.png",
           "color": "#4ECCA3",
           "defaultChannel": "default",
           "channels": [
@@ -114,11 +133,12 @@
       "apiUrl": "$EXPO_PUBLIC_API_URL",
       "groqApiKey": "$EXPO_PUBLIC_GROQ_API_KEY",
       "huggingFaceToken": "$EXPO_PUBLIC_HUGGING_FACE_TOKEN",
+      "router": {},
       "eas": {
-        "projectId": "e9868cd6-adaa-422c-be2b-89b6f028e5f6"
+        "projectId": "5163460b-7d45-4c4c-b10d-c5effb08a3c3"
       }
     },
     "newArchEnabled": false,
-    "owner": "ak88"
+    "owner": "anilkhamsa"
   }
 }
