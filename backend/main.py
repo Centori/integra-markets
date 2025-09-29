@@ -6,10 +6,8 @@ from dotenv import load_dotenv
 from supabase import create_client, Client
 from pydantic import BaseModel
 
-# Load environment variables from parent directory's .env file
-parent_dir = Path(__file__).parent.parent
-env_path = parent_dir / '.env'
-load_dotenv(env_path)
+# Load environment variables (Cloud Run will provide them directly)
+load_dotenv()  # This will load from .env if present, but won't fail if missing
 
 app = FastAPI(title="Integra AI Backend", description="Financial AI Analysis API")
 

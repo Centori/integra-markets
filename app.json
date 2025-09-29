@@ -20,7 +20,7 @@
     ],
     "ios": {
       "bundleIdentifier": "com.centori.integramarkets",
-      "buildNumber": "26",
+      "buildNumber": "45",
       "deploymentTarget": "13.0",
       "supportsTablet": true,
       "requireFullScreen": false,
@@ -58,9 +58,7 @@
           "UNAuthorizationOptionProvidesAppNotificationSettings": true
         }
       },
-      "runtimeVersion": {
-        "policy": "appVersion"
-      },
+      "runtimeVersion": "1.0.0",
       "jsEngine": "hermes"
     },
     "android": {
@@ -101,16 +99,16 @@
       ]
     ],
     "extra": {
-      "supabaseUrl": "https://jcovjmuaysebdfbpbvdh.supabase.co",
-      "supabaseAnonKey": "__SUPABASE_ANON_KEY__",
-      "apiUrl": "__API_URL__",
-      "groqApiKey": "__GROQ_API_KEY__",
-      "huggingFaceToken": "__HUGGING_FACE_TOKEN__",
+      "supabaseUrl": "$EXPO_PUBLIC_SUPABASE_URL",
+      "supabaseAnonKey": "$EXPO_PUBLIC_SUPABASE_ANON_KEY",
+      "apiUrl": "$EXPO_PUBLIC_API_URL",
+      "groqApiKey": "$EXPO_PUBLIC_GROQ_API_KEY",
+      "huggingFaceToken": "$EXPO_PUBLIC_HUGGING_FACE_TOKEN",
       "eas": {
-        "projectId": "e9868cd6-adaa-422c-be2b-89b6f028e5f6"
+        "projectId": "5163460b-7d45-4c4c-b10d-c5effb08a3c3"
       }
     },
     "newArchEnabled": false,
-    "owner": "ak88"
+    "owner": "anilkhamsa"
   }
 }

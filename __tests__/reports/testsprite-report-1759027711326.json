@@ -1,0 +1,290 @@
+{
+  "metadata": {
+    "framework": "TestSprite AI Testing Framework",
+    "version": "1.0.0",
+    "timestamp": "2025-09-28T02:48:31.326Z",
+    "duration": 12,
+    "environment": {
+      "node": "v20.17.0",
+      "platform": "darwin",
+      "arch": "arm64"
+    }
+  },
+  "summary": {
+    "totalTests": 24,
+    "passed": 15,
+    "failed": 9,
+    "skipped": 0,
+    "startTime": "2025-09-28T02:48:31.314Z",
+    "endTime": "2025-09-28T02:48:31.326Z",
+    "duration": 12
+  },
+  "results": {
+    "frontend": [
+      {
+        "component": "ChatInterface",
+        "test": "Renders correctly",
+        "status": "passed",
+        "timestamp": "2025-09-28T02:48:31.315Z"
+      },
+      {
+        "component": "ChatInterface",
+        "test": "Text input works",
+        "status": "passed",
+        "timestamp": "2025-09-28T02:48:31.315Z"
+      },
+      {
+        "component": "ChatInterface",
+        "test": "Suggestion chips render",
+        "status": "passed",
+        "timestamp": "2025-09-28T02:48:31.315Z"
+      },
+      {
+        "component": "NewsCard",
+        "test": "Renders news content",
+        "status": "passed",
+        "timestamp": "2025-09-28T02:48:31.315Z"
+      },
+      {
+        "component": "NewsCard",
+        "test": "Displays sentiment",
+        "status": "passed",
+        "timestamp": "2025-09-28T02:48:31.315Z"
+      },
+      {
+        "component": "AuthButtons",
+        "test": "Renders auth buttons",
+        "status": "passed",
+        "timestamp": "2025-09-28T02:48:31.315Z"
+      },
+      {
+        "component": "AuthButtons",
+        "test": "Button interactions work",
+        "status": "passed",
+        "timestamp": "2025-09-28T02:48:31.315Z"
+      },
+      {
+        "component": "TodayDashboard",
+        "test": "Renders dashboard sections",
+        "status": "passed",
+        "timestamp": "2025-09-28T02:48:31.315Z"
+      },
+      {
+        "component": "AIAnalysisOverlay",
+        "test": "Renders overlay content",
+        "status": "passed",
+        "timestamp": "2025-09-28T02:48:31.316Z"
+      },
+      {
+        "component": "OnboardingForm",
+        "test": "Renders onboarding form",
+        "status": "passed",
+        "timestamp": "2025-09-28T02:48:31.316Z"
+      },
+      {
+        "component": "NotificationSettings",
+        "test": "Renders notification settings",
+        "status": "passed",
+        "timestamp": "2025-09-28T02:48:31.316Z"
+      },
+      {
+        "component": "WelcomeScreen",
+        "test": "Renders welcome screen",
+        "status": "passed",
+        "timestamp": "2025-09-28T02:48:31.316Z"
+      }
+    ],
+    "api": [
+      {
+        "endpoint": "Health Check",
+        "test": "Endpoint Availability",
+        "status": "failed",
+        "error": "fetch failed",
+        "timestamp": "2025-09-28T02:48:31.317Z"
+      },
+      {
+        "endpoint": "Health Check",
+        "test": "Response Validation",
+        "status": "failed",
+        "error": "fetch failed",
+        "timestamp": "2025-09-28T02:48:31.318Z"
+      },
+      {
+        "endpoint": "Health Check",
+        "test": "Error Handling",
+        "status": "passed",
+        "statusCode": 200,
+        "timestamp": "2025-09-28T02:48:31.318Z"
+      },
+      {
+        "endpoint": "Health Check",
+        "test": "Data Integrity",
+        "status": "failed",
+        "error": "fetch failed",
+        "timestamp": "2025-09-28T02:48:31.319Z"
+      },
+      {
+        "endpoint": "Root Endpoint",
+        "test": "Endpoint Availability",
+        "status": "failed",
+        "error": "fetch failed",
+        "timestamp": "2025-09-28T02:48:31.320Z"
+      },
+      {
+        "endpoint": "Root Endpoint",
+        "test": "Response Validation",
+        "status": "failed",
+        "error": "fetch failed",
+        "timestamp": "2025-09-28T02:48:31.321Z"
+      },
+      {
+        "endpoint": "Root Endpoint",
+        "test": "Error Handling",
+        "status": "passed",
+        "statusCode": 200,
+        "timestamp": "2025-09-28T02:48:31.321Z"
+      },
+      {
+        "endpoint": "Root Endpoint",
+        "test": "Data Integrity",
+        "status": "failed",
+        "error": "fetch failed",
+        "timestamp": "2025-09-28T02:48:31.321Z"
+      },
+      {
+        "endpoint": "Sentiment Analysis",
+        "test": "Endpoint Availability",
+        "status": "failed",
+        "error": "fetch failed",
+        "timestamp": "2025-09-28T02:48:31.322Z"
+      },
+      {
+        "endpoint": "Sentiment Analysis",
+        "test": "Response Validation",
+        "status": "failed",
+        "error": "fetch failed",
+        "timestamp": "2025-09-28T02:48:31.323Z"
+      },
+      {
+        "endpoint": "Sentiment Analysis",
+        "test": "Error Handling",
+        "status": "passed",
+        "error": "fetch failed",
+        "timestamp": "2025-09-28T02:48:31.325Z"
+      },
+      {
+        "endpoint": "Sentiment Analysis",
+        "test": "Data Integrity",
+        "status": "failed",
+        "error": "fetch failed",
+        "timestamp": "2025-09-28T02:48:31.325Z"
+      }
+    ],
+    "authentication": []
+  },
+  "statistics": {
+    "byCategory": {
+      "frontend": {
+        "total": 12,
+        "passed": 12,
+        "failed": 0,
+        "skipped": 0,
+        "successRate": "100.00"
+      },
+      "api": {
+        "total": 12,
+        "passed": 3,
+        "failed": 9,
+        "skipped": 0,
+        "successRate": "25.00"
+      },
+      "authentication": {
+        "total": 0,
+        "passed": 0,
+        "failed": 0,
+        "skipped": 0,
+        "successRate": 0
+      }
+    },
+    "byStatus": {
+      "passed": 15,
+      "failed": 9,
+      "skipped": 0
+    },
+    "successRate": "62.50",
+    "averageTestDuration": 0
+  },
+  "recommendations": [
+    {
+      "category": "Critical Issues",
+      "priority": "high",
+      "description": "9 tests failed and require immediate attention",
+      "actions": [
+        {
+          "test": "Endpoint Availability",
+          "component": "Health Check",
+          "error": "fetch failed",
+          "suggestion": "Check network connectivity and API endpoint availability"
+        },
+        {
+          "test": "Response Validation",
+          "component": "Health Check",
+          "error": "fetch failed",
+          "suggestion": "Check network connectivity and API endpoint availability"
+        },
+        {
+          "test": "Data Integrity",
+          "component": "Health Check",
+          "error": "fetch failed",
+          "suggestion": "Check network connectivity and API endpoint availability"
+        },
+        {
+          "test": "Endpoint Availability",
+          "component": "Root Endpoint",
+          "error": "fetch failed",
+          "suggestion": "Check network connectivity and API endpoint availability"
+        },
+        {
+          "test": "Response Validation",
+          "component": "Root Endpoint",
+          "error": "fetch failed",
+          "suggestion": "Check network connectivity and API endpoint availability"
+        },
+        {
+          "test": "Data Integrity",
+          "component": "Root Endpoint",
+          "error": "fetch failed",
+          "suggestion": "Check network connectivity and API endpoint availability"
+        },
+        {
+          "test": "Endpoint Availability",
+          "component": "Sentiment Analysis",
+          "error": "fetch failed",
+          "suggestion": "Check network connectivity and API endpoint availability"
+        },
+        {
+          "test": "Response Validation",
+          "component": "Sentiment Analysis",
+          "error": "fetch failed",
+          "suggestion": "Check network connectivity and API endpoint availability"
+        },
+        {
+          "test": "Data Integrity",
+          "component": "Sentiment Analysis",
+          "error": "fetch failed",
+          "suggestion": "Check network connectivity and API endpoint availability"
+        }
+      ]
+    },
+    {
+      "category": "Test Coverage",
+      "priority": "medium",
+      "description": "Success rate is 62.50%, consider improving test reliability",
+      "actions": [
+        "Review failed test cases and fix underlying issues",
+        "Add more comprehensive error handling",
+        "Improve test data and mock configurations"
+      ]
+    }
+  ]
+}
