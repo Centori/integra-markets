@@ -1,120 +1,126 @@
-import React, { useEffect, useRef } from 'react';
+import React from 'react';
 import {
-  Modal,
   View,
+  Text,
+  Modal,
+  ScrollView,
+  TouchableOpacity,
   StyleSheet,
-  Animated,
-  Dimensions,
-  Platform,
+  SafeAreaView,
 } from 'react-native';
-import PrivacyPolicy from './PrivacyPolicy';
+import { MaterialIcons } from '@expo/vector-icons';
 
-const { height: SCREEN_HEIGHT } = Dimensions.get('window');
+const colors = {
+  bgPrimary: '#121212',
+  bgSecondary: '#1E1E1E',
+  textPrimary: '#ECECEC',
+  textSecondary: '#A0A0A0',
+  accentPositive: '#4ECCA3',
+  divider: '#333333',
+};
 
 const PrivacyPolicyModal = ({ visible, onClose }) => {
-  const slideAnim = useRef(new Animated.Value(SCREEN_HEIGHT)).current;
-  const fadeAnim = useRef(new Animated.Value(0)).current;
-
-  useEffect(() => {
-    if (visible) {
-      // Start both animations when modal becomes visible
-      Animated.parallel([
-        Animated.timing(slideAnim, {
-          toValue: 0,
-          duration: 400,
-          useNativeDriver: true,
-        }),
-        Animated.timing(fadeAnim, {
-          toValue: 1,
-          duration: 300,
-          useNativeDriver: true,
-        }),
-      ]).start();
-    } else {
-      // Reset animations when modal is hidden
-      slideAnim.setValue(SCREEN_HEIGHT);
-      fadeAnim.setValue(0);
-    }
-  }, [visible, slideAnim, fadeAnim]);
-
-  const handleClose = () => {
-    // Animate out before closing
-    Animated.parallel([
-      Animated.timing(slideAnim, {
-        toValue: SCREEN_HEIGHT,
-        duration: 350,
-        useNativeDriver: true,
-      }),
-      Animated.timing(fadeAnim, {
-        toValue: 0,
-        duration: 300,
-        useNativeDriver: true,
-      }),
-    ]).start(() => {
-      onClose();
-    });
-  };
-
   return (
     <Modal
       visible={visible}
-      transparent={true}
-      animationType="none"
-      statusBarTranslucent={true}
-      onRequestClose={handleClose}
+      animationType="slide"
+      presentationStyle="pageSheet"
     >
-      <View style={styles.modalContainer}>
-        {/* Semi-transparent background */}
-        <Animated.View
-          style={[
-            styles.backdrop,
-            {
-              opacity: fadeAnim,
-            },
-          ]}
-        />
+      <SafeAreaView style={styles.container}>
+        <View style={styles.header}>
+          <Text style={styles.title}>Privacy Policy</Text>
+          <TouchableOpacity onPress={onClose} style={styles.closeButton}>
+            <MaterialIcons name="close" size={24} color={colors.textPrimary} />
+          </TouchableOpacity>
+        </View>
         
-        {/* Privacy Policy Content */}
-        <Animated.View
-          style={[
-            styles.contentContainer,
-            {
-              transform: [{ translateY: slideAnim }],
-            },
-          ]}
-        >
-          <PrivacyPolicy onBack={handleClose} />
-        </Animated.View>
-      </View>
+        <ScrollView style={styles.content} showsVerticalScrollIndicator={false}>
+          <Text style={styles.sectionTitle}>Information We Collect</Text>
+          <Text style={styles.text}>
+            We collect information you provide directly to us, such as when you create an account, 
+            set up alerts, or contact us for support.
+          </Text>
+          
+          <Text style={styles.sectionTitle}>How We Use Your Information</Text>
+          <Text style={styles.text}>
+            We use the information we collect to provide, maintain, and improve our services, 
+            send you relevant market alerts, and communicate with you about our services.
+          </Text>
+          
+          <Text style={styles.sectionTitle}>Information Sharing</Text>
+          <Text style={styles.text}>
+            We do not sell, trade, or otherwise transfer your personal information to third parties 
+            without your consent, except as described in this policy.
+          </Text>
+          
+          <Text style={styles.sectionTitle}>Data Security</Text>
+          <Text style={styles.text}>
+            We implement appropriate security measures to protect your personal information against 
+            unauthorized access, alteration, disclosure, or destruction.
+          </Text>
+          
+          <Text style={styles.sectionTitle}>Contact Us</Text>
+          <Text style={styles.text}>
+            If you have any questions about this Privacy Policy, please contact us at privacy@integra.app
+          </Text>
+          
+          <View style={styles.footer}>
+            <Text style={styles.footerText}>Last updated: December 2024</Text>
+          </View>
+        </ScrollView>
+      </SafeAreaView>
     </Modal>
   );
 };
 
 const styles = StyleSheet.create({
-  modalContainer: {
+  container: {
     flex: 1,
+    backgroundColor: colors.bgPrimary,
   },
-  backdrop: {
-    ...StyleSheet.absoluteFillObject,
-    backgroundColor: 'rgba(0, 0, 0, 0.5)',
+  header: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    paddingHorizontal: 20,
+    paddingVertical: 15,
+    borderBottomWidth: 1,
+    borderBottomColor: colors.divider,
   },
-  contentContainer: {
+  title: {
+    fontSize: 20,
+    fontWeight: '600',
+    color: colors.textPrimary,
+  },
+  closeButton: {
+    padding: 5,
+  },
+  content: {
     flex: 1,
-    backgroundColor: '#121212',
-    // Add slight border radius for iOS
-    ...(Platform.OS === 'ios' && {
-      borderTopLeftRadius: 12,
-      borderTopRightRadius: 12,
-      overflow: 'hidden',
-      // Add subtle shadow
-      shadowColor: '#000',
-      shadowOffset: {
-        width: 0,
-        height: -2,
-      },
-      shadowOpacity: 0.25,
-      shadowRadius: 4,
-    }),
+    paddingHorizontal: 20,
+    paddingTop: 20,
+  },
+  sectionTitle: {
+    fontSize: 18,
+    fontWeight: '600',
+    color: colors.textPrimary,
+    marginTop: 24,
+    marginBottom: 12,
+  },
+  text: {
+    fontSize: 16,
+    lineHeight: 24,
+    color: colors.textSecondary,
+    marginBottom: 16,
+  },
+  footer: {
+    paddingVertical: 40,
+    alignItems: 'center',
+  },
+  footerText: {
+    fontSize: 14,
+    color: colors.textSecondary,
+    fontStyle: 'italic',
   },
 });
 

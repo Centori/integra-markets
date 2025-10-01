@@ -1,58 +1,21 @@
 {
   "cli": {
-    "version": ">= 12.0.0",
-    "appVersionSource": "local"
+    "version": ">= 16.19.3",
+    "appVersionSource": "remote"
   },
   "build": {
     "development": {
       "developmentClient": true,
-      "distribution": "internal",
-      "ios": {
-        "resourceClass": "m-medium"
-      },
-      "android": {
-        "buildType": "apk",
-        "gradleCommand": ":app:assembleDebug"
-      }
+      "distribution": "internal"
     },
     "preview": {
-      "distribution": "internal",
-      "ios": {
-        "resourceClass": "m-medium",
-        "simulator": true
-      },
-      "android": {
-        "buildType": "apk"
-      }
+      "distribution": "internal"
     },
     "production": {
-      "developmentClient": false,
-      "distribution": "store",
-      "ios": {
-        "resourceClass": "m-medium",
-        "buildConfiguration": "Release",
-        "image": "latest"
-      },
-      "android": {
-        "buildType": "app-bundle"
-      },
-      "env": {
-        "NODE_ENV": "production",
-        "EXPO_PUBLIC_ENV": "production"
-      }
+      "autoIncrement": true
     }
   },
   "submit": {
-    "production": {
-      "ios": {
-        "appleId": "centori1@gmail.com",
-        "ascAppId": "6748999346",
-        "appleTeamId": "2ABHLWV763"
-      },
-      "android": {
-        "serviceAccountKeyPath": "./google-service-account.json",
-        "track": "internal"
-      }
-    }
+    "production": {}
   }
 }

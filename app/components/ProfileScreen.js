@@ -1,4 +1,4 @@
-import React, { useState } from "react";
+import React, { useEffect, useState } from "react";
 import { 
   StyleSheet, 
   Text, 
@@ -7,10 +7,14 @@ import {
   TouchableOpacity, 
   Alert,
   SafeAreaView,
-  StatusBar 
+  StatusBar, 
+  ActivityIndicator
 } from "react-native";
 import { MaterialIcons } from '@expo/vector-icons';
+import * as ImagePicker from 'expo-image-picker';
+import { Image } from 'react-native';
 import { useBookmarks } from '../providers/BookmarkProvider';
+import { userService } from '../services/userService';
 
 // Use the same color palette as the main app
 const colors = {
@@ -52,13 +56,100 @@ const getRoleLabel = (role) => {
   return roleMap[role] || role;
 };
 
-export default function ProfileScreen({ userProfile, alertPreferences, apiKeys, onBack, onNavigateToSettings, onLogout }) {
+export default function ProfileScreen({ userProfile, alertPreferences, apiKeys, onBack, onNavigateToSettings, onLogout, onNavigateToBookmarks }) {
   const [selectedProvider, setSelectedProvider] = useState(null);
   const [showAPIKeySetup, setShowAPIKeySetup] = useState(false);
   const [showAlertPreferences, setShowAlertPreferences] = useState(false);
   const [showAllBookmarks, setShowAllBookmarks] = useState(false);
+  const [loadingProfile, setLoadingProfile] = useState(true);
+  const [profileError, setProfileError] = useState(null);
+  const [resolvedProfile, setResolvedProfile] = useState(userProfile || null);
+  const [uploading, setUploading] = useState(false);
+
+  const pickImage = async () => {
+    try {
+      const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
+      if (status !== 'granted') {
+        Alert.alert('Permission Denied', 'Sorry, we need camera roll permissions to upload a profile photo.');
+        return;
+      }
+
+      const result = await ImagePicker.launchImagePickerAsync({
+        mediaTypes: ImagePicker.MediaTypeOptions.Images,
+        allowsEditing: true,
+        aspect: [1, 1],
+        quality: 0.8,
+      });
+
+      if (!result.canceled && result.assets && result.assets[0]) {
+        setUploading(true);
+        try {
+          // Upload to your backend/storage service
+          const formData = new FormData();
+          formData.append('photo', {
+            uri: result.assets[0].uri,
+            type: 'image/jpeg',
+            name: 'profile-photo.jpg',
+          });
+
+          // Update this with your actual API endpoint
+          const response = await fetch('YOUR_UPLOAD_ENDPOINT', {
+            method: 'POST',
+            body: formData,
+            headers: {
+              'Content-Type': 'multipart/form-data',
+            },
+          });
+
+          const uploadResult = await response.json();
+          
+          if (uploadResult.url) {
+            setResolvedProfile(prev => ({
+              ...prev,
+              photoUrl: uploadResult.url
+            }));
+            Alert.alert('Success', 'Profile photo updated successfully!');
+          } else {
+            throw new Error('Upload failed');
+          }
+        } catch (error) {
+          console.error('Error uploading photo:', error);
+          Alert.alert('Error', 'Failed to upload profile photo. Please try again.');
+        } finally {
+          setUploading(false);
+        }
+      }
+    } catch (error) {
+      console.error('Error picking image:', error);
+      Alert.alert('Error', 'Failed to select image. Please try again.');
+    }
+  };
   
   const { bookmarks, removeBookmark } = useBookmarks();
+
+  useEffect(() => {
+    let mounted = true;
+    const loadProfile = async () => {
+      try {
+        setLoadingProfile(true);
+        setProfileError(null);
+        const profile = await userService.getCurrentUser();
+        if (mounted) {
+          if (profile) {
+            setResolvedProfile(profile);
+          } else {
+            setProfileError('Unable to load user profile.');
+          }
+        }
+      } catch (e) {
+        if (mounted) setProfileError('An unexpected error occurred loading the profile.');
+      } finally {
+        if (mounted) setLoadingProfile(false);
+      }
+    };
+    loadProfile();
+    return () => { mounted = false; };
+  }, []);
 
   const handleDeleteKey = (keyId, keyName) => {
     Alert.alert(
@@ -82,15 +173,8 @@ export default function ProfileScreen({ userProfile, alertPreferences, apiKeys, 
     setSelectedProvider(provider);
   };
 
-  // Default values for demo
-  const defaultUserProfile = userProfile || {
-    username: 'GodModeTrader301',
-    role: 'trader',
-    institution: 'Goldman Sachs',
-    bio: 'Oil Trader at Hedge Fund with 10+ years experience',
-    marketFocus: ['Oil & Oil Products', 'Metals & Minerals'],
-    experience: '10+'
-  };
+// Remove demo defaults; derive from resolvedProfile
+  const effectiveUserProfile = resolvedProfile || null;
 
   const defaultAlertPreferences = alertPreferences || {
     commodities: ['Crude Oil', 'Gold', 'Natural Gas'],
@@ -148,64 +232,129 @@ export default function ProfileScreen({ userProfile, alertPreferences, apiKeys, 
         <View style={styles.headerSpacer} />
       </View>
 
-      <ScrollView style={styles.container} contentContainerStyle={styles.content}>
-        {/* User Profile Section */}
-        <View style={styles.section}>
-          <View style={styles.sectionHeader}>
-            <View style={styles.sectionTitleContainer}>
-              <MaterialIcons name="person" color={colors.accentPositive} size={20} />
-              <Text style={styles.sectionTitle}>Profile</Text>
-            </View>
-          </View>
-
-          <View style={styles.profileCard}>
-            <View style={styles.profileHeader}>
-              <View style={styles.profileAvatar}>
-                <Text style={styles.profileAvatarText}>
-                  {defaultUserProfile.username?.charAt(0)?.toUpperCase() || 'U'}
-                </Text>
+      {loadingProfile ? (
+        <View style={{ flex: 1, alignItems: 'center', justifyContent: 'center', backgroundColor: colors.bgPrimary }}>
+          <ActivityIndicator size="large" color={colors.accentPositive} />
+          <Text style={{ color: colors.textSecondary, marginTop: 12 }}>Loading profile…</Text>
+        </View>
+      ) : profileError ? (
+        <View style={{ flex: 1, alignItems: 'center', justifyContent: 'center', padding: 24 }}>
+          <Text style={{ color: colors.textSecondary, textAlign: 'center', marginBottom: 12 }}>{profileError}</Text>
+          <TouchableOpacity onPress={() => {
+            setLoadingProfile(true);
+            setProfileError(null);
+            // Trigger reload
+            (async () => {
+              const profile = await userService.getCurrentUser();
+              if (profile) setResolvedProfile(profile); else setProfileError('Unable to load user profile.');
+              setLoadingProfile(false);
+            })();
+          }} style={[styles.viewAllButton, { paddingHorizontal: 24 }]}>
+            <Text style={styles.viewAllText}>Retry</Text>
+          </TouchableOpacity>
+        </View>
+      ) : (
+        <ScrollView style={styles.container} contentContainerStyle={styles.content}>
+          {/* User Profile Section */}
+          <View style={styles.section}>
+            <View style={styles.sectionHeader}>
+              <View style={styles.sectionTitleContainer}>
+                <MaterialIcons name="person" color={colors.accentPositive} size={20} />
+                <Text style={styles.sectionTitle}>Profile</Text>
               </View>
+            </View>
+
+            <View style={styles.profileCard}>
+            <TouchableOpacity 
+              style={styles.profileHeader}
+              onPress={() => navigateToScreen('EditProfile')}
+              activeOpacity={0.7}
+            >
+              <TouchableOpacity 
+                style={styles.profileAvatar}
+                onPress={pickImage}
+                disabled={uploading}
+              >
+                {uploading ? (
+                  <ActivityIndicator color={colors.bgPrimary} />
+                ) : resolvedProfile?.photoUrl ? (
+                  <Image 
+                    source={{ uri: resolvedProfile.photoUrl }} 
+                    style={styles.avatarImage}
+                    defaultSource={require('../assets/default-avatar.png')}
+                  />
+                ) : (
+                  <Text style={styles.profileAvatarText}>
+                    {effectiveUserProfile?.username?.charAt(0)?.toUpperCase() || 'U'}
+                  </Text>
+                )}
+                <View style={styles.cameraIconContainer}>
+                  <MaterialIcons 
+                    name="photo-camera" 
+                    size={16} 
+                    color={colors.bgPrimary} 
+                  />
+                </View>
+              </TouchableOpacity>
               <View style={styles.profileInfo}>
                 <Text style={styles.profileName}>
-                  {defaultUserProfile.username || 'User'}
+                  {effectiveUserProfile?.username || effectiveUserProfile?.email || 'User'}
                 </Text>
-                <Text style={styles.profileRole}>
-                  {getRoleLabel(defaultUserProfile.role)}
-                </Text>
-                {defaultUserProfile.institution && (
+                {effectiveUserProfile?.role ? (
+                  <Text style={styles.profileRole}>
+                    {getRoleLabel(effectiveUserProfile.role)}
+                  </Text>
+                ) : null}
+                {effectiveUserProfile?.institution && (
                   <Text style={styles.profileInstitution}>
-                    {defaultUserProfile.institution}
+                    {effectiveUserProfile.institution}
                   </Text>
                 )}
               </View>
-            </View>
-            
-            {defaultUserProfile.bio && (
-              <Text style={styles.profileBio}>{defaultUserProfile.bio}</Text>
-            )}
-            
-            <View style={styles.profileStats}>
-              <View style={styles.profileStat}>
-                <Text style={styles.profileStatValue}>
-                  {defaultUserProfile.marketFocus?.length || 0}
-                </Text>
-                <Text style={styles.profileStatLabel}>Market Focus</Text>
-              </View>
-              <View style={styles.profileStat}>
-                <Text style={styles.profileStatValue}>
-                  {defaultUserProfile.experience}
-                </Text>
-                <Text style={styles.profileStatLabel}>Experience</Text>
-              </View>
-              <View style={styles.profileStat}>
-                <Text style={styles.profileStatValue}>
-                  {defaultAlertPreferences.commodities.length}
-                </Text>
-                <Text style={styles.profileStatLabel}>Alerts</Text>
+              <MaterialIcons name="edit" size={20} color={colors.textSecondary} style={styles.editIcon} />
+            </TouchableOpacity>
+              
+              {effectiveUserProfile?.bio ? (
+                <Text style={styles.profileBio}>{effectiveUserProfile.bio}</Text>
+              ) : null}
+              
+              <View style={styles.profileStats}>
+                <TouchableOpacity 
+                  style={styles.profileStat}
+                  onPress={() => navigateToScreen('MarketFocus')}
+                  activeOpacity={0.7}
+                >
+                  <Text style={styles.profileStatValue}>
+                    {effectiveUserProfile?.marketFocus?.length || 0}
+                  </Text>
+                  <Text style={styles.profileStatLabel}>Market Focus</Text>
+                  <MaterialIcons name="arrow-forward" size={16} color={colors.textSecondary} style={styles.statIcon} />
+                </TouchableOpacity>
+                <TouchableOpacity 
+                  style={styles.profileStat}
+                  onPress={() => navigateToScreen('Experience')}
+                  activeOpacity={0.7}
+                >
+                  <Text style={styles.profileStatValue}>
+                    {effectiveUserProfile?.experience || '-'}
+                  </Text>
+                  <Text style={styles.profileStatLabel}>Experience</Text>
+                  <MaterialIcons name="arrow-forward" size={16} color={colors.textSecondary} style={styles.statIcon} />
+                </TouchableOpacity>
+                <TouchableOpacity 
+                  style={styles.profileStat}
+                  onPress={() => setShowAlertPreferences(true)}
+                  activeOpacity={0.7}
+                >
+                  <Text style={styles.profileStatValue}>
+                    {defaultAlertPreferences.commodities.length}
+                  </Text>
+                  <Text style={styles.profileStatLabel}>Alerts</Text>
+                  <MaterialIcons name="arrow-forward" size={16} color={colors.textSecondary} style={styles.statIcon} />
+                </TouchableOpacity>
               </View>
             </View>
           </View>
-        </View>
 
         {/* Alert Preferences Section */}
         <View style={styles.section}>
@@ -223,24 +372,45 @@ export default function ProfileScreen({ userProfile, alertPreferences, apiKeys, 
           </View>
 
           <View style={styles.alertsCard}>
-            <View style={styles.alertRow}>
-              <Text style={styles.alertLabel}>Commodities</Text>
+          <TouchableOpacity 
+            style={styles.alertRow}
+            onPress={() => navigateToScreen('CommodityPreferences')}
+            activeOpacity={0.7}
+          >
+            <Text style={styles.alertLabel}>Commodities</Text>
+            <View style={styles.alertValueContainer}>
               <Text style={styles.alertValue}>
                 {defaultAlertPreferences.commodities.length} selected
               </Text>
+              <MaterialIcons name="chevron-right" size={16} color={colors.textSecondary} />
             </View>
-            <View style={styles.alertRow}>
-              <Text style={styles.alertLabel}>Frequency</Text>
+          </TouchableOpacity>
+          <TouchableOpacity 
+            style={styles.alertRow}
+            onPress={() => navigateToScreen('AlertFrequency')}
+            activeOpacity={0.7}
+          >
+            <Text style={styles.alertLabel}>Frequency</Text>
+            <View style={styles.alertValueContainer}>
               <Text style={styles.alertValue}>
                 {defaultAlertPreferences.frequency.charAt(0).toUpperCase() + defaultAlertPreferences.frequency.slice(1)}
               </Text>
+              <MaterialIcons name="chevron-right" size={16} color={colors.textSecondary} />
             </View>
-            <View style={styles.alertRow}>
-              <Text style={styles.alertLabel}>Notifications</Text>
+          </TouchableOpacity>
+          <TouchableOpacity 
+            style={styles.alertRow}
+            onPress={() => navigateToScreen('NotificationSettings')}
+            activeOpacity={0.7}
+          >
+            <Text style={styles.alertLabel}>Notifications</Text>
+            <View style={styles.alertValueContainer}>
               <Text style={styles.alertValue}>
                 {defaultAlertPreferences.notifications ? 'Enabled' : 'Disabled'}
               </Text>
+              <MaterialIcons name="chevron-right" size={16} color={colors.textSecondary} />
             </View>
+          </TouchableOpacity>
           </View>
         </View>
 
@@ -309,7 +479,13 @@ export default function ProfileScreen({ userProfile, alertPreferences, apiKeys, 
               <MaterialIcons name="bookmark" color={colors.accentPositive} size={20} />
               <Text style={styles.sectionTitle}>Bookmarks</Text>
             </View>
-            <Text style={styles.bookmarkCount}>{bookmarks.length}</Text>
+            <TouchableOpacity 
+              style={styles.manageButton}
+              onPress={() => onNavigateToBookmarks ? onNavigateToBookmarks() : handleViewAllBookmarks()}
+            >
+              <Text style={styles.bookmarkCount}>{bookmarks.length}</Text>
+              <MaterialIcons name="chevron-right" color={colors.accentPositive} size={20} />
+            </TouchableOpacity>
           </View>
 
           {bookmarks.length === 0 ? (
@@ -322,13 +498,19 @@ export default function ProfileScreen({ userProfile, alertPreferences, apiKeys, 
           ) : (
             <View style={styles.bookmarksList}>
               {(showAllBookmarks ? bookmarks : bookmarks.slice(0, 3)).map((bookmark) => (
-                <TouchableOpacity key={bookmark.id} style={styles.bookmarkItem}>
+                <TouchableOpacity 
+                  key={bookmark.id} 
+                  style={styles.bookmarkItem}
+                  onPress={() => onNavigateToBookmarks ? onNavigateToBookmarks() : handleViewAllBookmarks()}
+                >
                   <View style={styles.bookmarkContent}>
                     <Text style={styles.bookmarkTitle} numberOfLines={2}>
                       {bookmark.title}
                     </Text>
-                    <Text style={styles.bookmarkSource}>{bookmark.source}</Text>
-                    {bookmark.sentiment && (
+                    <Text style={styles.bookmarkSource}>
+                      {bookmark.type === 'chat' ? 'AI Chat' : bookmark.source}
+                    </Text>
+                    {bookmark.type === 'news' && bookmark.sentiment && (
                       <Text style={[styles.bookmarkSentiment, {
                         color: bookmark.sentiment === 'BULLISH' ? colors.accentPositive :
                                bookmark.sentiment === 'BEARISH' ? colors.accentNegative :
@@ -340,14 +522,20 @@ export default function ProfileScreen({ userProfile, alertPreferences, apiKeys, 
                   </View>
                   <TouchableOpacity 
                     style={styles.deleteBookmarkButton}
-                    onPress={() => handleDeleteBookmark(bookmark.id, bookmark.title)}
+                    onPress={(e) => {
+                      e.stopPropagation();
+                      handleDeleteBookmark(bookmark.id, bookmark.title);
+                    }}
                   >
                     <MaterialIcons name="delete" color={colors.accentNegative} size={18} />
                   </TouchableOpacity>
                 </TouchableOpacity>
               ))}
               {!showAllBookmarks && bookmarks.length > 3 && (
-                <TouchableOpacity style={styles.viewAllButton} onPress={handleViewAllBookmarks}>
+                <TouchableOpacity 
+                  style={styles.viewAllButton} 
+                  onPress={() => onNavigateToBookmarks ? onNavigateToBookmarks() : handleViewAllBookmarks()}
+                >
                   <Text style={styles.viewAllText}>View all {bookmarks.length} bookmarks</Text>
                   <MaterialIcons name="chevron-right" color={colors.accentPositive} size={16} />
                 </TouchableOpacity>
@@ -400,12 +588,27 @@ export default function ProfileScreen({ userProfile, alertPreferences, apiKeys, 
             </TouchableOpacity>
           </View>
         </View>
-      </ScrollView>
+        </ScrollView>
+      )}
     </SafeAreaView>
   );
 }
 
 const styles = StyleSheet.create({
+  editIcon: {
+    position: 'absolute',
+    right: 12,
+    top: 12,
+    opacity: 0.6,
+  },
+  statIcon: {
+    marginTop: 4,
+  },
+  alertValueContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+  },
   safeArea: {
     flex: 1,
     backgroundColor: colors.bgPrimary,
@@ -480,6 +683,11 @@ const styles = StyleSheet.create({
     color: colors.textSecondary,
     fontSize: 16,
   },
+  manageButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+  },
   profileCard: {
     backgroundColor: colors.bgSecondary,
     borderRadius: 16,
@@ -493,6 +701,7 @@ const styles = StyleSheet.create({
     marginBottom: 16,
   },
   profileAvatar: {
+    position: 'relative',
     width: 60,
     height: 60,
     borderRadius: 30,
@@ -500,6 +709,24 @@ const styles = StyleSheet.create({
     alignItems: "center",
     justifyContent: "center",
     marginRight: 16,
+  },
+  avatarImage: {
+    width: 60,
+    height: 60,
+    borderRadius: 30,
+  },
+  cameraIconContainer: {
+    position: 'absolute',
+    right: -4,
+    bottom: -4,
+    backgroundColor: colors.accentPositive,
+    borderRadius: 12,
+    width: 24,
+    height: 24,
+    justifyContent: 'center',
+    alignItems: 'center',
+    borderWidth: 2,
+    borderColor: colors.bgPrimary,
   },
   profileAvatarText: {
     color: colors.bgPrimary,

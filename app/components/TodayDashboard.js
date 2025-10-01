@@ -14,7 +14,7 @@ const TodayDashboard = ({ agentActive }) => {
   const [sentimentModalVisible, setSentimentModalVisible] = useState(false);
   const [sentimentAnalysis, setSentimentAnalysis] = useState(null);
   const [sentimentLoading, setSentimentLoading] = useState(false);
-  const [marketData, setMarketData] = useState(null);
+const [marketData, setMarketData] = useState(null);
   const [aiOverlayVisible, setAiOverlayVisible] = useState(false);
   const [selectedNews, setSelectedNews] = useState(null);
 
@@ -29,6 +29,7 @@ const TodayDashboard = ({ agentActive }) => {
   const loadDashboardData = async () => {
     setIsLoading(true);
     try {
+      // Use real dashboard API for production
       const dashboardData = await dashboardApi.getTodayDashboard(trackedCommodities);
 
       if (dashboardData.news && dashboardData.news.length > 0) {
@@ -405,7 +406,7 @@ const TodayDashboard = ({ agentActive }) => {
     </Modal>
   );
 
-  const renderNewsCard = (item) => {
+const renderNewsCard = (item) => {
     
     const openAIOverlay = (article) => {
       setSelectedNews(article);
@@ -642,7 +643,7 @@ const TodayDashboard = ({ agentActive }) => {
       <AIAnalysisOverlay 
         isVisible={aiOverlayVisible} 
         onClose={() => setAiOverlayVisible(false)}
-        news={selectedNews}
+        newsData={selectedNews}
       />
     </SafeAreaView>
   );

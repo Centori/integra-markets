@@ -1,12 +1,17 @@
 /**
  * Enhanced API Client for Integra Markets
  * Handles all API communication with authentication
+ * Implements comprehensive error handling and retry logic
  */
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import Constants from 'expo-constants';
+import { safeApiCall, logError, checkOnlineStatus } from './errorHandler';
 
 // Safely access environment variables to prevent iOS 18.6 crashes
-const API_BASE_URL = Constants.expoConfig?.extra?.apiUrl || 'http://localhost:8000';
+// Prefer env/Expo config, fallback to production Fly.io URL
+const API_BASE_URL = process.env.EXPO_PUBLIC_API_URL || 
+                     (Constants.expoConfig?.extra?.apiUrl) || 
+                     'https://integra-markets-backend.fly.dev';
 const API_URL = `${API_BASE_URL}/api`;
 
 class APIClient {
@@ -194,8 +199,23 @@ class APIClient {
         return this.get('/sentiment/movers');
     }
 
-    async getNewsAnalysis() {
-        return this.get('/news/analysis');
+    async getNewsAnalysis(preferences = {}) {
+        // Use the real news feed endpoint
+        const result = await this.post('/news/feed', {
+            max_articles: preferences.maxArticles || 20,
+            sources: preferences.sources || null,
+            commodity_filter: preferences.commodity || null,
+            hours_back: preferences.hoursBack || 12,
+            enhanced_content: preferences.enhancedContent || false,
+            max_enhanced: preferences.maxEnhanced || 3
+        });
+        
+        return {
+            news: result.news || [],
+            status: 'success',
+            sources: result.sources || [],
+            timestamp: result.timestamp
+        };
     }
 
     async getWeatherAlerts() {
@@ -205,14 +225,24 @@ class APIClient {
     // --- Preprocessing & Analysis ---
 
     async preprocessNews(text) {
-        return this.post('/preprocess-news', { text });
+        // Use analyze-sentiment endpoint as preprocess-news doesn't exist
+        const url = `${this.baseURL}/analyze-sentiment`;
+        return this.request(url, {
+            method: 'POST',
+            body: JSON.stringify({ text })
+        });
     }
 
     async analyzeSentiment(text, commodity = null, enhanced = true) {
-        return this.post('/analyze-sentiment', {
-            text,
-            commodity,
-            enhanced,
+        // Use the root-level analyze-sentiment endpoint
+        const url = `${this.baseURL}/analyze-sentiment`;
+        return this.request(url, {
+            method: 'POST',
+            body: JSON.stringify({
+                text,
+                commodity,
+                enhanced,
+            })
         });
     }
 

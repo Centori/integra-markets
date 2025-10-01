@@ -1,394 +1,572 @@
-import React, { useState } from 'react';
+import React, { useState, useMemo } from 'react';
 import {
-  View,
-  Text,
-  ScrollView,
   StyleSheet,
+  Text,
+  View,
   TouchableOpacity,
+  ScrollView,
+  TextInput,
   SafeAreaView,
+  StatusBar,
   Alert,
-  RefreshControl,
+  FlatList,
   ActivityIndicator,
 } from 'react-native';
-import { MaterialIcons, MaterialCommunityIcons } from '@expo/vector-icons';
+import { MaterialIcons } from '@expo/vector-icons';
 import { useBookmarks } from '../providers/BookmarkProvider';
 
-const BookmarksScreen = () => {
-  const { bookmarks, removeBookmark, isLoading } = useBookmarks();
-  const [selectedFilter, setSelectedFilter] = useState('All');
-  const [refreshing, setRefreshing] = useState(false);
+const colors = {
+  bgPrimary: '#121212',
+  bgSecondary: '#1E1E1E',
+  bgTertiary: '#252525',
+  textPrimary: '#ECECEC',
+  textSecondary: '#A0A0A0',
+  accentPositive: '#4ECCA3',
+  accentNegative: '#F05454',
+  accentNeutral: '#EAB308',
+  accentData: '#30A5FF',
+  divider: '#333333',
+  cardBorder: '#2A2A2A',
+};
 
-  const filterOptions = ['All', 'Bullish', 'Bearish', 'Neutral'];
+export default function BookmarksScreen({ onBack, onSelectBookmark }) {
+  const { 
+    bookmarks, 
+    newsBookmarks, 
+    chatBookmarks, 
+    removeBookmark, 
+    searchBookmarks,
+    clearAllBookmarks,
+    isLoading 
+  } = useBookmarks();
 
-  const filteredBookmarks = bookmarks.filter((bookmark) => {
-    if (selectedFilter === 'All') return true;
-    return bookmark.sentiment === selectedFilter.toUpperCase();
-  });
+  const [activeTab, setActiveTab] = useState('all');
+  const [searchQuery, setSearchQuery] = useState('');
+  const [sortBy, setSortBy] = useState('newest');
 
-  const handleDelete = (bookmark) => {
+  // Filter and sort bookmarks based on current settings
+  const filteredBookmarks = useMemo(() => {
+    let items = [];
+    
+    if (activeTab === 'all') {
+      items = bookmarks;
+    } else if (activeTab === 'news') {
+      items = newsBookmarks;
+    } else if (activeTab === 'chat') {
+      items = chatBookmarks;
+    }
+
+    // Apply search filter
+    if (searchQuery.trim()) {
+      items = searchBookmarks(searchQuery, activeTab);
+    }
+
+    // Apply sorting
+    return items.sort((a, b) => {
+      if (sortBy === 'newest') {
+        return new Date(b.createdAt) - new Date(a.createdAt);
+      } else {
+        return new Date(a.createdAt) - new Date(b.createdAt);
+      }
+    });
+  }, [bookmarks, newsBookmarks, chatBookmarks, activeTab, searchQuery, sortBy, searchBookmarks]);
+
+  const handleDeleteBookmark = (id, title) => {
     Alert.alert(
       'Delete Bookmark',
-      `Remove "${bookmark.title}" from bookmarks?`,
+      `Remove "${title}" from bookmarks?`,
       [
         { text: 'Cancel', style: 'cancel' },
-        {
-          text: 'Delete',
+        { 
+          text: 'Delete', 
           style: 'destructive',
-          onPress: async () => {
-            try {
-              await removeBookmark(bookmark.id);
-            } catch (error) {
-              Alert.alert('Error', 'Failed to delete bookmark');
-            }
-          },
-        },
+          onPress: () => removeBookmark(id)
+        }
       ]
     );
   };
 
-  const handleRefresh = async () => {
-    setRefreshing(true);
-    // In a real app, you might reload bookmarks from a backend
-    setTimeout(() => setRefreshing(false), 1000);
+  const formatDate = (date) => {
+    const now = new Date();
+    const diff = now.getTime() - date.getTime();
+    const hours = Math.floor(diff / (1000 * 60 * 60));
+    const days = Math.floor(hours / 24);
+
+    if (hours < 1) return 'Just now';
+    if (hours < 24) return `${hours}h ago`;
+    if (days < 7) return `${days}d ago`;
+    return date.toLocaleDateString();
   };
 
-  const getSentimentColor = (sentiment) => {
-    switch (sentiment) {
-      case 'BULLISH':
-        return '#4ECCA3';
-      case 'BEARISH':
-        return '#F05454';
-      case 'NEUTRAL':
-        return '#FFD700';
-      default:
-        return '#A0A0A0';
-    }
-  };
-
-  const renderFilterButton = (filter) => {
-    const isSelected = selectedFilter === filter;
-    return (
-      <TouchableOpacity
-        key={filter}
-        style={[
-          styles.filterButton,
-          isSelected && styles.filterButtonActive,
-          isSelected && filter === 'Bullish' && { backgroundColor: '#4ECCA3' },
-          isSelected && filter === 'Bearish' && { backgroundColor: '#F05454' },
-          isSelected && filter === 'Neutral' && { backgroundColor: '#FFD700' },
-        ]}
-        onPress={() => setSelectedFilter(filter)}
-      >
-        <Text
-          style={[
-            styles.filterButtonText,
-            isSelected && styles.filterButtonTextActive,
-            isSelected && (filter === 'Bullish' || filter === 'Bearish') && { color: '#FFFFFF' },
-            isSelected && filter === 'Neutral' && { color: '#121212' },
-          ]}
-        >
-          {filter}
-        </Text>
-      </TouchableOpacity>
-    );
-  };
-
-  const renderBookmark = (bookmark) => (
-    <View key={bookmark.id} style={styles.bookmarkCard}>
+  const renderNewsBookmark = (bookmark) => (
+    <TouchableOpacity
+      style={styles.bookmarkCard}
+      onPress={() => onSelectBookmark?.(bookmark)}
+      activeOpacity={0.7}
+    >
       <View style={styles.bookmarkHeader}>
-        <View style={styles.sentimentBadge}>
-          <MaterialCommunityIcons
-            name={
-              bookmark.sentiment === 'BULLISH'
-                ? 'trending-up'
-                : bookmark.sentiment === 'BEARISH'
-                ? 'trending-down'
-                : 'minus'
-            }
-            size={16}
-            color={getSentimentColor(bookmark.sentiment)}
-          />
-          <Text
-            style={[
-              styles.sentimentText,
-              { color: getSentimentColor(bookmark.sentiment) },
-            ]}
-          >
-            {bookmark.sentiment}
-          </Text>
+        <View style={styles.bookmarkTypeIcon}>
+          <MaterialIcons name="article" size={16} color={colors.accentData} />
         </View>
-        <TouchableOpacity
-          style={styles.deleteButton}
-          onPress={() => handleDelete(bookmark)}
-        >
-          <MaterialIcons name="close" size={20} color="#A0A0A0" />
-        </TouchableOpacity>
+        <Text style={styles.bookmarkSource}>{bookmark.source}</Text>
+        <Text style={styles.bookmarkDate}>{formatDate(bookmark.createdAt)}</Text>
       </View>
-
+      
       <Text style={styles.bookmarkTitle} numberOfLines={2}>
         {bookmark.title}
       </Text>
-
-      <Text style={styles.bookmarkSummary} numberOfLines={3}>
-        {bookmark.summary}
+      
+      <Text style={styles.bookmarkSummary} numberOfLines={2}>
+        {bookmark.summary || bookmark.description}
       </Text>
 
       <View style={styles.bookmarkFooter}>
-        <View style={styles.sourceInfo}>
-          <Text style={styles.sourceText}>{bookmark.source}</Text>
-          <View style={styles.scoreBadge}>
-            <Text style={styles.scoreText}>
-              {(bookmark.sentimentScore * 100).toFixed(0)}%
-            </Text>
+        {bookmark.sentiment && (
+          <View style={[
+            styles.sentimentBadge,
+            bookmark.sentiment === 'BULLISH' && styles.bullishBadge,
+            bookmark.sentiment === 'BEARISH' && styles.bearishBadge,
+            bookmark.sentiment === 'NEUTRAL' && styles.neutralBadge,
+          ]}>
+            <Text style={styles.sentimentText}>{bookmark.sentiment}</Text>
           </View>
+        )}
+        
+        {bookmark.commodities && bookmark.commodities.length > 0 && (
+          <View style={styles.commoditiesList}>
+            {bookmark.commodities.slice(0, 2).map((commodity, index) => (
+              <Text key={index} style={styles.commodityTag}>{commodity}</Text>
+            ))}
+            {bookmark.commodities.length > 2 && (
+              <Text style={styles.commodityTag}>+{bookmark.commodities.length - 2}</Text>
+            )}
+          </View>
+        )}
+        
+        <TouchableOpacity
+          style={styles.deleteButton}
+          onPress={(e) => {
+            e.stopPropagation();
+            handleDeleteBookmark(bookmark.id, bookmark.title);
+          }}
+        >
+          <MaterialIcons name="delete-outline" size={18} color={colors.textSecondary} />
+        </TouchableOpacity>
+      </View>
+    </TouchableOpacity>
+  );
+
+  const renderChatBookmark = (bookmark) => (
+    <TouchableOpacity
+      style={styles.bookmarkCard}
+      onPress={() => onSelectBookmark?.(bookmark)}
+      activeOpacity={0.7}
+    >
+      <View style={styles.bookmarkHeader}>
+        <View style={styles.bookmarkTypeIcon}>
+          <MaterialIcons name="chat" size={16} color={colors.accentPositive} />
         </View>
-        <Text style={styles.dateText}>
-          {new Date(bookmark.createdAt).toLocaleDateString()}
+        <Text style={styles.bookmarkSource}>AI Chat</Text>
+        <Text style={styles.bookmarkDate}>{formatDate(bookmark.createdAt)}</Text>
+      </View>
+      
+      <View style={styles.chatQuery}>
+        <MaterialIcons name="person" size={14} color={colors.textSecondary} />
+        <Text style={styles.queryText} numberOfLines={1}>
+          {bookmark.query}
         </Text>
       </View>
-    </View>
+      
+      <View style={styles.chatResponse}>
+        <MaterialIcons name="auto-awesome" size={14} color={colors.accentPositive} />
+        <Text style={styles.responseText} numberOfLines={3}>
+          {bookmark.response.substring(0, 150)}...
+        </Text>
+      </View>
+      
+      <View style={styles.bookmarkFooter}>
+        {bookmark.sources && bookmark.sources.length > 0 && (
+          <View style={styles.sourcesContainer}>
+            <MaterialIcons name="link" size={14} color={colors.textSecondary} />
+            <Text style={styles.sourcesCount}>
+              {bookmark.sources.length} source{bookmark.sources.length > 1 ? 's' : ''}
+            </Text>
+          </View>
+        )}
+        
+        {bookmark.tags && bookmark.tags.length > 0 && (
+          <View style={styles.tagsList}>
+            {bookmark.tags.slice(0, 2).map((tag, index) => (
+              <Text key={index} style={styles.tag}>#{tag}</Text>
+            ))}
+          </View>
+        )}
+        
+        <TouchableOpacity
+          style={styles.deleteButton}
+          onPress={(e) => {
+            e.stopPropagation();
+            handleDeleteBookmark(bookmark.id, bookmark.query);
+          }}
+        >
+          <MaterialIcons name="delete-outline" size={18} color={colors.textSecondary} />
+        </TouchableOpacity>
+      </View>
+    </TouchableOpacity>
   );
+
+  const renderBookmark = ({ item }) => {
+    return item.type === 'news' 
+      ? renderNewsBookmark(item)
+      : renderChatBookmark(item);
+  };
 
   const renderEmptyState = () => (
     <View style={styles.emptyState}>
-      <MaterialIcons name="bookmark-border" size={64} color="#333333" />
+      <MaterialIcons name="bookmark-border" size={64} color={colors.textSecondary} />
       <Text style={styles.emptyTitle}>No bookmarks yet</Text>
       <Text style={styles.emptySubtitle}>
-        Save news articles and AI analysis to view them later
+        {activeTab === 'news' 
+          ? 'Bookmark news articles to save them for later'
+          : activeTab === 'chat'
+          ? 'Save important AI chat responses here'
+          : 'Start bookmarking content to access it later'}
       </Text>
     </View>
   );
 
-  const renderContent = () => {
-    if (isLoading) {
-      return (
-        <View style={styles.loadingContainer}>
-          <ActivityIndicator size="large" color="#4ECCA3" />
-          <Text style={styles.loadingText}>Loading bookmarks...</Text>
-        </View>
-      );
-    }
-
-    if (filteredBookmarks.length === 0) {
-      return renderEmptyState();
-    }
-
-    return (
-      <ScrollView
-        style={styles.scrollView}
-        refreshControl={
-          <RefreshControl
-            refreshing={refreshing}
-            onRefresh={handleRefresh}
-            tintColor="#4ECCA3"
-          />
-        }
-        showsVerticalScrollIndicator={false}
-      >
-        <View style={styles.statsContainer}>
-          <View style={styles.statCard}>
-            <Text style={styles.statValue}>{bookmarks.length}</Text>
-            <Text style={styles.statLabel}>Total Saved</Text>
-          </View>
-          <View style={styles.statCard}>
-            <Text style={styles.statValue}>
-              {bookmarks.filter((b) => b.sentiment === 'BULLISH').length}
-            </Text>
-            <Text style={styles.statLabel}>Bullish</Text>
-          </View>
-          <View style={styles.statCard}>
-            <Text style={styles.statValue}>
-              {bookmarks.filter((b) => b.sentiment === 'BEARISH').length}
-            </Text>
-            <Text style={styles.statLabel}>Bearish</Text>
-          </View>
-        </View>
-
-        {filteredBookmarks.map(renderBookmark)}
-      </ScrollView>
-    );
-  };
-
   return (
-    <SafeAreaView style={styles.container}>
+    <SafeAreaView style={styles.safeArea}>
+      <StatusBar barStyle="light-content" />
+      
+      {/* Header */}
       <View style={styles.header}>
-        <Text style={styles.headerTitle}>Saved Analysis</Text>
-        <View style={styles.headerBadge}>
-          <Text style={styles.headerBadgeText}>{bookmarks.length}</Text>
+        <TouchableOpacity onPress={onBack} style={styles.backButton}>
+          <MaterialIcons name="arrow-back" size={24} color={colors.textPrimary} />
+        </TouchableOpacity>
+        <Text style={styles.headerTitle}>Bookmarks</Text>
+        <TouchableOpacity 
+          style={styles.menuButton}
+          onPress={clearAllBookmarks}
+          disabled={bookmarks.length === 0}
+        >
+          <MaterialIcons 
+            name="delete-sweep" 
+            size={24} 
+            color={bookmarks.length > 0 ? colors.textPrimary : colors.textSecondary} 
+          />
+        </TouchableOpacity>
+      </View>
+
+      {/* Search */}
+      <View style={styles.searchContainer}>
+        <MaterialIcons name="search" size={20} color={colors.textSecondary} />
+        <TextInput
+          style={styles.searchInput}
+          placeholder="Search bookmarks..."
+          placeholderTextColor={colors.textSecondary}
+          value={searchQuery}
+          onChangeText={setSearchQuery}
+        />
+        {searchQuery.length > 0 && (
+          <TouchableOpacity onPress={() => setSearchQuery('')}>
+            <MaterialIcons name="clear" size={20} color={colors.textSecondary} />
+          </TouchableOpacity>
+        )}
+      </View>
+
+      {/* Tabs */}
+      <View style={styles.tabsContainer}>
+        <TouchableOpacity
+          style={[styles.tab, activeTab === 'all' && styles.activeTab]}
+          onPress={() => setActiveTab('all')}
+        >
+          <Text style={[styles.tabText, activeTab === 'all' && styles.activeTabText]}>
+            All ({bookmarks.length})
+          </Text>
+        </TouchableOpacity>
+        <TouchableOpacity
+          style={[styles.tab, activeTab === 'news' && styles.activeTab]}
+          onPress={() => setActiveTab('news')}
+        >
+          <Text style={[styles.tabText, activeTab === 'news' && styles.activeTabText]}>
+            News ({newsBookmarks.length})
+          </Text>
+        </TouchableOpacity>
+        <TouchableOpacity
+          style={[styles.tab, activeTab === 'chat' && styles.activeTab]}
+          onPress={() => setActiveTab('chat')}
+        >
+          <Text style={[styles.tabText, activeTab === 'chat' && styles.activeTabText]}>
+            Chat ({chatBookmarks.length})
+          </Text>
+        </TouchableOpacity>
+      </View>
+
+      {/* Sort Options */}
+      <View style={styles.sortContainer}>
+        <Text style={styles.sortLabel}>Sort by:</Text>
+        <TouchableOpacity
+          style={[styles.sortOption, sortBy === 'newest' && styles.activeSortOption]}
+          onPress={() => setSortBy('newest')}
+        >
+          <Text style={[styles.sortText, sortBy === 'newest' && styles.activeSortText]}>
+            Newest
+          </Text>
+        </TouchableOpacity>
+        <TouchableOpacity
+          style={[styles.sortOption, sortBy === 'oldest' && styles.activeSortOption]}
+          onPress={() => setSortBy('oldest')}
+        >
+          <Text style={[styles.sortText, sortBy === 'oldest' && styles.activeSortText]}>
+            Oldest
+          </Text>
+        </TouchableOpacity>
+      </View>
+
+      {/* Content */}
+      {isLoading ? (
+        <View style={styles.loadingContainer}>
+          <ActivityIndicator size="large" color={colors.accentPositive} />
         </View>
-      </View>
-
-      <View style={styles.filtersContainer}>
-        {filterOptions.map(renderFilterButton)}
-      </View>
-
-      {renderContent()}
+      ) : (
+        <FlatList
+          data={filteredBookmarks}
+          renderItem={renderBookmark}
+          keyExtractor={(item) => item.id}
+          contentContainerStyle={[
+            styles.listContent,
+            filteredBookmarks.length === 0 && styles.emptyListContent
+          ]}
+          showsVerticalScrollIndicator={false}
+          ListEmptyComponent={renderEmptyState}
+        />
+      )}
     </SafeAreaView>
   );
-};
+}
 
 const styles = StyleSheet.create({
-  container: {
+  safeArea: {
     flex: 1,
-    backgroundColor: '#121212',
+    backgroundColor: colors.bgPrimary,
   },
   header: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    paddingHorizontal: 16,
-    paddingTop: 12,
-    paddingBottom: 16,
+    paddingHorizontal: 20,
+    paddingVertical: 16,
+    borderBottomWidth: 1,
+    borderBottomColor: colors.divider,
+  },
+  backButton: {
+    padding: 4,
   },
   headerTitle: {
-    fontSize: 24,
-    fontWeight: '700',
-    color: '#ECECEC',
-  },
-  headerBadge: {
-    backgroundColor: '#4ECCA3',
-    borderRadius: 12,
-    paddingHorizontal: 10,
-    paddingVertical: 4,
-  },
-  headerBadgeText: {
-    color: '#000000',
-    fontSize: 14,
+    fontSize: 20,
     fontWeight: '600',
+    color: colors.textPrimary,
   },
-  filtersContainer: {
+  menuButton: {
+    padding: 4,
+  },
+  searchContainer: {
     flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: colors.bgSecondary,
+    marginHorizontal: 20,
+    marginVertical: 12,
     paddingHorizontal: 16,
-    marginBottom: 16,
+    paddingVertical: 12,
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: colors.divider,
   },
-  filterButton: {
+  searchInput: {
+    flex: 1,
+    marginLeft: 12,
+    fontSize: 16,
+    color: colors.textPrimary,
+  },
+  tabsContainer: {
+    flexDirection: 'row',
+    paddingHorizontal: 20,
+    marginBottom: 8,
+    gap: 12,
+  },
+  tab: {
     paddingHorizontal: 16,
     paddingVertical: 8,
     borderRadius: 20,
-    backgroundColor: '#2A2A2A',
-    marginRight: 8,
-    borderWidth: 1,
-    borderColor: '#333333',
+    backgroundColor: colors.bgSecondary,
   },
-  filterButtonActive: {
-    borderColor: 'transparent',
+  activeTab: {
+    backgroundColor: colors.accentPositive,
   },
-  filterButtonText: {
+  tabText: {
     fontSize: 14,
-    color: '#A0A0A0',
     fontWeight: '500',
+    color: colors.textSecondary,
   },
-  filterButtonTextActive: {
-    fontWeight: '600',
+  activeTabText: {
+    color: colors.bgPrimary,
   },
-  scrollView: {
-    flex: 1,
-    paddingHorizontal: 16,
-  },
-  loadingContainer: {
-    flex: 1,
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  loadingText: {
-    color: '#ECECEC',
-    marginTop: 12,
-    fontSize: 16,
-  },
-  statsContainer: {
+  sortContainer: {
     flexDirection: 'row',
-    justifyContent: 'space-between',
-    marginBottom: 20,
-  },
-  statCard: {
-    flex: 1,
-    backgroundColor: '#1E1E1E',
-    padding: 16,
-    borderRadius: 12,
     alignItems: 'center',
-    marginHorizontal: 4,
+    paddingHorizontal: 20,
+    marginBottom: 12,
+  },
+  sortLabel: {
+    fontSize: 14,
+    color: colors.textSecondary,
+    marginRight: 12,
+  },
+  sortOption: {
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    marginRight: 8,
+    borderRadius: 16,
+    backgroundColor: colors.bgSecondary,
+  },
+  activeSortOption: {
+    backgroundColor: colors.bgTertiary,
     borderWidth: 1,
-    borderColor: '#333333',
+    borderColor: colors.accentPositive,
   },
-  statValue: {
-    fontSize: 24,
-    fontWeight: '700',
-    color: '#4ECCA3',
-    marginBottom: 4,
+  sortText: {
+    fontSize: 13,
+    color: colors.textSecondary,
   },
-  statLabel: {
-    fontSize: 12,
-    color: '#A0A0A0',
+  activeSortText: {
+    color: colors.accentPositive,
+  },
+  listContent: {
+    paddingHorizontal: 20,
+    paddingBottom: 20,
+  },
+  emptyListContent: {
+    flex: 1,
   },
   bookmarkCard: {
-    backgroundColor: '#1E1E1E',
-    marginBottom: 12,
-    borderRadius: 12,
+    backgroundColor: colors.bgSecondary,
+    borderRadius: 16,
     padding: 16,
+    marginBottom: 12,
     borderWidth: 1,
-    borderColor: '#333333',
+    borderColor: colors.cardBorder,
   },
   bookmarkHeader: {
     flexDirection: 'row',
-    justifyContent: 'space-between',
     alignItems: 'center',
     marginBottom: 8,
   },
-  sentimentBadge: {
-    flexDirection: 'row',
-    alignItems: 'center',
+  bookmarkTypeIcon: {
+    marginRight: 8,
   },
-  sentimentText: {
+  bookmarkSource: {
+    fontSize: 13,
+    color: colors.textSecondary,
+    flex: 1,
+  },
+  bookmarkDate: {
     fontSize: 12,
-    fontWeight: '600',
-    marginLeft: 4,
-    textTransform: 'uppercase',
-  },
-  deleteButton: {
-    padding: 4,
+    color: colors.textSecondary,
   },
   bookmarkTitle: {
     fontSize: 16,
     fontWeight: '600',
-    color: '#ECECEC',
-    lineHeight: 22,
+    color: colors.textPrimary,
     marginBottom: 8,
+    lineHeight: 22,
   },
   bookmarkSummary: {
     fontSize: 14,
-    color: '#A0A0A0',
-    lineHeight: 20,
+    color: colors.textSecondary,
     marginBottom: 12,
+    lineHeight: 20,
   },
   bookmarkFooter: {
     flexDirection: 'row',
-    justifyContent: 'space-between',
     alignItems: 'center',
   },
-  sourceInfo: {
+  sentimentBadge: {
+    paddingHorizontal: 10,
+    paddingVertical: 4,
+    borderRadius: 12,
+    marginRight: 8,
+  },
+  bullishBadge: {
+    backgroundColor: 'rgba(78, 204, 163, 0.2)',
+  },
+  bearishBadge: {
+    backgroundColor: 'rgba(240, 84, 84, 0.2)',
+  },
+  neutralBadge: {
+    backgroundColor: 'rgba(234, 179, 8, 0.2)',
+  },
+  sentimentText: {
+    fontSize: 12,
+    fontWeight: '600',
+    color: colors.textPrimary,
+  },
+  commoditiesList: {
+    flexDirection: 'row',
+    flex: 1,
+  },
+  commodityTag: {
+    fontSize: 12,
+    color: colors.accentData,
+    marginRight: 8,
+  },
+  chatQuery: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 8,
+    marginBottom: 8,
   },
-  sourceText: {
-    fontSize: 12,
-    color: '#30A5FF',
+  queryText: {
+    fontSize: 14,
     fontWeight: '500',
+    color: colors.textPrimary,
+    marginLeft: 6,
+    fontStyle: 'italic',
+    flex: 1,
   },
-  scoreBadge: {
-    backgroundColor: 'rgba(78, 204, 163, 0.2)',
-    paddingHorizontal: 8,
-    paddingVertical: 2,
-    borderRadius: 10,
+  chatResponse: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    marginBottom: 12,
   },
-  scoreText: {
-    fontSize: 11,
-    color: '#4ECCA3',
-    fontWeight: '600',
+  responseText: {
+    fontSize: 14,
+    color: colors.textSecondary,
+    marginLeft: 6,
+    lineHeight: 20,
+    flex: 1,
   },
-  dateText: {
+  sourcesContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginRight: 12,
+  },
+  sourcesCount: {
     fontSize: 12,
-    color: '#666666',
+    color: colors.textSecondary,
+    marginLeft: 4,
+  },
+  tagsList: {
+    flexDirection: 'row',
+    flex: 1,
+  },
+  tag: {
+    fontSize: 12,
+    color: colors.accentData,
+    marginRight: 8,
+  },
+  deleteButton: {
+    padding: 4,
+    marginLeft: 'auto',
   },
   emptyState: {
     flex: 1,
@@ -399,16 +577,19 @@ const styles = StyleSheet.create({
   emptyTitle: {
     fontSize: 18,
     fontWeight: '600',
-    color: '#ECECEC',
+    color: colors.textPrimary,
     marginTop: 16,
     marginBottom: 8,
   },
   emptySubtitle: {
     fontSize: 14,
-    color: '#A0A0A0',
+    color: colors.textSecondary,
     textAlign: 'center',
     lineHeight: 20,
   },
+  loadingContainer: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
 });
-
-export default BookmarksScreen;

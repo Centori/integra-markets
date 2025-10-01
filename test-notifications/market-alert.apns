@@ -1,0 +1,18 @@
+{
+  "Simulator Target Bundle": "com.centori.integramarkets",
+  "aps": {
+    "alert": {
+      "title": "📈 Market Alert",
+      "subtitle": "Commodity Prices",
+      "body": "Gold surged 3.2% following Fed announcement"
+    },
+    "badge": 1,
+    "sound": "default",
+    "category": "MARKET_ALERT"
+  },
+  "data": {
+    "type": "market",
+    "asset": "GOLD",
+    "change": "+3.2%"
+  }
+}

@@ -20,6 +20,11 @@ import {
   cancelAllNotifications,
   scheduleLocalNotification,
   checkNotificationPermissions,
+  refreshPermissionStatus,
+  getDetailedPermissionStatus,
+  getDebugInfo,
+  logPermissionStateChange,
+  validatePermissionConsistency,
 } from '../services/notificationService';
 
 // Use the same color palette as the main app
@@ -40,9 +45,13 @@ const colors = {
 const NotificationSettings = ({ onBack }) => {
   const [settings, setSettings] = useState({});
   const [loading, setLoading] = useState(true);
+  const [refreshing, setRefreshing] = useState(false);
   const [pushToken, setPushToken] = useState(null);
   const [scheduledCount, setScheduledCount] = useState(0);
   const [hasPermission, setHasPermission] = useState(false);
+  const [permissionDetails, setPermissionDetails] = useState(null);
+  const [debugInfo, setDebugInfo] = useState(null);
+  const [showDebugInfo, setShowDebugInfo] = useState(__DEV__);
 
   useEffect(() => {
     loadSettings();
@@ -82,10 +91,83 @@ const NotificationSettings = ({ onBack }) => {
 
   const checkPermissionStatus = async () => {
     try {
+      const oldStatus = permissionDetails?.granted;
       const permissionGranted = await checkNotificationPermissions();
+      const detailedStatus = await getDetailedPermissionStatus();
+      
+      // Log permission state changes for debugging
+      if (oldStatus !== undefined && oldStatus !== detailedStatus.granted) {
+        logPermissionStateChange(oldStatus, detailedStatus.granted, 'permission check');
+      }
+      
       setHasPermission(permissionGranted);
+      setPermissionDetails(detailedStatus);
+      
+      // Update debug info if in development
+      if (__DEV__) {
+        const debugData = await getDebugInfo();
+        setDebugInfo(debugData);
+      }
     } catch (error) {
       console.error('Error checking permission status:', error);
+    }
+  };
+
+  const handleRefreshPermissions = async () => {
+    setRefreshing(true);
+    try {
+      console.log('Manually refreshing permission status...');
+      const oldStatus = permissionDetails?.granted;
+      const refreshResult = await refreshPermissionStatus();
+      
+      if (refreshResult.success) {
+        // Log permission state changes
+        if (oldStatus !== undefined && oldStatus !== refreshResult.permissionStatus.granted) {
+          logPermissionStateChange(oldStatus, refreshResult.permissionStatus.granted, 'manual refresh');
+        }
+        
+        // Update all state with fresh data
+        setSettings(refreshResult.settings);
+        setHasPermission(refreshResult.permissionStatus.granted);
+        setPermissionDetails(refreshResult.permissionStatus);
+        
+        // Reload other data
+        await loadPushToken();
+        await loadScheduledNotifications();
+        
+        // Update debug info and check consistency
+        if (__DEV__) {
+          const debugData = await getDebugInfo();
+          setDebugInfo(debugData);
+          
+          const consistencyCheck = await validatePermissionConsistency();
+          if (!consistencyCheck.consistent) {
+            console.warn('[NotificationSettings] Permission inconsistencies detected:', consistencyCheck.inconsistencies);
+          }
+        }
+        
+        Alert.alert(
+          'Permissions Refreshed',
+          `Status: ${refreshResult.permissionStatus.granted ? 'Granted' : 'Not Granted'}\n` +
+          `Updated: ${new Date(refreshResult.permissionStatus.timestamp).toLocaleTimeString()}`,
+          [{ text: 'OK' }]
+        );
+      } else {
+        Alert.alert(
+          'Refresh Failed',
+          `Could not refresh permission status: ${refreshResult.error}`,
+          [{ text: 'OK' }]
+        );
+      }
+    } catch (error) {
+      console.error('Error refreshing permissions:', error);
+      Alert.alert(
+        'Refresh Error',
+        'An error occurred while refreshing permissions.',
+        [{ text: 'OK' }]
+      );
+    } finally {
+      setRefreshing(false);
     }
   };
 
@@ -189,7 +271,23 @@ const NotificationSettings = ({ onBack }) => {
         
         {/* Push Notifications Status */}
         <View style={styles.section}>
-          <Text style={styles.sectionTitle}>Push Notification Status</Text>
+          <View style={styles.sectionHeader}>
+            <Text style={styles.sectionTitle}>Push Notification Status</Text>
+            <TouchableOpacity 
+              style={[styles.refreshButton, refreshing && styles.refreshButtonDisabled]} 
+              onPress={handleRefreshPermissions}
+              disabled={refreshing}
+            >
+              <MaterialIcons 
+                name="refresh" 
+                size={20} 
+                color={refreshing ? colors.textSecondary : colors.accentData} 
+              />
+              <Text style={[styles.refreshButtonText, refreshing && styles.refreshButtonTextDisabled]}>
+                {refreshing ? 'Refreshing...' : 'Refresh'}
+              </Text>
+            </TouchableOpacity>
+          </View>
           <View style={styles.statusCard}>
             <View style={styles.statusRow}>
               <MaterialIcons 
@@ -206,6 +304,68 @@ const NotificationSettings = ({ onBack }) => {
                     ? (pushToken ? 'Ready to receive alerts' : 'Registering device...')
                     : 'Tap to enable notifications'}
                 </Text>
+                {permissionDetails?.timestamp && (
+                   <Text style={styles.timestampText}>
+                     Last checked: {new Date(permissionDetails.timestamp).toLocaleTimeString()}
+                   </Text>
+                 )}
+                 
+                 {/* Debug Information Section (Development Only) */}
+                 {showDebugInfo && debugInfo && (
+                   <View style={styles.debugSection}>
+                     <Text style={styles.debugTitle}>Debug Information</Text>
+                     <TouchableOpacity 
+                       style={styles.debugToggle}
+                       onPress={() => setShowDebugInfo(!showDebugInfo)}
+                     >
+                       <Text style={styles.debugToggleText}>Hide Debug Info</Text>
+                     </TouchableOpacity>
+                     
+                     <ScrollView style={styles.debugScrollView} nestedScrollEnabled={true}>
+                       <Text style={styles.debugText}>
+                         Platform: {debugInfo.platform} {debugInfo.platformVersion}
+                       </Text>
+                       <Text style={styles.debugText}>
+                         Permission Status: {debugInfo.detailedPermissionStatus?.status}
+                       </Text>
+                       <Text style={styles.debugText}>
+                         Granted: {debugInfo.detailedPermissionStatus?.granted ? 'Yes' : 'No'}
+                       </Text>
+                       <Text style={styles.debugText}>
+                         Can Ask Again: {debugInfo.detailedPermissionStatus?.canAskAgain ? 'Yes' : 'No'}
+                       </Text>
+                       <Text style={styles.debugText}>
+                         Has Push Token: {debugInfo.hasPushToken ? 'Yes' : 'No'}
+                       </Text>
+                       <Text style={styles.debugText}>
+                         Scheduled Notifications: {debugInfo.scheduledNotificationsCount}
+                       </Text>
+                       <Text style={styles.debugText}>
+                         Consistency Check: {debugInfo.consistencyCheck?.consistent ? 'Passed' : 'Failed'}
+                       </Text>
+                       {debugInfo.consistencyCheck?.inconsistencies?.length > 0 && (
+                         <View style={styles.inconsistenciesSection}>
+                           <Text style={styles.debugSubtitle}>Inconsistencies:</Text>
+                           {debugInfo.consistencyCheck.inconsistencies.map((issue, index) => (
+                             <Text key={index} style={styles.inconsistencyText}>
+                               • {issue.message}
+                             </Text>
+                           ))}
+                         </View>
+                       )}
+                     </ScrollView>
+                   </View>
+                 )}
+                 
+                 {/* Debug Toggle Button (Development Only) */}
+                 {__DEV__ && !showDebugInfo && (
+                   <TouchableOpacity 
+                     style={styles.debugToggleButton}
+                     onPress={() => setShowDebugInfo(true)}
+                   >
+                     <Text style={styles.debugToggleButtonText}>Show Debug Info</Text>
+                   </TouchableOpacity>
+                 )}
               </View>
               {!hasPermission && (
                 <TouchableOpacity 
@@ -450,11 +610,39 @@ const styles = StyleSheet.create({
   section: {
     marginBottom: 32,
   },
+  sectionHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 16,
+  },
   sectionTitle: {
     color: colors.textPrimary,
     fontSize: 18,
     fontWeight: '600',
-    marginBottom: 16,
+  },
+  refreshButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: colors.accentDataBg,
+    borderRadius: 8,
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderWidth: 1,
+    borderColor: colors.accentData,
+  },
+  refreshButtonDisabled: {
+    backgroundColor: colors.bgSecondary,
+    borderColor: colors.divider,
+  },
+  refreshButtonText: {
+    color: colors.accentData,
+    fontSize: 12,
+    fontWeight: '600',
+    marginLeft: 4,
+  },
+  refreshButtonTextDisabled: {
+    color: colors.textSecondary,
   },
   statusCard: {
     backgroundColor: colors.bgSecondary,
@@ -481,7 +669,79 @@ const styles = StyleSheet.create({
     color: colors.textSecondary,
     fontSize: 14,
   },
-  enableButton: {
+  timestampText: {
+    color: colors.textSecondary,
+    fontSize: 12,
+    marginTop: 4,
+    fontStyle: 'italic',
+  },
+  debugSection: {
+    marginTop: 16,
+    padding: 12,
+    backgroundColor: colors.bgSecondary,
+    borderRadius: 8,
+    borderWidth: 1,
+    borderColor: colors.cardBorder,
+  },
+  debugTitle: {
+    fontSize: 14,
+    fontWeight: 'bold',
+    color: colors.textPrimary,
+    marginBottom: 8,
+  },
+  debugToggle: {
+    alignSelf: 'flex-end',
+    padding: 4,
+  },
+  debugToggleText: {
+    fontSize: 12,
+    color: colors.accentData,
+    textDecorationLine: 'underline',
+  },
+  debugScrollView: {
+    maxHeight: 200,
+    marginTop: 8,
+  },
+  debugText: {
+    fontSize: 11,
+    color: colors.textSecondary,
+    marginBottom: 4,
+    fontFamily: 'monospace',
+  },
+  debugSubtitle: {
+    fontSize: 12,
+    fontWeight: 'bold',
+    color: colors.textPrimary,
+    marginTop: 8,
+    marginBottom: 4,
+  },
+  inconsistenciesSection: {
+    marginTop: 8,
+    padding: 8,
+    backgroundColor: colors.accentNegative + '20',
+    borderRadius: 4,
+    borderWidth: 1,
+    borderColor: colors.accentNegative,
+  },
+  inconsistencyText: {
+    fontSize: 11,
+    color: colors.accentNegative,
+    marginBottom: 2,
+  },
+  debugToggleButton: {
+    marginTop: 8,
+    padding: 8,
+    backgroundColor: colors.bgSecondary,
+    borderRadius: 4,
+    borderWidth: 1,
+    borderColor: colors.cardBorder,
+    alignItems: 'center',
+  },
+  debugToggleButtonText: {
+     fontSize: 12,
+     color: colors.accentData,
+   },
+   enableButton: {
     backgroundColor: colors.accentPositive,
     borderRadius: 8,
     paddingHorizontal: 16,

@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import {
   StyleSheet,
   Text,
@@ -10,6 +10,7 @@ import {
   TextInput,
   Alert,
 } from 'react-native';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import { MaterialIcons } from '@expo/vector-icons';
 import { DEFAULT_WEBSITE_SOURCES, getSuggestedWebsiteURLs } from '../config/default_sources';
 
@@ -24,8 +25,8 @@ const colors = {
   divider: '#333333',
 };
 
-const AlertPreferencesForm = ({ onComplete, onSkip, showSkipOption = false }) => {
-  const [activeTab, setActiveTab] = useState('Websites');
+const AlertPreferencesForm = ({ onComplete, onSkip, showSkipOption = false, isEditMode = false }) => {
+  const [activeTab, setActiveTab] = useState('Commodities');
   const [selectedCommodities, setSelectedCommodities] = useState(['Zinc', 'Wheat', 'Tin']);
   const [selectedRegions, setSelectedRegions] = useState(['North America', 'Middle East']);
   const [selectedCurrencies, setSelectedCurrencies] = useState(['USD', 'EUR']);
@@ -40,6 +41,36 @@ const AlertPreferencesForm = ({ onComplete, onSkip, showSkipOption = false }) =>
   const [websiteURLs, setWebsiteURLs] = useState([]);
   const [customKeyword, setCustomKeyword] = useState('');
   const [keywords, setKeywords] = useState([]);
+
+  // Load existing preferences when in edit mode
+  useEffect(() => {
+    if (isEditMode) {
+      loadExistingPreferences();
+    }
+  }, [isEditMode]);
+
+  const loadExistingPreferences = async () => {
+    try {
+      const storedPrefs = await AsyncStorage.getItem('alert_preferences');
+      if (storedPrefs) {
+        const prefs = JSON.parse(storedPrefs);
+        console.log('Loading existing preferences:', prefs);
+        
+        // Update state with existing preferences
+        if (prefs.commodities) setSelectedCommodities(prefs.commodities);
+        if (prefs.regions) setSelectedRegions(prefs.regions);
+        if (prefs.currencies) setSelectedCurrencies(prefs.currencies);
+        if (prefs.keywords) setKeywords(prefs.keywords);
+        if (prefs.websiteURLs) setWebsiteURLs(prefs.websiteURLs);
+        if (prefs.alertFrequency) setAlertFrequency(prefs.alertFrequency);
+        if (prefs.alertThreshold) setAlertThreshold(prefs.alertThreshold);
+        if (prefs.pushNotifications !== undefined) setPushNotifications(prefs.pushNotifications);
+        if (prefs.emailAlerts !== undefined) setEmailAlerts(prefs.emailAlerts);
+      }
+    } catch (error) {
+      console.error('Error loading preferences:', error);
+    }
+  };
 
   const tabs = ['Commodities', 'Regions', 'Currencies', 'Websites', 'Keywords', 'Sources'];
   const frequencies = ['Real-time', 'Daily', 'Weekly'];
@@ -152,7 +183,7 @@ const AlertPreferencesForm = ({ onComplete, onSkip, showSkipOption = false }) =>
     }
   };
 
-  const handleSavePreferences = () => {
+  const handleSavePreferences = async () => {
     const preferences = {
       commodities: selectedCommodities,
       regions: selectedRegions,
@@ -163,13 +194,33 @@ const AlertPreferencesForm = ({ onComplete, onSkip, showSkipOption = false }) =>
       alertThreshold,
       pushNotifications,
       emailAlerts,
+      lastUpdated: new Date().toISOString()
     };
+
+    // Log what we're saving
+    console.log('Saving preferences:', {
+      commodities: preferences.commodities.length,
+      regions: preferences.regions.length,
+      currencies: preferences.currencies.length,
+      keywords: preferences.keywords.length,
+      websiteURLs: preferences.websiteURLs.length,
+      alertFrequency: preferences.alertFrequency,
+      alertThreshold: preferences.alertThreshold
+    });
+
+    // Save directly to AsyncStorage for verification
+    try {
+      await AsyncStorage.setItem('alert_preferences', JSON.stringify(preferences));
+      console.log('Preferences saved to AsyncStorage');
+    } catch (error) {
+      console.error('Error saving to AsyncStorage:', error);
+    }
 
     const totalItems = selectedCommodities.length + selectedRegions.length + selectedCurrencies.length + keywords.length + websiteURLs.length;
     
     Alert.alert(
       'Preferences Saved',
-      `Your alert preferences have been configured:\n• ${selectedCommodities.length} commodities\n• ${selectedRegions.length} regions\n• ${selectedCurrencies.length} currencies\n• ${keywords.length} keywords\n• ${websiteURLs.length} website sources\n\nTotal: ${totalItems} tracking items`,
+      `Your alert preferences have been configured:\n• ${selectedCommodities.length} commodities\n• ${selectedRegions.length} regions\n• ${selectedCurrencies.length} currencies\n• ${keywords.length} keywords\n• ${websiteURLs.length} website sources\n• Alert Frequency: ${alertFrequency}\n\nTotal: ${totalItems} tracking items`,
       [
         {
           text: 'Continue',
@@ -180,20 +231,26 @@ const AlertPreferencesForm = ({ onComplete, onSkip, showSkipOption = false }) =>
   };
 
   const handleSkipPreferences = () => {
-    Alert.alert(
-      'Skip Alert Setup',
-      'You can always set up alerts later in the app. Continue without setting up alerts?',
-      [
-        { text: 'Continue Setup', style: 'cancel' },
-        {
-          text: 'Skip for Now',
-          onPress: () => {
-            console.log('Alert preferences skipped');
-            onSkip && onSkip();
+    if (isEditMode) {
+      // In edit mode, just go back without confirmation
+      onSkip && onSkip();
+    } else {
+      // During onboarding, show confirmation
+      Alert.alert(
+        'Skip Alert Setup',
+        'You can always set up alerts later in the app. Continue without setting up alerts?',
+        [
+          { text: 'Continue Setup', style: 'cancel' },
+          {
+            text: 'Skip for Now',
+            onPress: () => {
+              console.log('Alert preferences skipped');
+              onSkip && onSkip();
+            }
           }
-        }
-      ]
-    );
+        ]
+      );
+    }
   };
 
   const renderCommoditiesTab = () => (
@@ -239,7 +296,13 @@ const AlertPreferencesForm = ({ onComplete, onSkip, showSkipOption = false }) =>
               styles.suggestedOption,
               selectedCommodities.includes(commodity) && styles.selectedSuggestedOption
             ]}
-            onPress={() => addCommodity(commodity)}
+            onPress={() => {
+              if (selectedCommodities.includes(commodity)) {
+                removeCommodity(commodity);
+              } else {
+                addCommodity(commodity);
+              }
+            }}
           >
             <Text style={[
               styles.suggestedOptionText,
@@ -296,7 +359,13 @@ const AlertPreferencesForm = ({ onComplete, onSkip, showSkipOption = false }) =>
               styles.suggestedOption,
               selectedRegions.includes(region) && styles.selectedSuggestedOption
             ]}
-            onPress={() => addRegion(region)}
+            onPress={() => {
+              if (selectedRegions.includes(region)) {
+                removeRegion(region);
+              } else {
+                addRegion(region);
+              }
+            }}
           >
             <Text style={[
               styles.suggestedOptionText,
@@ -353,7 +422,13 @@ const AlertPreferencesForm = ({ onComplete, onSkip, showSkipOption = false }) =>
               styles.suggestedOption,
               selectedCurrencies.includes(currency) && styles.selectedSuggestedOption
             ]}
-            onPress={() => addCurrency(currency)}
+            onPress={() => {
+              if (selectedCurrencies.includes(currency)) {
+                removeCurrency(currency);
+              } else {
+                addCurrency(currency);
+              }
+            }}
           >
             <Text style={[
               styles.suggestedOptionText,
@@ -415,7 +490,15 @@ const AlertPreferencesForm = ({ onComplete, onSkip, showSkipOption = false }) =>
             ]}
             onPress={() => {
               if (!websiteURLs.includes(website.url)) {
-                setWebsiteURLs(prev => [...prev, website.url]);
+                console.log('Adding website:', website.url);
+                setWebsiteURLs(prev => {
+                  const newUrls = [...prev, website.url];
+                  console.log('Updated website URLs:', newUrls);
+                  return newUrls;
+                });
+              } else {
+                console.log('Removing website:', website.url);
+                setWebsiteURLs(prev => prev.filter(url => url !== website.url));
               }
             }}
           >
@@ -484,13 +567,13 @@ const AlertPreferencesForm = ({ onComplete, onSkip, showSkipOption = false }) =>
     <SafeAreaView style={styles.container}>
       <StatusBar barStyle="light-content" />
 
-      {/* Enhanced Header with skip option */}
+      {/* Enhanced Header with conditional skip option */}
       <View style={styles.header}>
-        <TouchableOpacity onPress={handleSkipPreferences}>
+        <TouchableOpacity onPress={isEditMode ? onSkip : handleSkipPreferences}>
           <MaterialIcons name="arrow-back" size={24} color={colors.accentData} />
         </TouchableOpacity>
-        <Text style={styles.headerTitle}>Alert Preferences</Text>
-        {showSkipOption && (
+        <Text style={styles.headerTitle}>{isEditMode ? 'Edit Alert Preferences' : 'Alert Preferences'}</Text>
+        {showSkipOption && !isEditMode && (
           <TouchableOpacity onPress={handleSkipPreferences}>
             <Text style={styles.skipHeaderText}>Skip</Text>
           </TouchableOpacity>
@@ -502,6 +585,18 @@ const AlertPreferencesForm = ({ onComplete, onSkip, showSkipOption = false }) =>
         <Text style={styles.description}>
           Customize what news and analysis you want to receive. You can always change these settings later.
         </Text>
+        
+        {/* Current Selections Summary */}
+        <View style={styles.summaryContainer}>
+          <Text style={styles.summaryTitle}>Current Selections:</Text>
+          <Text style={styles.summaryText}>
+            • {selectedCommodities.length} Commodities
+            • {selectedRegions.length} Regions
+            • {selectedCurrencies.length} Currencies
+            • {websiteURLs.length} Websites
+            • {keywords.length} Keywords
+          </Text>
+        </View>
 
         {/* Tabs */}
         <View style={styles.tabsContainer}>
@@ -510,7 +605,16 @@ const AlertPreferencesForm = ({ onComplete, onSkip, showSkipOption = false }) =>
               <TouchableOpacity
                 key={tab}
                 style={[styles.tab, activeTab === tab && styles.activeTab]}
-                onPress={() => setActiveTab(tab)}
+                onPress={() => {
+                  console.log(`Switching to ${tab} tab. Current selections:`, {
+                    commodities: selectedCommodities.length,
+                    regions: selectedRegions.length,
+                    currencies: selectedCurrencies.length,
+                    websites: websiteURLs.length,
+                    keywords: keywords.length
+                  });
+                  setActiveTab(tab);
+                }}
               >
                 <Text style={[styles.tabText, activeTab === tab && styles.activeTabText]}>
                   {tab}
@@ -597,10 +701,10 @@ const AlertPreferencesForm = ({ onComplete, onSkip, showSkipOption = false }) =>
         {/* Enhanced Save Button with flexible completion */}
         <View style={styles.buttonContainer}>
           <TouchableOpacity style={styles.saveButton} onPress={handleSavePreferences}>
-            <Text style={styles.saveButtonText}>Save Preferences</Text>
+            <Text style={styles.saveButtonText}>{isEditMode ? 'Update Preferences' : 'Save Preferences'}</Text>
           </TouchableOpacity>
 
-          {showSkipOption && (
+          {showSkipOption && !isEditMode && (
             <TouchableOpacity style={styles.skipButton} onPress={handleSkipPreferences}>
               <Text style={styles.skipButtonText}>Set Up Later</Text>
             </TouchableOpacity>
@@ -644,6 +748,23 @@ const styles = StyleSheet.create({
     fontSize: 16,
     marginVertical: 20,
     lineHeight: 22,
+  },
+  summaryContainer: {
+    backgroundColor: colors.bgSecondary,
+    padding: 15,
+    borderRadius: 10,
+    marginBottom: 20,
+  },
+  summaryTitle: {
+    color: colors.accentData,
+    fontSize: 14,
+    fontWeight: '600',
+    marginBottom: 8,
+  },
+  summaryText: {
+    color: colors.textSecondary,
+    fontSize: 14,
+    lineHeight: 20,
   },
   tabsContainer: {
     marginBottom: 20,

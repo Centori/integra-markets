@@ -1,0 +1,79 @@
+{
+  "badgeTypes": {
+    "notification": {
+      "description": "Standard notification badge",
+      "colors": {
+        "background": "#4ECCA3",
+        "text": "#000000"
+      },
+      "sizes": [16, 24, 32, 48]
+    },
+    "alert": {
+      "description": "Alert/warning badge",
+      "colors": {
+        "background": "#F05454",
+        "text": "#FFFFFF"
+      },
+      "sizes": [16, 24, 32, 48]
+    },
+    "market": {
+      "description": "Market update badge",
+      "colors": {
+        "background": "#30A5FF",
+        "text": "#FFFFFF"
+      },
+      "sizes": [16, 24, 32, 48]
+    },
+    "success": {
+      "description": "Success/bullish badge",
+      "colors": {
+        "background": "#4ECCA3",
+        "text": "#000000"
+      },
+      "sizes": [16, 24, 32, 48]
+    },
+    "bearish": {
+      "description": "Bearish/negative badge",
+      "colors": {
+        "background": "#F05454",
+        "text": "#FFFFFF"
+      },
+      "sizes": [16, 24, 32, 48]
+    }
+  },
+  "notificationIcons": {
+    "default": {
+      "description": "Standard notification icon",
+      "platforms": ["ios", "android", "web"],
+      "sizes": {
+        "ios": [20, 29, 40, 58, 60, 76, 80, 87, 120, 152, 167, 180],
+        "android": [24, 36, 48, 72, 96],
+        "web": [16, 32, 48, 64, 128, 192, 256, 512]
+      }
+    },
+    "simplified": {
+      "description": "Simplified icon for small sizes",
+      "platforms": ["ios", "android"],
+      "sizes": {
+        "ios": [20, 29, 40],
+        "android": [24, 36, 48]
+      }
+    },
+    "statusBar": {
+      "description": "White silhouette for Android status bar",
+      "platforms": ["android"],
+      "sizes": {
+        "android": [24, 36, 48, 72, 96]
+      }
+    }
+  },
+  "brandColors": {
+    "primary": "#000000",
+    "accent": "#4ECCA3",
+    "bearish": "#F05454",
+    "bullish": "#4ECCA3",
+    "neutral": "#30A5FF",
+    "text": "#FFFFFF",
+    "textDark": "#000000"
+  }
+}

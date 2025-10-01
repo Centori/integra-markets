@@ -5,13 +5,62 @@ from pathlib import Path
 from dotenv import load_dotenv
 from supabase import create_client, Client
 from pydantic import BaseModel
+from typing import Optional
 
-# Load environment variables from parent directory's .env file
+# DB
+try:
+    from db import init_db, close_db
+except ImportError:
+    # Fallback for deployment
+    async def init_db():
+        pass
+    async def close_db():
+        pass
+
+# Routers
+try:
+    from api.notifications import router as notifications_router
+    notifications_available = True
+except ImportError:
+    notifications_available = False
+
+try:
+    from api.market_data import router as market_data_router
+    market_data_available = True
+except ImportError:
+    market_data_available = False
+
+try:
+    from api.news import router as news_router
+    news_available = True
+except ImportError:
+    news_available = False
+
+# Load environment variables
+# Try multiple paths for different deployment environments
+load_dotenv()  # Load from current directory first
 parent_dir = Path(__file__).parent.parent
 env_path = parent_dir / '.env'
-load_dotenv(env_path)
+load_dotenv(env_path)  # Also try parent directory
 
 app = FastAPI(title="Integra AI Backend", description="Financial AI Analysis API")
+
+# Lifespan events
+@app.on_event("startup")
+async def startup_event():
+    await init_db()
+
+@app.on_event("shutdown")
+async def shutdown_event():
+    await close_db()
+
+# Mount routers conditionally
+if notifications_available:
+    app.include_router(notifications_router)
+if market_data_available:
+    app.include_router(market_data_router)
+if news_available:
+    app.include_router(news_router)
 
 # Add CORS middleware to allow requests from your React Native app
 app.add_middleware(
@@ -26,13 +75,10 @@ app.add_middleware(
 supabase_url: str = os.getenv("SUPABASE_URL")
 supabase_key: str = os.getenv("SUPABASE_KEY")
 
-# Initialize Supabase client only if credentials are available
-supabase: Client = None
+# Gracefully handle missing Supabase credentials in production
+supabase: Optional[Client] = None
 if supabase_url and supabase_key:
     supabase = create_client(supabase_url, supabase_key)
-    print("✅ Supabase client initialized")
-else:
-    print("⚠️  Supabase credentials not found - some features will be limited")
 
 # Pydantic models for request/response
 class SentimentRequest(BaseModel):
@@ -50,7 +96,18 @@ def read_root():
     return {
         "message": "Integra AI Backend is running!",
         "version": "1.0.1",  # Updated version
-        "endpoints": ["/analyze-sentiment", "/health"]
+        "endpoints": [
+            "/analyze-sentiment",
+            "/health",
+            "/api/notifications/register-token",
+            "/api/notifications/test",
+            "/api/market-data/fx/rate",
+            "/api/market-data/fx/series",
+            "/api/market-data/commodities/rate",
+            "/api/market-data/commodities/series",
+            "/api/news/latest",
+            "/api/news/refresh"
+        ]
     }
 
 @app.get('/health')
@@ -63,120 +120,107 @@ def analyze_sentiment(request: SentimentRequest):
         if not request.text or len(request.text.strip()) == 0:
             raise HTTPException(status_code=400, detail="Text cannot be empty")
         
-        # TODO: Replace with actual NLTK and FinBERT implementation
-        # For now, return mock data
         import datetime
+        import requests
+        import json
         
-        # Simple mock sentiment analysis
-        positive_words = ['good', 'great', 'excellent', 'amazing', 'wonderful', 'profit', 'gain']
-        negative_words = ['bad', 'terrible', 'awful', 'loss', 'deficit', 'poor']
+        # Try FinBERT via Hugging Face API first
+        hf_token = os.getenv("HUGGING_FACE_TOKEN")
+        if hf_token:
+            try:
+                headers = {"Authorization": f"Bearer {hf_token}"}
+                api_url = "https://api-inference.huggingface.co/models/ProsusAI/finbert"
+                
+                response = requests.post(
+                    api_url,
+                    headers=headers,
+                    json={"inputs": request.text},
+                    timeout=10
+                )
+                
+                if response.status_code == 200:
+                    result = response.json()
+                    if isinstance(result, list) and len(result) > 0:
+                        # FinBERT returns labels: positive, negative, neutral
+                        scores = {item['label'].lower(): item['score'] for item in result[0]}
+                        
+                        # Get the highest confidence prediction
+                        best_sentiment = max(scores.keys(), key=lambda k: scores[k])
+                        confidence = scores[best_sentiment]
+                        
+                        return SentimentResponse(
+                            text=request.text,
+                            sentiment=best_sentiment,
+                            confidence=round(confidence, 3),
+                            timestamp=datetime.datetime.now().isoformat()
+                        )
+            except Exception as e:
+                print(f"FinBERT API error: {e}")
         
-        text_lower = request.text.lower()
-        positive_count = sum(1 for word in positive_words if word in text_lower)
-        negative_count = sum(1 for word in negative_words if word in text_lower)
-        
-        if positive_count > negative_count:
-            sentiment = "positive"
-            confidence = min(0.95, 0.6 + (positive_count * 0.1))
-        elif negative_count > positive_count:
-            sentiment = "negative"
-            confidence = min(0.95, 0.6 + (negative_count * 0.1))
-        else:
-            sentiment = "neutral"
-            confidence = 0.5
-        
-        return SentimentResponse(
-            text=request.text,
-            sentiment=sentiment,
-            confidence=round(confidence, 3),
-            timestamp=datetime.datetime.now().isoformat()
-        )
+        # Fallback to NLTK VADER sentiment analysis
+        try:
+            import nltk
+            from nltk.sentiment import SentimentIntensityAnalyzer
+            
+            # Download required data if not present
+            try:
+                nltk.data.find('vader_lexicon')
+            except LookupError:
+                nltk.download('vader_lexicon', quiet=True)
+            
+            sia = SentimentIntensityAnalyzer()
+            scores = sia.polarity_scores(request.text)
+            
+            # Convert VADER compound score to sentiment
+            compound = scores['compound']
+            if compound >= 0.05:
+                sentiment = "positive"
+                confidence = min(0.95, abs(compound))
+            elif compound <= -0.05:
+                sentiment = "negative"
+                confidence = min(0.95, abs(compound))
+            else:
+                sentiment = "neutral"
+                confidence = 1 - abs(compound)
+            
+            return SentimentResponse(
+                text=request.text,
+                sentiment=sentiment,
+                confidence=round(confidence, 3),
+                timestamp=datetime.datetime.now().isoformat()
+            )
+            
+        except Exception as nltk_error:
+            print(f"NLTK error: {nltk_error}")
+            
+            # Final fallback to basic analysis
+            financial_positive = ['bullish', 'gain', 'profit', 'surge', 'rally', 'rise', 'increase', 'boost', 'strong', 'growth']
+            financial_negative = ['bearish', 'loss', 'deficit', 'fall', 'drop', 'decline', 'crash', 'weak', 'recession', 'downturn']
+            
+            text_lower = request.text.lower()
+            positive_count = sum(1 for word in financial_positive if word in text_lower)
+            negative_count = sum(1 for word in financial_negative if word in text_lower)
+            
+            if positive_count > negative_count:
+                sentiment = "positive"
+                confidence = min(0.85, 0.6 + (positive_count * 0.1))
+            elif negative_count > positive_count:
+                sentiment = "negative"
+                confidence = min(0.85, 0.6 + (negative_count * 0.1))
+            else:
+                sentiment = "neutral"
+                confidence = 0.5
+            
+            return SentimentResponse(
+                text=request.text,
+                sentiment=sentiment,
+                confidence=round(confidence, 3),
+                timestamp=datetime.datetime.now().isoformat()
+            )
         
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Analysis failed: {str(e)}")
 
-# Push Notification Verification Endpoints
-@app.get('/api/push/verify')
-def verify_push_setup():
-    """Verify push notification setup without requiring database"""
-    
-    result = {
-        "expo_sdk_available": False,
-        "push_client_available": False,
-        "token_validation_working": False,
-        "sample_token_valid": False,
-        "ready_to_send": False,
-        "details": {}
-    }
-    
-    # Check 1: Expo SDK availability
-    try:
-        from exponent_server_sdk import PushClient, PushMessage
-        result["expo_sdk_available"] = True
-        result["details"]["expo_sdk_version"] = "2.1.0"
-    except ImportError:
-        result["details"]["expo_sdk_error"] = "exponent-server-sdk not installed"
-        return result
-    
-    # Check 2: Push client creation
-    try:
-        client = PushClient()
-        result["push_client_available"] = True
-        result["details"]["push_client"] = "Successfully created"
-    except Exception as e:
-        result["details"]["push_client_error"] = str(e)
-        return result
-    
-    # Check 3: Token validation
-    try:
-        # Test with a properly formatted token
-        test_token = "ExponentPushToken[xxxxxxxxxxxxxxxxxxxxxx]"
-        result["sample_token_valid"] = PushClient.is_exponent_push_token(test_token)
-        result["token_validation_working"] = True
-        
-        # Test with invalid token
-        invalid_token = "invalid-token"
-        invalid_result = PushClient.is_exponent_push_token(invalid_token)
-        
-        result["details"]["token_validation"] = {
-            "valid_token_test": result["sample_token_valid"],
-            "invalid_token_test": not invalid_result,
-            "test_passed": result["sample_token_valid"] and not invalid_result
-        }
-    except Exception as e:
-        result["details"]["token_validation_error"] = str(e)
-    
-    # Overall readiness
-    result["ready_to_send"] = all([
-        result["expo_sdk_available"],
-        result["push_client_available"],
-        result["token_validation_working"],
-        result["sample_token_valid"]
-    ])
-    
-    return result
-
-@app.post('/api/push/test-token')
-def test_push_token(token: str):
-    """Test if a push token is valid"""
-    
-    try:
-        from exponent_server_sdk import PushClient
-        
-        is_valid = PushClient.is_exponent_push_token(token)
-        
-        return {
-            "token": token,
-            "is_valid": is_valid,
-            "format_hint": "Token should be in format: ExponentPushToken[xxxx...]" if not is_valid else "Token format is correct"
-        }
-    except ImportError:
-        raise HTTPException(
-            status_code=500,
-            detail="Expo Server SDK not installed"
-        )
-    except Exception as e:
-        raise HTTPException(
-            status_code=500,
-            detail=f"Error validating token: {str(e)}"
-        )
+if __name__ == "__main__":
+    import uvicorn
+    uvicorn.run(app, host="0.0.0.0", port=8000)

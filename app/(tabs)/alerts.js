@@ -9,12 +9,14 @@ import {
   Alert,
   SafeAreaView,
   StatusBar,
+  Linking,
 } from 'react-native';
 import { MaterialIcons } from '@expo/vector-icons';
 import Toast from 'react-native-toast-message';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { router } from 'expo-router';
 import HollowCircularIcon from '../components/HollowCircularIcon';
+import * as Notifications from 'expo-notifications';
 
 const colors = {
   bgPrimary: '#121212',
@@ -28,7 +30,7 @@ const colors = {
 };
 
 export default function AlertsScreen() {
-  const [pushEnabled, setPushEnabled] = useState(true);
+  const [pushEnabled, setPushEnabled] = useState(false); // Start with false until we check
   const [emailEnabled, setEmailEnabled] = useState(false);
   const [priceAlerts, setPriceAlerts] = useState(true);
   const [newsAlerts, setNewsAlerts] = useState(true);
@@ -45,10 +47,15 @@ export default function AlertsScreen() {
   });
   const [preferencesLoaded, setPreferencesLoaded] = useState(false);
 
-  // Load alert preferences from AsyncStorage
+  // Load alert preferences and check notification permissions
   useEffect(() => {
-    const loadAlertPreferences = async () => {
+    const loadPreferencesAndPermissions = async () => {
       try {
+        // Check notification permissions
+        const { status } = await Notifications.getPermissionsAsync();
+        setPushEnabled(status === 'granted');
+        
+        // Load alert preferences
         const storedPreferences = await AsyncStorage.getItem('alert_preferences');
         if (storedPreferences) {
           const preferences = JSON.parse(storedPreferences);
@@ -64,12 +71,12 @@ export default function AlertsScreen() {
         }
         setPreferencesLoaded(true);
       } catch (error) {
-        console.error('Error loading alert preferences:', error);
+        console.error('Error loading preferences:', error);
         setPreferencesLoaded(true);
       }
     };
 
-    loadAlertPreferences();
+    loadPreferencesAndPermissions();
   }, []);
 
   const alerts = [
@@ -159,9 +166,36 @@ export default function AlertsScreen() {
               </View>
               <Switch
                 value={pushEnabled}
-                onValueChange={(value) => {
-                  setPushEnabled(value);
-                  handleSettingChange('Push notifications', value);
+                onValueChange={async (value) => {
+                  if (value && !pushEnabled) {
+                    // If trying to enable, request permission
+                    const { status } = await Notifications.requestPermissionsAsync();
+                    if (status === 'granted') {
+                      setPushEnabled(true);
+                      handleSettingChange('Push notifications', true);
+                    } else {
+                      // Open settings if permission denied
+                      Alert.alert(
+                        'Permission Required',
+                        'Please enable notifications in Settings to receive alerts.',
+                        [
+                          { text: 'Cancel', style: 'cancel' },
+                          { text: 'Open Settings', onPress: () => Linking.openSettings() }
+                        ]
+                      );
+                    }
+                  } else if (!value) {
+                    // If disabling, just update state (user needs to disable in Settings)
+                    setPushEnabled(false);
+                    Alert.alert(
+                      'Disable Notifications',
+                      'To fully disable notifications, please turn them off in Settings.',
+                      [
+                        { text: 'OK' },
+                        { text: 'Open Settings', onPress: () => Linking.openSettings() }
+                      ]
+                    );
+                  }
                 }}
                 trackColor={{ false: colors.divider, true: colors.accentPositive }}
                 thumbColor={colors.textPrimary}

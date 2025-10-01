@@ -1,114 +1,150 @@
-// IntegraIcon.js - Official Integra branded icon component (matches media kit)
-import React, { useEffect } from 'react';
-import { View, Animated } from 'react-native';
+import React, { useEffect, useRef } from 'react';
+import { View, Animated, StyleSheet } from 'react-native';
 
-const IntegraIcon = ({ 
-    size = 192, 
-    animated = false, 
-    variant = 'default', // 'default', 'loading', 'app-icon'
-    style = {} 
-}) => {
-    const animatedValue = new Animated.Value(0);
-    
-    useEffect(() => {
-        if (animated) {
-            Animated.loop(
-                Animated.sequence([
-                    Animated.timing(animatedValue, {
-                        toValue: 1,
-                        duration: 2000,
-                        useNativeDriver: false,
-                    }),
-                    Animated.timing(animatedValue, {
-                        toValue: 0,
-                        duration: 2000,
-                        useNativeDriver: false,
-                    }),
-                ])
-            ).start();
-        }
-    }, [animated]);
+const IntegraIcon = ({ size = 24, animated = false, variant = 'default', style }) => {
+  const pulseAnim = useRef(new Animated.Value(1)).current;
 
-    // Color configurations for different variants (updated to match media kit)
-    const getColors = () => {
-        switch (variant) {
-            case 'loading':
-                return {
-                    border: '#4ECCA3', // Always green for the border
-                    dot: '#4ECCA3',    // Green for the dot
-                    line: '#4ECCA3',   // Green for the line (no more grey)
-                    background: '#000000'
-                };
-            case 'app-icon':
-                return {
-                    border: '#4ECCA3', // Green border
-                    dot: '#4ECCA3',    // Green dot
-                    line: '#4ECCA3',   // Green line
-                    background: '#000000'
-                };
-            default:
-                return {
-                    border: '#4ECCA3',
-                    dot: '#4ECCA3',
-                    line: '#4ECCA3',
-                    background: 'transparent'
-                };
-        }
-    };
+  useEffect(() => {
+    if (animated) {
+      const pulseSequence = Animated.sequence([
+        Animated.timing(pulseAnim, {
+          toValue: 1.1,
+          duration: 1000,
+          useNativeDriver: true,
+        }),
+        Animated.timing(pulseAnim, {
+          toValue: 1,
+          duration: 1000,
+          useNativeDriver: true,
+        }),
+      ]);
 
-    const colors = getColors();
-    const iconSize = size;
-    // Updated dimensions to match media kit specifications
-    const borderWidth = Math.max(2, size * 0.015);
-    const dotSize = size * 0.06;        // 6% of total size for slim design
-    const lineWidth = size * 0.06;      // 6% of total size for slim design  
-    const lineHeight = size * 0.2;      // 20% of total size
-    const cornerRadius = size * 0.1;    // 10% for more square appearance (updated from 0.18)
-    const gapSize = size * 0.04;        // Gap between dot and line
+      Animated.loop(pulseSequence).start();
+    }
+  }, [animated]);
 
-    return (
-        <View style={[
+  const getColors = () => {
+    switch (variant) {
+      case 'success':
+        return { primary: '#4ECCA3', secondary: '#30A5FF' };
+      case 'error':
+        return { primary: '#F05454', secondary: '#FFD700' };
+      case 'warning':
+        return { primary: '#FFD700', secondary: '#F05454' };
+      case 'default':
+      default:
+        return { primary: '#30A5FF', secondary: '#4ECCA3' };
+    }
+  };
+
+  const colors = getColors();
+  const containerSize = size;
+  const innerCircleSize = size * 0.7;
+  const dotSize = size * 0.15;
+
+  return (
+    <Animated.View
+      style={[
+        styles.container,
+        {
+          width: containerSize,
+          height: containerSize,
+          transform: [{ scale: pulseAnim }],
+        },
+        style,
+      ]}
+    >
+      <View
+        style={[
+          styles.outerCircle,
+          {
+            width: containerSize,
+            height: containerSize,
+            borderRadius: containerSize / 2,
+            borderColor: colors.primary,
+          },
+        ]}
+      >
+        <View
+          style={[
+            styles.innerCircle,
             {
-                width: iconSize,
-                height: iconSize,
-                justifyContent: 'center',
-                alignItems: 'center',
-                backgroundColor: colors.background,
-                borderRadius: variant === 'app-icon' ? cornerRadius : 0,
+              width: innerCircleSize,
+              height: innerCircleSize,
+              borderRadius: innerCircleSize / 2,
+              backgroundColor: colors.secondary,
             },
-            style
-        ]}>
-            <Animated.View
-                style={{
-                    width: iconSize * 0.7,
-                    height: iconSize * 0.7,
-                    borderWidth: borderWidth,
-                    borderRadius: cornerRadius * 0.75,
-                    borderColor: colors.border,
-                    justifyContent: 'center',
-                    alignItems: 'center',
-                }}
-            >
-                <View
-                    style={{
-                        width: dotSize,
-                        height: dotSize,
-                        backgroundColor: colors.dot,
-                        borderRadius: cornerRadius * 0.1, // Square-ish dot like in media kit
-                        marginBottom: gapSize,
-                    }}
-                />
-                <View
-                    style={{
-                        width: lineWidth,
-                        height: lineHeight,
-                        backgroundColor: colors.line,
-                        borderRadius: cornerRadius * 0.1, // Square-ish line like in media kit
-                    }}
-                />
-            </Animated.View>
-        </View>
-    );
+          ]}
+        />
+        <View
+          style={[
+            styles.dot,
+            {
+              width: dotSize,
+              height: dotSize,
+              borderRadius: dotSize / 2,
+              backgroundColor: colors.primary,
+              top: containerSize * 0.2,
+            },
+          ]}
+        />
+        <View
+          style={[
+            styles.dot,
+            {
+              width: dotSize,
+              height: dotSize,
+              borderRadius: dotSize / 2,
+              backgroundColor: colors.primary,
+              bottom: containerSize * 0.2,
+            },
+          ]}
+        />
+        <View
+          style={[
+            styles.dot,
+            {
+              width: dotSize,
+              height: dotSize,
+              borderRadius: dotSize / 2,
+              backgroundColor: colors.primary,
+              left: containerSize * 0.2,
+            },
+          ]}
+        />
+        <View
+          style={[
+            styles.dot,
+            {
+              width: dotSize,
+              height: dotSize,
+              borderRadius: dotSize / 2,
+              backgroundColor: colors.primary,
+              right: containerSize * 0.2,
+            },
+          ]}
+        />
+      </View>
+    </Animated.View>
+  );
 };
+
+const styles = StyleSheet.create({
+  container: {
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  outerCircle: {
+    borderWidth: 2,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  innerCircle: {
+    position: 'absolute',
+  },
+  dot: {
+    position: 'absolute',
+  },
+});
 
 export default IntegraIcon;

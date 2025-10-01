@@ -1,0 +1,16 @@
+Traceback (most recent call last):
+  File "/Users/lm/Desktop/integra/integra-markets/app/services/sentiment.py", line 13, in <module>
+    from app.services.smart_sentiment import analyze_financial_text as smart_analyze
+ModuleNotFoundError: No module named 'app.services'
+
+During handling of the above exception, another exception occurred:
+
+Traceback (most recent call last):
+  File "/Users/lm/Desktop/integra/integra-markets/backenINFO:     192.168.0.208:63060 - "GET / HTTP/1.1" 200 OK
+INFO:     Shutting down
+INFO:     Waiting for application shutdown.
+INFO:     Application shutdown complete.
+INFO:     Finished server process [17396]
+rning("Smart sentiment not available, using basic VADER only")
+    ^^^^^^
+NameError: name 'logger' is not defined
