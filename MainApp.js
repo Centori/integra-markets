@@ -13,6 +13,7 @@ import TodayDashboard from './app/components/TodayDashboard';
 import AlertsScreen from './app/components/AlertsScreen';
 import ProfileScreen from './app/components/ProfileScreen';
 import IntegraLoadingPage from './app/components/IntegraLoadingPage';
+import ErrorBoundary from './app/components/ErrorBoundary';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { registerForPushNotificationsAsync } from './app/services/notificationService';
 
@@ -67,59 +68,61 @@ const MainApp = () => {
   };
 
   return (
-    <SafeAreaView style={styles.container}>
-      <StatusBar barStyle="light-content" backgroundColor="#121212" />
-      
-      {/* Main Content */}
-      <View style={styles.content}>
-        {renderContent()}
-      </View>
+    <ErrorBoundary>
+      <SafeAreaView style={styles.container}>
+        <StatusBar barStyle="light-content" backgroundColor="#121212" />
+        
+        {/* Main Content */}
+        <View style={styles.content}>
+          {renderContent()}
+        </View>
 
-      {/* Bottom Navigation */}
-      <View style={styles.bottomNav}>
-        <TouchableOpacity
-          style={[styles.navItem, activeTab === 'Today' && styles.navItemActive]}
-          onPress={() => setActiveTab('Today')}
-        >
-          <Ionicons
-            name={activeTab === 'Today' ? 'today' : 'today-outline'}
-            size={24}
-            color={activeTab === 'Today' ? '#4ECCA3' : '#666666'}
-          />
-          <Text style={[styles.navText, activeTab === 'Today' && styles.navTextActive]}>
-            Today
-          </Text>
-        </TouchableOpacity>
+        {/* Bottom Navigation */}
+        <View style={styles.bottomNav}>
+          <TouchableOpacity
+            style={[styles.navItem, activeTab === 'Today' && styles.navItemActive]}
+            onPress={() => setActiveTab('Today')}
+          >
+            <Ionicons
+              name={activeTab === 'Today' ? 'today' : 'today-outline'}
+              size={24}
+              color={activeTab === 'Today' ? '#4ECCA3' : '#666666'}
+            />
+            <Text style={[styles.navText, activeTab === 'Today' && styles.navTextActive]}>
+              Today
+            </Text>
+          </TouchableOpacity>
 
-        <TouchableOpacity
-          style={[styles.navItem, activeTab === 'Alerts' && styles.navItemActive]}
-          onPress={() => setActiveTab('Alerts')}
-        >
-          <Ionicons
-            name={activeTab === 'Alerts' ? 'notifications' : 'notifications-outline'}
-            size={24}
-            color={activeTab === 'Alerts' ? '#4ECCA3' : '#666666'}
-          />
-          <Text style={[styles.navText, activeTab === 'Alerts' && styles.navTextActive]}>
-            Alerts
-          </Text>
-        </TouchableOpacity>
+          <TouchableOpacity
+            style={[styles.navItem, activeTab === 'Alerts' && styles.navItemActive]}
+            onPress={() => setActiveTab('Alerts')}
+          >
+            <Ionicons
+              name={activeTab === 'Alerts' ? 'notifications' : 'notifications-outline'}
+              size={24}
+              color={activeTab === 'Alerts' ? '#4ECCA3' : '#666666'}
+            />
+            <Text style={[styles.navText, activeTab === 'Alerts' && styles.navTextActive]}>
+              Alerts
+            </Text>
+          </TouchableOpacity>
 
-        <TouchableOpacity
-          style={[styles.navItem, activeTab === 'Profile' && styles.navItemActive]}
-          onPress={() => setActiveTab('Profile')}
-        >
-          <Ionicons
-            name={activeTab === 'Profile' ? 'person' : 'person-outline'}
-            size={24}
-            color={activeTab === 'Profile' ? '#4ECCA3' : '#666666'}
-          />
-          <Text style={[styles.navText, activeTab === 'Profile' && styles.navTextActive]}>
-            Profile
-          </Text>
-        </TouchableOpacity>
-      </View>
-    </SafeAreaView>
+          <TouchableOpacity
+            style={[styles.navItem, activeTab === 'Profile' && styles.navItemActive]}
+            onPress={() => setActiveTab('Profile')}
+          >
+            <Ionicons
+              name={activeTab === 'Profile' ? 'person' : 'person-outline'}
+              size={24}
+              color={activeTab === 'Profile' ? '#4ECCA3' : '#666666'}
+            />
+            <Text style={[styles.navText, activeTab === 'Profile' && styles.navTextActive]}>
+              Profile
+            </Text>
+          </TouchableOpacity>
+        </View>
+      </SafeAreaView>
+    </ErrorBoundary>
   );
 };
 

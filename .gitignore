@@ -26,3 +26,92 @@ yarn-error.log*
 # typescript
 *.tsbuildinfo
 next-env.d.ts
+
+# Expo/React Native
+.expo/
+.expo-shared/
+*.jks
+*.p8
+*.p12
+*.key
+*.mobileprovision
+*.orig.*
+web-build/
+
+# iOS
+ios/
+*.xcodeproj
+*.xcworkspace
+*.pbxuser
+*.mode1v3
+*.mode2v3
+*.perspectivev3
+xcuserdata/
+*.xccheckout
+*.moved-aside
+DerivedData
+*.hmap
+*.ipa
+*.xcuserstate
+
+# Database files
+*.db
+*.sqlite
+*.sqlite3
+
+# Log files
+*.log
+logs/
+
+# Test coverage
+htmlcov/
+.tox/
+.coverage
+.coverage.*
+.cache
+.pytest_cache/
+nosetests.xml
+coverage.xml
+*.cover
+.hypothesis/
+
+# Documentation builds
+docs/_build/
+docs/site/
+
+# Temporary files
+*.tmp
+*.temp
+*.bak
+*.backup
+
+# Media files (uncomment if needed)
+# *.jpg
+# *.jpeg
+# *.png
+# *.gif
+# *.pdf
+# *.webp
+
+# Python specific
+.python-version
+*.pyc
+.mypy_cache/
+.dmypy.json
+dmypy.json
+
+# UV package manager
+uv.lock
+
+# Deployment
+deployment/
+
+# Scripts (be selective)
+*.sh
+!start_backend.sh
+
+# Test files in root
+test_*.py
+-integra-markets/
+-integra-markets-backup/
+.vercel

@@ -1,64 +1,36 @@
-# Fly.io Configuration for Integra Markets Backend
-app = "integra-markets-backend"
-primary_region = "sjc"  # San Jose, closest to you
-kill_signal = "SIGINT"
-kill_timeout = "5s"
+# fly.toml app configuration file for integra-backend
+# Updated for Google Cloud Run compatibility
+
+app = "integra-backend"
+primary_region = "sjc"
 
 [build]
-  dockerfile = "Dockerfile"
-
-[processes]
-  app = "uvicorn main:app --host 0.0.0.0 --port 8000"
+  dockerfile = "backend/Dockerfile"
 
 [env]
-  PORT = "8000"
+  PORT = "8080"
   ENVIRONMENT = "production"
   LOG_LEVEL = "INFO"
-  HOST = "0.0.0.0"
-  BIND = "0.0.0.0:8000"
 
-[experimental]
-  auto_rollback = true
-
-[[services]]
-  protocol = "tcp"
-  internal_port = 8000
+[http_service]
+  internal_port = 8080
+  force_https = true
+  auto_stop_machines = true
+  auto_start_machines = true
+  min_machines_running = 0
   processes = ["app"]
 
-  [[services.ports]]
-    port = 80
-    handlers = ["http"]
-    force_https = true
+[[vm]]
+  memory = "1gb"
+  cpu_kind = "shared"
+  cpus = 1
 
-  [[services.ports]]
-    port = 443
-    handlers = ["tls", "http"]
-  
-  [services.concurrency]
-    type = "connections"
-    hard_limit = 25
-    soft_limit = 20
-
-  [[services.tcp_checks]]
-    interval = "15s"
-    timeout = "2s"
-    grace_period = "1s"
-    restart_limit = 0
-
-  [[services.http_checks]]
-    interval = "10s"
-    timeout = "2s"
-    grace_period = "5s"
-    restart_limit = 0
-    method = "get"
+[checks]
+  [checks.health]
+    grace_period = "10s"
+    interval = "30s"
+    method = "GET"
     path = "/health"
-    protocol = "http"
-    tls_skip_verify = false
-
-[[statics]]
-  guest_path = "/app/public"
-  url_prefix = "/static/"
-
-[mounts]
-  source = "integra_data"
-  destination = "/data"
+    port = 8080
+    timeout = "5s"
+    type = "http"

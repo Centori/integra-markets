@@ -7,6 +7,9 @@ from supabase import create_client, Client
 from pydantic import BaseModel
 from typing import Optional
 
+# Load environment variables (Cloud Run will provide them directly)
+load_dotenv()  # This will load from .env if present, but won't fail if missing
+
 # DB
 try:
     from db import init_db, close_db
@@ -35,13 +38,6 @@ try:
     news_available = True
 except ImportError:
     news_available = False
-
-# Load environment variables
-# Try multiple paths for different deployment environments
-load_dotenv()  # Load from current directory first
-parent_dir = Path(__file__).parent.parent
-env_path = parent_dir / '.env'
-load_dotenv(env_path)  # Also try parent directory
 
 app = FastAPI(title="Integra AI Backend", description="Financial AI Analysis API")
 
