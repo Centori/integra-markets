@@ -9,7 +9,16 @@ import time
 from pathlib import Path
 
 # Set environment variables
-os.environ['GROQ_API_KEY'] = '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'
+# Load API key from .env file if not already set
+if 'GROQ_API_KEY' not in os.environ:
+    try:
+        from dotenv import load_dotenv
+        # Load from .env file in project root
+        load_dotenv(Path(__file__).parent.parent / '.env')
+        print("Loaded environment variables from .env file")
+    except ImportError:
+        print("Warning: python-dotenv not installed. Using existing environment variables.")
+        
 os.environ['PYTHONPATH'] = str(Path(__file__).parent.parent)
 
 print("🚀 Starting Integra Markets Backend Services...")
