@@ -102,7 +102,7 @@
     },
     "plugins": [
       "expo-router",
-      "./expo-plugins/disable-privacy-aggregation",
+      "./expo-plugins/disable-privacy-aggregation.cjs",
       [
         "expo-notifications",
         {

@@ -436,10 +436,22 @@ export default function AIChatInterface({ commodity = null, onInsightGenerated, 
         
         {loading && (
           <View style={styles.loadingContainer}>
-            <AITextLoading 
-              style={styles.loadingAnimation} 
-              textStyle={[styles.loadingText, darkTheme && styles.darkLoadingText]}
-            />
+            <View style={styles.loadingBubble}>
+              <View style={styles.loadingContent}>
+                <ActivityIndicator 
+                  size="small" 
+                  color="#4CAF50" 
+                  style={styles.loadingSpinner}
+                />
+                <AITextLoading 
+                  style={styles.loadingAnimation} 
+                  textStyle={[styles.loadingText, darkTheme && styles.darkLoadingText]}
+                />
+              </View>
+              <Text style={[styles.loadingSubtext, darkTheme && styles.darkLoadingSubtext]}>
+                Analyzing your request...
+              </Text>
+            </View>
           </View>
         )}
       </ScrollView>
@@ -466,26 +478,43 @@ export default function AIChatInterface({ commodity = null, onInsightGenerated, 
         behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
         style={styles.inputContainer}
       >
-        <TextInput
-          style={styles.input}
-          value={inputText}
-          onChangeText={setInputText}
-          placeholder="Ask about market trends, analysis, predictions..."
-          placeholderTextColor="#999"
-          multiline
-          maxHeight={100}
-          onSubmitEditing={sendMessage}
-        />
+        <View style={styles.inputWrapper}>
+          <TextInput
+            style={[styles.input, loading && styles.inputLoading]}
+            value={inputText}
+            onChangeText={setInputText}
+            placeholder="Ask about market trends, analysis, predictions..."
+            placeholderTextColor="#999"
+            multiline
+            maxHeight={100}
+            onSubmitEditing={sendMessage}
+            editable={!loading}
+          />
+          {loading && (
+            <View style={styles.inputLoadingIndicator}>
+              <ActivityIndicator size="small" color="#4CAF50" />
+            </View>
+          )}
+        </View>
         <TouchableOpacity
-          style={[styles.sendButton, (!inputText.trim() || (loading && !abortController.current)) && styles.sendButtonDisabled]}
+          style={[
+            styles.sendButton, 
+            loading ? styles.stopButton : styles.sendButtonActive,
+            (!inputText.trim() && !loading) && styles.sendButtonDisabled
+          ]}
           onPress={sendMessage}
           disabled={!inputText.trim() && !loading}
+          activeOpacity={0.7}
         >
-          <Ionicons 
-            name={loading ? "stop" : "send"} 
-            size={20} 
-            color="#fff" 
-          />
+          {loading ? (
+            <View style={styles.buttonContent}>
+              <Ionicons name="stop" size={20} color="#fff" />
+            </View>
+          ) : (
+            <View style={styles.buttonContent}>
+              <Ionicons name="send" size={20} color="#fff" />
+            </View>
+          )}
         </TouchableOpacity>
       </KeyboardAvoidingView>
       
@@ -644,6 +673,28 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     gap: 8,
     padding: 16,
+    marginBottom: 8,
+  },
+  loadingBubble: {
+    maxWidth: '80%',
+    padding: 16,
+    backgroundColor: '#f8f9fa',
+    borderRadius: 16,
+    borderWidth: 1,
+    borderColor: '#e9ecef',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.1,
+    shadowRadius: 2,
+    elevation: 2,
+  },
+  loadingContent: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
+  },
+  loadingSpinner: {
+    marginRight: 4,
   },
   loadingText: {
     fontSize: 16,
@@ -652,6 +703,15 @@ const styles = StyleSheet.create({
   },
   darkLoadingText: {
     color: '#999',
+  },
+  loadingSubtext: {
+    fontSize: 12,
+    color: '#999',
+    marginTop: 8,
+    fontStyle: 'italic',
+  },
+  darkLoadingSubtext: {
+    color: '#666',
   },
   loadingAnimation: {
     marginVertical: -8,
@@ -682,29 +742,63 @@ const styles = StyleSheet.create({
     borderTopWidth: 0,
     alignItems: 'flex-end',
   },
+  inputWrapper: {
+    flex: 1,
+    position: 'relative',
+    marginRight: 8,
+  },
   input: {
     flex: 1,
     minHeight: 40,
     maxHeight: 100,
     paddingHorizontal: 16,
     paddingVertical: 10,
+    paddingRight: 40, // Space for loading indicator
     backgroundColor: '#1C1C1E',
     borderRadius: 20,
     fontSize: 16,
     color: '#ffffff',
-    marginRight: 8,
+    borderWidth: 2,
+    borderColor: 'transparent',
+  },
+  inputLoading: {
+    borderColor: '#4CAF50',
+    backgroundColor: '#1a1a1a',
+  },
+  inputLoadingIndicator: {
+    position: 'absolute',
+    right: 12,
+    top: '50%',
+    marginTop: -10,
   },
   sendButton: {
     width: 40,
     height: 40,
-    backgroundColor: '#4CAF50',
     borderRadius: 20,
     justifyContent: 'center',
     alignItems: 'center',
+    elevation: 2,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.25,
+    shadowRadius: 3.84,
+  },
+  sendButtonActive: {
+    backgroundColor: '#4CAF50',
+  },
+  stopButton: {
+    backgroundColor: '#FF5722',
   },
   sendButtonDisabled: {
-    backgroundColor: '#ccc',
+    backgroundColor: '#333',
+    elevation: 0,
+    shadowOpacity: 0,
   },
+  buttonContent: {
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+
   modalBackground: {
     flex: 1,
     justifyContent: 'center',
