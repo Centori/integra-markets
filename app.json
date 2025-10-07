@@ -29,7 +29,7 @@
     ],
     "ios": {
       "bundleIdentifier": "com.centori.integramarkets",
-      "buildNumber": "45",
+      "buildNumber": "48",
       "deploymentTarget": "13.0",
       "supportsTablet": true,
       "privacyManifests": null,
