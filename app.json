@@ -58,9 +58,7 @@
           "UNAuthorizationOptionProvidesAppNotificationSettings": true
         }
       },
-      "runtimeVersion": {
-        "policy": "appVersion"
-      },
+      "runtimeVersion": "1.0.1",
       "jsEngine": "hermes",
       "appleTeamId": "2ABHLWV763"
     },
