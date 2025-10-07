@@ -77,7 +77,8 @@
         ]
       },
       "runtimeVersion": "1.0.1",
-      "jsEngine": "hermes"
+      "jsEngine": "hermes",
+      "appleTeamId": "2ABHLWV763"
     },
     "android": {
       "package": "com.centori.integramarkets",

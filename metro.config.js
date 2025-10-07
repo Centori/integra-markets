@@ -3,18 +3,10 @@ const path = require('path');
 
 const config = getDefaultConfig(__dirname);
 
-// Add alias for @ to point to ./app and support expo-router
+// Add alias for @ to point to ./app
 config.resolver.alias = {
   '@': path.resolve(__dirname, 'app'),
-  '@/*': ['./app/*'],
-  'expo-router': require.resolve('expo-router'),
 };
-
-// Support .cjs extensions
-config.resolver.sourceExts.push('cjs');
-
-// Add JSX/TSX support
-config.resolver.sourceExts.push('jsx', 'tsx');
 
 // Fix for iOS 18.6 compatibility issues
 config.resolver.sourceExts = [...config.resolver.sourceExts, 'cjs'];

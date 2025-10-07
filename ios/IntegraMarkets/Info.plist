@@ -44,7 +44,7 @@
       </dict>
     </array>
     <key>CFBundleVersion</key>
-    <string>32</string>
+    <string>45</string>
     <key>ITSAppUsesNonExemptEncryption</key>
     <false/>
     <key>LSMinimumSystemVersion</key>
@@ -54,27 +54,14 @@
     <key>NSAppTransportSecurity</key>
     <dict>
       <key>NSAllowsArbitraryLoads</key>
-      <true/>
+      <false/>
       <key>NSAllowsLocalNetworking</key>
-      <true/>
+      <false/>
       <key>NSExceptionDomains</key>
-      <dict>
-        <key>192.168.0.208</key>
-        <dict>
-          <key>NSExceptionAllowsInsecureHTTPLoads</key>
-          <true/>
-          <key>NSIncludesSubdomains</key>
-          <true/>
-        </dict>
-        <key>localhost</key>
-        <dict>
-          <key>NSExceptionAllowsInsecureHTTPLoads</key>
-          <true/>
-        </dict>
-      </dict>
+      <dict/>
     </dict>
     <key>NSCameraUsageDescription</key>
-    <string>This app uses the camera to capture financial documents and receipts.</string>
+    <string>This app uses the camera to scan documents and capture images for analysis.</string>
     <key>NSFaceIDUsageDescription</key>
     <string>This app uses Face ID for secure authentication.</string>
     <key>NSKeychainAccessGroups</key>
@@ -82,14 +69,17 @@
       <string>$(AppIdentifierPrefix)com.centori.integramarkets</string>
     </array>
     <key>NSMicrophoneUsageDescription</key>
-    <string>Allow $(PRODUCT_NAME) to access your microphone</string>
+    <string>This app uses the microphone for voice commands and audio analysis.</string>
     <key>NSPhotoLibraryUsageDescription</key>
-    <string>This app accesses your photo library to select financial documents and receipts.</string>
+    <string>This app accesses your photo library to select images for analysis.</string>
+    <key>NSUserActivityTypes</key>
+    <array>
+      <string>$(PRODUCT_BUNDLE_IDENTIFIER).expo.index_route</string>
+    </array>
     <key>NSUserNotificationsUsageDescription</key>
     <string>This app sends notifications for market alerts and breaking news.</string>
     <key>UIBackgroundModes</key>
     <array>
-      <string>fetch</string>
       <string>remote-notification</string>
     </array>
     <key>UILaunchStoryboardName</key>
@@ -115,7 +105,7 @@
       <string>UIInterfaceOrientationLandscapeRight</string>
     </array>
     <key>UIUserInterfaceStyle</key>
-    <string>Light</string>
+    <string>Dark</string>
     <key>UIViewControllerBasedStatusBarAppearance</key>
     <false/>
     <key>UNUserNotificationCenter</key>

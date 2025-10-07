@@ -1,0 +1,14 @@
+{
+  "timestamp": "2025-10-05T10:59:58.888Z",
+  "testType": "api",
+  "error": "Command failed: npx jest __tests__/integration/backendAPI.test.ts __tests__/integration/backendAPI.simple.test.ts --verbose --detectOpenHandles --forceExit",
+  "files": [
+    "__tests__/integration/backendAPI.test.ts",
+    "__tests__/integration/backendAPI.simple.test.ts"
+  ],
+  "environment": {
+    "NODE_ENV": "test",
+    "TESTSPRITE_API_KEY": "test-key",
+    "API_BASE_URL": "http://localhost:8000"
+  }
+}

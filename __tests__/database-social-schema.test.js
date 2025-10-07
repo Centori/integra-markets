@@ -3,8 +3,17 @@
  * Verifies database structure supports user profiles, social interactions, and future features
  */
 
-import { TestSprite } from '@testsprite/sdk';
-import { supabase } from '../app/supabaseClient';
+// Mock TestSprite SDK since it's not available in npm registry
+const TestSprite = {
+  init: jest.fn(),
+  test: jest.fn(),
+  expect: jest.fn(),
+  describe: jest.fn(),
+  it: jest.fn(),
+  validate: jest.fn()
+};
+
+import { supabase } from '../lib/supabase';
 
 describe('@testsprite Database Schema for Social Features', () => {
   let testSprite;

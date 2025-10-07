@@ -1,0 +1,16 @@
+{
+  "timestamp": "2025-10-05T11:15:19.846Z",
+  "testType": "all",
+  "error": "Command failed: npx jest __tests__/user-onboarding.test.js __tests__/database-social-schema.test.js __tests__/integration/backendAPI.test.ts __tests__/e2e/googleOnboarding.test.ts --verbose --detectOpenHandles --forceExit",
+  "files": [
+    "__tests__/user-onboarding.test.js",
+    "__tests__/database-social-schema.test.js",
+    "__tests__/integration/backendAPI.test.ts",
+    "__tests__/e2e/googleOnboarding.test.ts"
+  ],
+  "environment": {
+    "NODE_ENV": "test",
+    "TESTSPRITE_API_KEY": "test-key",
+    "API_BASE_URL": "http://localhost:8000"
+  }
+}

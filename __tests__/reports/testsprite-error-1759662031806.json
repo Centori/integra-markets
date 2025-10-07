@@ -1,0 +1,14 @@
+{
+  "timestamp": "2025-10-05T11:00:31.806Z",
+  "testType": "frontend",
+  "error": "Command failed: npx jest __tests__/user-onboarding.test.js app/tests/notificationTestSprite.js --verbose --detectOpenHandles --forceExit",
+  "files": [
+    "__tests__/user-onboarding.test.js",
+    "app/tests/notificationTestSprite.js"
+  ],
+  "environment": {
+    "NODE_ENV": "test",
+    "TESTSPRITE_API_KEY": "test-key",
+    "API_BASE_URL": "http://localhost:8000"
+  }
+}
