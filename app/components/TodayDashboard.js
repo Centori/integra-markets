@@ -3,7 +3,8 @@ import { View, Text, ScrollView, StyleSheet, SafeAreaView, TouchableOpacity, Act
 import { Ionicons, MaterialIcons, MaterialCommunityIcons } from '@expo/vector-icons';
 import { dashboardApi, sentimentApi, marketDataApi } from '../services/api';
 import IntegraIcon from './IntegraIcon';
-import AIAnalysisOverlay from './AIAnalysisOverlay';
+// Temporarily disabled for Build 26 compatibility
+// import AIAnalysisOverlay from './AIAnalysisOverlay';
 
 const TodayDashboard = ({ agentActive }) => {
   const [selectedFilter, setSelectedFilter] = useState('All');
@@ -640,11 +641,13 @@ const renderNewsCard = (item) => {
       )}
       
       {renderSentimentModal()}
+      {/* Temporarily disabled for Build 26 compatibility
       <AIAnalysisOverlay 
         isVisible={aiOverlayVisible} 
         onClose={() => setAiOverlayVisible(false)}
         newsData={selectedNews}
       />
+      */}
     </SafeAreaView>
   );
 };
