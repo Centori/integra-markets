@@ -39,6 +39,12 @@ try:
 except ImportError:
     news_available = False
 
+try:
+    from api.kalshi import router as kalshi_router
+    kalshi_available = True
+except ImportError:
+    kalshi_available = False
+
 app = FastAPI(title="Integra AI Backend", description="Financial AI Analysis API")
 
 # Lifespan events
@@ -57,6 +63,8 @@ if market_data_available:
     app.include_router(market_data_router)
 if news_available:
     app.include_router(news_router)
+if kalshi_available:
+    app.include_router(kalshi_router)
 
 # Add CORS middleware to allow requests from your React Native app
 app.add_middleware(
@@ -70,6 +78,11 @@ app.add_middleware(
 # Get Supabase URL and Key from environment variables
 supabase_url: str = os.getenv("SUPABASE_URL")
 supabase_key: str = os.getenv("SUPABASE_KEY")
+
+# Kalshi configuration
+kalshi_api_key: str = os.getenv("KALSHI_API_KEY")
+kalshi_api_secret: str = os.getenv("KALSHI_API_SECRET")
+kalshi_base_url: str = os.getenv("KALSHI_BASE_URL", "https://trading-api.kalshi.com/trade-api/v2")
 
 # Gracefully handle missing Supabase credentials in production
 supabase: Optional[Client] = None

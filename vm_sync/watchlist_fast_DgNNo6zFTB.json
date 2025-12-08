@@ -1,0 +1,126 @@
+{
+  "created_at": "2025-11-06T21:09:59.877255",
+  "seed_wallet": "DgNNo6zFTB5N8QGjEYkKxszMtb1a12NjwZZdgSQkBDJJ",
+  "wallets": [
+    {
+      "address": "9n3uVrMUiBxY7gPTrp9EDEH94VJtK8tvvftMNmZmtvrN",
+      "score": 68.41197822141561,
+      "shared_tokens": 83,
+      "priority": "high"
+    },
+    {
+      "address": "GL4tD6ShfZPFYYUKgjd3oAPLugAYWGLCNu6qkgZQeJzb",
+      "score": 67.14285714285715,
+      "shared_tokens": 80,
+      "priority": "high"
+    },
+    {
+      "address": "8tQHNXJxSkmCTyPhFTYt4wM1KFuVqqF4cbKwDwY4c4e",
+      "score": 61.59722222222222,
+      "shared_tokens": 35,
+      "priority": "high"
+    },
+    {
+      "address": "HEk96g9miMyLRBP5p7K1WxKz6obH13gna2ytTo2qktke",
+      "score": 59.40277777777777,
+      "shared_tokens": 29,
+      "priority": "medium"
+    },
+    {
+      "address": "2yidV53JGm9cBqhDKk88fqN7eGJVyZwoC8b2e9v8XbSG",
+      "score": 59.40277777777777,
+      "shared_tokens": 29,
+      "priority": "medium"
+    },
+    {
+      "address": "4o5LQKYtxy2pDJnAt1abNc7XNa6XVS5asRfvVSUMP1ko",
+      "score": 59.03256704980843,
+      "shared_tokens": 28,
+      "priority": "medium"
+    },
+    {
+      "address": "9aovczExCrTY74q8WvKbhv8cyvbSizZBwHEgtd7M4sbh",
+      "score": 59.03256704980843,
+      "shared_tokens": 28,
+      "priority": "medium"
+    },
+    {
+      "address": "3sKvNUrwH1W8g2oUArjh7oUiyRZsejNRCqKSp7jZS3yG",
+      "score": 59.03256704980843,
+      "shared_tokens": 28,
+      "priority": "medium"
+    },
+    {
+      "address": "2fQ16EnFgaXtK85WCmej6V37GDmHddq2ATa1VYVCY6La",
+      "score": 49.793103448275865,
+      "shared_tokens": 56,
+      "priority": "medium"
+    },
+    {
+      "address": "CyfwEmDU7dSLTi9rk8B2CutvGFY7irEbL2DyiRnoNwLk",
+      "score": 37.20496894409938,
+      "shared_tokens": 26,
+      "priority": "medium"
+    },
+    {
+      "address": "3acezFUNodEJSVGWmyE96U3GZ3BBtkApUaMEWqCx3SSK",
+      "score": 36.555538602380224,
+      "shared_tokens": 39,
+      "priority": "medium"
+    },
+    {
+      "address": "9DkEwPES7dDa7JBiTvKw8GjperMyES2gJkZwmTevZowj",
+      "score": 35.94975907313231,
+      "shared_tokens": 25,
+      "priority": "medium"
+    },
+    {
+      "address": "CbxyCWWkwDNWoDo7knukzxkoyyghygZnGjgmzw13Vgo",
+      "score": 35.89375,
+      "shared_tokens": 23,
+      "priority": "medium"
+    },
+    {
+      "address": "7LFN4ZdGXA2w8M2hiLcuKziHci7Wr1eYxaJZSmWjwYL9",
+      "score": 34.52380952380952,
+      "shared_tokens": 22,
+      "priority": "medium"
+    },
+    {
+      "address": "EmnnAqq7EaEfTzfhfjoYCaaqz9nmZkjoe3HKAcrM6t8E",
+      "score": 34.50954084675015,
+      "shared_tokens": 25,
+      "priority": "medium"
+    },
+    {
+      "address": "9AZzD9FghY3fGG4tKuAsZW9JgvwdadDCopYpES3u6tSE",
+      "score": 33.6949494949495,
+      "shared_tokens": 16,
+      "priority": "medium"
+    },
+    {
+      "address": "65zpTWk9cFZRAFQNgJeqW832mdYux2XhN4g1Aa3KZjfL",
+      "score": 33.6949494949495,
+      "shared_tokens": 16,
+      "priority": "medium"
+    },
+    {
+      "address": "EEXkNd3i9xo9Z2e9wiG3fRgqHPr2djBtp8RTjzWPc7JY",
+      "score": 33.43426195942173,
+      "shared_tokens": 15,
+      "priority": "medium"
+    },
+    {
+      "address": "Gpvpn3UkM9onLgvknzHi51Hi7WfRDF95pB5svaGGQSU2",
+      "score": 33.43426195942173,
+      "shared_tokens": 15,
+      "priority": "medium"
+    },
+    {
+      "address": "8Ks12pbrD6PXxfty1hVQiE9sc289zgU1zHkvXhrSdriF",
+      "score": 32.30530753968254,
+      "shared_tokens": 11,
+      "priority": "medium"
+    }
+  ]
+}

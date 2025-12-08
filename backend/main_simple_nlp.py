@@ -180,6 +180,12 @@ class UserNewsRequest(BaseModel):
     enhanced_content: Optional[bool] = Field(False)
     max_enhanced: Optional[int] = Field(3, ge=1, le=10)
 
+class ComprehensiveAnalysisRequest(BaseModel):
+    text: str = Field(..., min_length=1, description="Text to analyze")
+    commodity: Optional[str] = Field(None, description="Specific commodity context")
+    include_preprocessing: bool = Field(True, description="Include preprocessing with trigger keywords")
+    include_finbert: bool = Field(True, description="Include FinBERT sentiment analysis")
+
 # Root endpoint
 @app.get('/')
 def read_root():
@@ -749,6 +755,135 @@ async def get_user_news(request: UserNewsRequest):
         logger.error(f"User news error: {e}")
         raise HTTPException(status_code=500, detail=str(e))
 
+# Comprehensive analysis endpoint with preprocessing
+@app.post('/api/comprehensive-analysis')
+async def comprehensive_analysis(request: ComprehensiveAnalysisRequest):
+    """Perform comprehensive analysis with preprocessing and trigger keywords"""
+    try:
+        result = {
+            "text": request.text,
+            "commodity": request.commodity,
+            "timestamp": datetime.datetime.now().isoformat()
+        }
+        
+        # Preprocessing: Extract trigger keywords with relevance scores
+        if request.include_preprocessing:
+            trigger_keywords = extract_trigger_keywords_with_relevance(request.text, request.commodity)
+            
+            # Format for frontend compatibility
+            result["preprocessing"] = {
+                "trigger_keywords": trigger_keywords,
+                "commodity": request.commodity,
+                "event_type": "market_movement",  # Could be enhanced with classification
+                "market_impact": "medium"  # Could be enhanced with impact analysis
+            }
+        
+        # Sentiment Analysis
+        sentiment_req = SentimentRequest(
+            text=request.text,
+            commodity=request.commodity,
+            enhanced=request.include_finbert
+        )
+        sentiment_result = await analyze_sentiment(sentiment_req)
+        
+        # Structure the sentiment analysis for frontend
+        result["sentiment_analysis"] = {
+            "sentiment": sentiment_result["sentiment"],
+            "confidence": sentiment_result["confidence"],
+            "details": {
+                "method": sentiment_result.get("method", "basic"),
+                "commodity_specific": sentiment_result.get("commodity_specific", False)
+            }
+        }
+        
+        # Add FinBERT-style probabilities if using enhanced analysis
+        if request.include_finbert:
+            # Convert single sentiment to probability distribution
+            if sentiment_result["sentiment"] == "BULLISH":
+                probabilities = {
+                    "positive": sentiment_result["confidence"],
+                    "negative": (1 - sentiment_result["confidence"]) * 0.3,
+                    "neutral": (1 - sentiment_result["confidence"]) * 0.7
+                }
+            elif sentiment_result["sentiment"] == "BEARISH":
+                probabilities = {
+                    "positive": (1 - sentiment_result["confidence"]) * 0.3,
+                    "negative": sentiment_result["confidence"],
+                    "neutral": (1 - sentiment_result["confidence"]) * 0.7
+                }
+            else:  # NEUTRAL
+                probabilities = {
+                    "positive": (1 - sentiment_result["confidence"]) * 0.5,
+                    "negative": (1 - sentiment_result["confidence"]) * 0.5,
+                    "neutral": sentiment_result["confidence"]
+                }
+            
+            result["sentiment_analysis"]["details"]["finbert"] = {
+                "sentiment": sentiment_result["sentiment"],
+                "probabilities": probabilities
+            }
+        
+        # Add VADER analysis if available
+        if vader_analyzer:
+            scores = vader_analyzer.polarity_scores(request.text)
+            result["sentiment_analysis"]["details"]["vader"] = {
+                "compound": scores['compound'],
+                "positive": scores['pos'],
+                "negative": scores['neg'],
+                "neutral": scores['neu']
+            }
+        
+        # Calculate market impact based on sentiment and keywords
+        if request.include_preprocessing and trigger_keywords:
+            # High impact if we have high-relevance keywords and strong sentiment
+            max_relevance = max(kw['relevance'] for kw in trigger_keywords)
+            if max_relevance > 0.8 and sentiment_result["confidence"] > 0.7:
+                market_impact = "HIGH"
+            elif max_relevance > 0.6 or sentiment_result["confidence"] > 0.6:
+                market_impact = "MEDIUM"
+            else:
+                market_impact = "LOW"
+            
+            result["sentiment_analysis"]["market_impact"] = market_impact
+            result["sentiment_analysis"]["confidence"] = sentiment_result["confidence"]
+        
+        # Add trading intelligence (simplified recommendations)
+        trading_intelligence = {
+            "risk_level": "Medium",
+            "time_horizon": "Short-term",
+            "recommendations": []
+        }
+        
+        if sentiment_result["sentiment"] == "BULLISH":
+            trading_intelligence["recommendations"] = [
+                "Consider long positions on momentum confirmation",
+                "Watch for resistance levels",
+                "Set stop-loss orders to manage risk"
+            ]
+        elif sentiment_result["sentiment"] == "BEARISH":
+            trading_intelligence["recommendations"] = [
+                "Consider defensive positioning",
+                "Look for support levels",
+                "Monitor for oversold conditions"
+            ]
+        else:
+            trading_intelligence["recommendations"] = [
+                "Wait for clearer directional signals",
+                "Consider range-trading strategies",
+                "Monitor for breakout opportunities"
+            ]
+        
+        result["trading_intelligence"] = trading_intelligence
+        
+        # Add the complete analysis object for compatibility
+        result["analysis"] = result["sentiment_analysis"]
+        
+        return result
+        
+    except Exception as e:
+        logger.error(f"Comprehensive analysis error: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
 # Legacy endpoint for backward compatibility
 @app.post('/analyze-sentiment')
 async def analyze_sentiment_legacy(request: SentimentRequest):
@@ -800,6 +935,158 @@ def extract_keywords(text: str) -> List[str]:
             keywords.append(term)
     
     return keywords[:5]  # Return top 5 keywords
+
+def extract_trigger_keywords_with_relevance(text: str, commodity: Optional[str] = None) -> List[Dict[str, Any]]:
+    """Extract trigger keywords with relevance scores for comprehensive analysis"""
+    import re
+    from collections import Counter
+    
+    text_lower = text.lower()
+    trigger_keywords = []
+    
+    # Define keyword categories with base relevance scores
+    keyword_patterns = {
+        # High relevance (0.8-1.0) - Direct market movers
+        'high': {
+            'patterns': [
+                (r'opec\+?\s*(decision|meeting|cut|increase)', 'OPEC decision'),
+                (r'(production|output)\s+(cut|reduction|increase|boost)', 'production change'),
+                (r'(supply|demand)\s+(shortage|surplus|disruption|shock)', 'supply/demand shock'),
+                (r'(price|prices)\s+(surge|plunge|spike|crash)', 'price movement'),
+                (r'sanctions?\s+(imposed|lifted|announced)', 'sanctions'),
+                (r'(hurricane|storm|drought|flood)\s+(threat|damage|impact)', 'weather event'),
+                (r'(inventory|stockpile)\s+(draw|build|change)', 'inventory change'),
+                (r'fed\s+(rate|decision|meeting|hike|cut)', 'Fed policy'),
+                (r'(war|conflict|tension)\s+(escalate|easing|risk)', 'geopolitical'),
+            ],
+            'base_relevance': 0.85
+        },
+        # Medium relevance (0.5-0.8) - Important indicators
+        'medium': {
+            'patterns': [
+                (r'(export|import)\s+(ban|restriction|increase)', 'trade policy'),
+                (r'(bullish|bearish)\s+(sentiment|outlook|trend)', 'market sentiment'),
+                (r'technical\s+(support|resistance|breakout)', 'technical analysis'),
+                (r'(harvest|planting)\s+(season|forecast|delay)', 'agricultural cycle'),
+                (r'(refinery|pipeline)\s+(outage|maintenance|restart)', 'infrastructure'),
+                (r'economic\s+(growth|recession|slowdown)', 'economic indicator'),
+                (r'(futures|options)\s+(trading|volume|position)', 'derivatives market'),
+            ],
+            'base_relevance': 0.65
+        },
+        # Low relevance (0.3-0.5) - Context indicators
+        'low': {
+            'patterns': [
+                (r'analyst\s+(forecast|prediction|estimate)', 'analyst view'),
+                (r'market\s+(open|close|trading)', 'market status'),
+                (r'year\s+(high|low|average)', 'price level'),
+                (r'seasonal\s+(pattern|trend|demand)', 'seasonality'),
+            ],
+            'base_relevance': 0.45
+        }
+    }
+    
+    # Extract keywords based on patterns
+    found_keywords = set()  # Track to avoid duplicates
+    
+    for priority, config in keyword_patterns.items():
+        for pattern, keyword_phrase in config['patterns']:
+            matches = re.finditer(pattern, text_lower)
+            for match in matches:
+                matched_text = match.group(0)
+                
+                # Skip if we already have this keyword
+                if keyword_phrase in found_keywords:
+                    continue
+                    
+                found_keywords.add(keyword_phrase)
+                
+                # Calculate relevance based on factors
+                relevance = config['base_relevance']
+                
+                # Boost relevance if commodity-specific
+                if commodity and commodity.lower() in matched_text:
+                    relevance += 0.1
+                
+                # Boost if appears in first 100 characters (likely headline)
+                if match.start() < 100:
+                    relevance += 0.05
+                
+                # Boost if appears multiple times
+                count = len(re.findall(pattern, text_lower))
+                if count > 1:
+                    relevance += min(0.1, count * 0.03)
+                
+                # Cap at 1.0
+                relevance = min(1.0, relevance)
+                
+                trigger_keywords.append({
+                    'keyword': keyword_phrase,
+                    'relevance': round(relevance, 2),
+                    'matched_text': matched_text,
+                    'category': priority
+                })
+    
+    # Also extract standalone important terms
+    important_terms = [
+        ('surge', 0.7), ('plunge', 0.7), ('spike', 0.7), ('crash', 0.75),
+        ('rally', 0.65), ('selloff', 0.65), ('breakout', 0.6),
+        ('disruption', 0.8), ('shortage', 0.8), ('surplus', 0.75),
+        ('sanctions', 0.85), ('embargo', 0.85), ('blockade', 0.8),
+        ('OPEC', 0.8), ('Fed', 0.75), ('ECB', 0.7),
+        ('inflation', 0.7), ('recession', 0.75), ('recovery', 0.65),
+    ]
+    
+    for term, base_relevance in important_terms:
+        if term.lower() in text_lower and term not in found_keywords:
+            # Find context around the term
+            index = text_lower.find(term.lower())
+            start = max(0, index - 20)
+            end = min(len(text), index + len(term) + 20)
+            context = text[start:end].strip()
+            
+            # Extract 2-3 word phrase around the term
+            words = context.split()
+            term_index = next((i for i, w in enumerate(words) if term.lower() in w.lower()), None)
+            
+            if term_index is not None:
+                # Get surrounding words
+                phrase_start = max(0, term_index - 1)
+                phrase_end = min(len(words), term_index + 2)
+                keyword_phrase = ' '.join(words[phrase_start:phrase_end])
+                
+                # Clean up the phrase
+                keyword_phrase = re.sub(r'[.,;!?]', '', keyword_phrase).strip()
+                
+                if keyword_phrase and keyword_phrase not in found_keywords:
+                    found_keywords.add(keyword_phrase)
+                    trigger_keywords.append({
+                        'keyword': keyword_phrase,
+                        'relevance': base_relevance,
+                        'matched_text': context,
+                        'category': 'extracted'
+                    })
+    
+    # Sort by relevance and return top keywords
+    trigger_keywords.sort(key=lambda x: x['relevance'], reverse=True)
+    
+    # Return top 10 keywords, but ensure we have at least 3
+    result = trigger_keywords[:10]
+    
+    # If we have fewer than 3 keywords, add some basic ones
+    if len(result) < 3:
+        basic_keywords = extract_keywords(text)
+        for kw in basic_keywords:
+            if len(result) >= 10:
+                break
+            if kw not in [k['keyword'] for k in result]:
+                result.append({
+                    'keyword': kw,
+                    'relevance': 0.4,
+                    'category': 'basic'
+                })
+    
+    return result
 
 def determine_market_impact(sentiment: str, confidence: float) -> str:
     """Determine market impact based on sentiment and confidence"""

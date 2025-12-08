@@ -12,6 +12,7 @@ import { Ionicons } from '@expo/vector-icons';
 import TodayDashboard from './app/components/TodayDashboard';
 import AlertsScreen from './app/components/AlertsScreen';
 import ProfileScreen from './app/components/ProfileScreen';
+import PredictionMarketsScreen from './app/screens/PredictionMarketsScreen';
 import IntegraLoadingPage from './app/components/IntegraLoadingPage';
 import ErrorBoundary from './app/components/ErrorBoundary';
 import AsyncStorage from '@react-native-async-storage/async-storage';
@@ -58,6 +59,8 @@ const MainApp = () => {
     switch (activeTab) {
       case 'Today':
         return <TodayDashboard agentActive={agentActive} />;
+      case 'Markets':
+        return <PredictionMarketsScreen />;
       case 'Alerts':
         return <AlertsScreen />;
       case 'Profile':

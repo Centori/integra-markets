@@ -17,6 +17,9 @@ httpx>=0.24.0,<0.25.0  # Match supabase 2.0.0 requirement
 beautifulsoup4==4.12.2
 feedparser==6.0.10
 
+# Cryptography for Kalshi API
+cryptography==41.0.7  # For Kalshi API signature generation
+
 # NLP & ML
 nltk==3.8.1  # Includes VADER sentiment analyzer
 numpy==1.24.3  # Required for NLTK and data processing
