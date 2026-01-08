@@ -336,6 +336,13 @@ const TradeModal = ({ visible, market, onClose, onTradeComplete }) => {
           )}
         </ScrollView>
 
+          {/* Powered by Polymarket */}
+          <View style={styles.poweredByContainer}>
+            <Text style={styles.poweredByText}>Powered by</Text>
+            <Text style={styles.poweredByBrand}>Polymarket</Text>
+          </View>
+        </ScrollView>
+
         {/* Action Buttons */}
         <View style={styles.footer}>
           <TouchableOpacity style={styles.resetButton} onPress={resetForm}>
@@ -544,6 +551,23 @@ const styles = StyleSheet.create({
     fontWeight: '600',
     color: colors.textPrimary,
     marginLeft: 6,
+  },
+  poweredByContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingVertical: 16,
+    marginTop: 8,
+    gap: 6,
+  },
+  poweredByText: {
+    fontSize: 11,
+    color: colors.textSecondary,
+  },
+  poweredByBrand: {
+    fontSize: 11,
+    fontWeight: '700',
+    color: colors.accentData,
   },
 });
 
