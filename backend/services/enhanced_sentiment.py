@@ -203,34 +203,80 @@ def extract_ml_keywords(text, metadata=None):
     if not text:
         return []
         
-    # Use Hugging Face API if available
-    hf_token = os.getenv("HUGGING_FACE_TOKEN")
-    if hf_token:
+    # Use Hugging Face API if available with caching and backoff
+    hf_token = os.getenv("HF_TOKEN") or os.getenv("HUGGING_FACE_TOKEN") or os.getenv("HUGGING_FACE_HUB_TOKEN")
+    cache_dir = os.getenv("FINBERT_CACHE_DIR", "/app/cache")
+    try:
+        os.makedirs(cache_dir, exist_ok=True)
+    except Exception:
+        pass
+
+    # Cache key based on text content (trim to 1024 chars)
+    text_key = hashlib.sha256(text[:1024].encode("utf-8", errors="ignore")).hexdigest()
+    cache_path = os.path.join(cache_dir, f"finbert_{text_key}.json")
+    cache_ttl_seconds = 24 * 60 * 60  # 24 hours
+
+    # Return cached result if fresh
+    if os.path.exists(cache_path):
         try:
-            headers = {"Authorization": f"Bearer {hf_token}"}
-            api_url = "https://api-inference.huggingface.co/models/yiyanghkust/finbert-tone"
-            
-            response = requests.post(
-                api_url,
-                headers=headers,
-                json={"inputs": text[:512]},  # Limit text length
-                timeout=10
-            )
-            
-            if response.status_code == 200:
-                result = response.json()
-                if isinstance(result, list) and len(result) > 0:
-                    keywords = []
-                    for item in result[0]:
-                        keywords.append({
-                            'word': item['label'].lower(),
-                            'sentiment': item['label'].lower(),
-                            'importance': item['score'],
-                            'confidence': item['score']
-                        })
-                    return keywords
-        except Exception as e:
-            print(f"Hugging Face API error: {e}")
+            if (time.time() - os.path.getmtime(cache_path)) < cache_ttl_seconds:
+                with open(cache_path, "r") as f:
+                    cached = json.load(f)
+                    if isinstance(cached, dict) and "keywords" in cached:
+                        return cached["keywords"]
+        except Exception:
+            pass
+
+    if hf_token:
+        headers = {"Authorization": f"Bearer {hf_token}"}
+        api_url = "https://api-inference.huggingface.co/models/yiyanghkust/finbert-tone"
+
+        # Exponential backoff with jitter for rate limits
+        max_retries = 3
+        base_delay = 0.75
+        for attempt in range(max_retries):
+            try:
+                response = requests.post(
+                    api_url,
+                    headers=headers,
+                    json={"inputs": text[:512]},  # Limit text length
+                    timeout=10
+                )
+
+                if response.status_code == 200:
+                    result = response.json()
+                    if isinstance(result, list) and len(result) > 0:
+                        keywords = []
+                        for item in result[0]:
+                            keywords.append({
+                                'word': item['label'].lower(),
+                                'sentiment': item['label'].lower(),
+                                'importance': item['score'],
+                                'confidence': item['score']
+                            })
+                        # write cache
+                        try:
+                            with open(cache_path, "w") as f:
+                                json.dump({"keywords": keywords}, f)
+                        except Exception:
+                            pass
+                        return keywords
+
+                # On rate limit or server errors, backoff and retry
+                if response.status_code in (429, 503):
+                    delay = base_delay * (2 ** attempt) + random.uniform(0, 0.5)
+                    time.sleep(delay)
+                    continue
+
+                # Other non-OK responses: break and fallback
+                break
+
+            except Exception as e:
+                # Network errors: backoff then retry
+                delay = base_delay * (2 ** attempt) + random.uniform(0, 0.5)
+                time.sleep(delay)
+                if attempt == max_retries - 1:
+                    print(f"Hugging Face API error after retries: {e}")
     
     # Fallback to TextBlob and regex
     try:

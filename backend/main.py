@@ -133,38 +133,84 @@ def analyze_sentiment(request: SentimentRequest):
         import requests
         import json
         
-        # Try FinBERT via Hugging Face API first
-        hf_token = os.getenv("HUGGING_FACE_TOKEN")
-        if hf_token:
+        # Try FinBERT via Hugging Face API first with caching and backoff
+        hf_token = os.getenv("HF_TOKEN") or os.getenv("HUGGING_FACE_TOKEN") or os.getenv("HUGGING_FACE_HUB_TOKEN")
+        cache_dir = os.getenv("FINBERT_CACHE_DIR", "/app/cache")
+        try:
+            os.makedirs(cache_dir, exist_ok=True)
+        except Exception:
+            pass
+        import hashlib, time, random
+        
+        # Cache key based on input text (trim to 1024 chars)
+        text_key = hashlib.sha256(request.text[:1024].encode("utf-8", errors="ignore")).hexdigest()
+        cache_path = os.path.join(cache_dir, f"finbert_sentiment_{text_key}.json")
+        cache_ttl_seconds = 24 * 60 * 60
+        
+        # If cached and fresh, return cached sentiment
+        if os.path.exists(cache_path):
             try:
-                headers = {"Authorization": f"Bearer {hf_token}"}
-                api_url = "https://api-inference.huggingface.co/models/ProsusAI/finbert"
-                
-                response = requests.post(
-                    api_url,
-                    headers=headers,
-                    json={"inputs": request.text},
-                    timeout=10
-                )
-                
-                if response.status_code == 200:
-                    result = response.json()
-                    if isinstance(result, list) and len(result) > 0:
-                        # FinBERT returns labels: positive, negative, neutral
-                        scores = {item['label'].lower(): item['score'] for item in result[0]}
-                        
-                        # Get the highest confidence prediction
-                        best_sentiment = max(scores.keys(), key=lambda k: scores[k])
-                        confidence = scores[best_sentiment]
-                        
-                        return SentimentResponse(
-                            text=request.text,
-                            sentiment=best_sentiment,
-                            confidence=round(confidence, 3),
-                            timestamp=datetime.datetime.now().isoformat()
-                        )
-            except Exception as e:
-                print(f"FinBERT API error: {e}")
+                if (time.time() - os.path.getmtime(cache_path)) < cache_ttl_seconds:
+                    with open(cache_path, "r") as f:
+                        cached = json.load(f)
+                        if isinstance(cached, dict) and "sentiment" in cached:
+                            return SentimentResponse(
+                                text=request.text,
+                                sentiment=cached["sentiment"],
+                                confidence=round(float(cached.get("confidence", 0.5)), 3),
+                                timestamp=datetime.datetime.now().isoformat()
+                            )
+            except Exception:
+                pass
+        
+        if hf_token:
+            headers = {"Authorization": f"Bearer {hf_token}"}
+            api_url = "https://api-inference.huggingface.co/models/ProsusAI/finbert"
+            
+            max_retries = 3
+            base_delay = 0.75
+            for attempt in range(max_retries):
+                try:
+                    response = requests.post(
+                        api_url,
+                        headers=headers,
+                        json={"inputs": request.text[:512]},
+                        timeout=10
+                    )
+                    
+                    if response.status_code == 200:
+                        result = response.json()
+                        if isinstance(result, list) and len(result) > 0:
+                            scores = {item['label'].lower(): item['score'] for item in result[0]}
+                            best_sentiment = max(scores.keys(), key=lambda k: scores[k])
+                            confidence = scores[best_sentiment]
+                            
+                            # write cache
+                            try:
+                                with open(cache_path, "w") as f:
+                                    json.dump({"sentiment": best_sentiment, "confidence": float(confidence)}, f)
+                            except Exception:
+                                pass
+                            
+                            return SentimentResponse(
+                                text=request.text,
+                                sentiment=best_sentiment,
+                                confidence=round(confidence, 3),
+                                timestamp=datetime.datetime.now().isoformat()
+                            )
+                    
+                    if response.status_code in (429, 503):
+                        delay = base_delay * (2 ** attempt) + random.uniform(0, 0.5)
+                        time.sleep(delay)
+                        continue
+                    
+                    # On other non-OK statuses, break and proceed to fallback
+                    break
+                except Exception as e:
+                    delay = base_delay * (2 ** attempt) + random.uniform(0, 0.5)
+                    time.sleep(delay)
+                    if attempt == max_retries - 1:
+                        print(f"FinBERT API error after retries: {e}")
         
         # Fallback to NLTK VADER sentiment analysis
         try:
