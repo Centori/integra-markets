@@ -13,8 +13,7 @@ from .schemas.notification import (
     NotificationPreferenceUpdate,
     NotificationPreferenceResponse
 )
-from .services.notification_service import NotificationService
-from .models.notification import DeviceToken, NotificationPreference
+from ..services.notification_service import NotificationService, NotificationData, NotificationType, Severity
 
 # Configure logging
 logging.basicConfig(level=logging.INFO)
@@ -31,18 +30,20 @@ async def register_push_token(
     """Register a device token for push notifications"""
     try:
         service = NotificationService()
-        token = await service.register_device_token(
+        token_row = await service.register_push_token(
             user_id=user_id,
             token=request.token,
             device_type=request.device_type,
-            device_info=request.device_info
+            device_info={"app_version": request.app_version} if request.app_version else {}
         )
+        if not token_row:
+            raise HTTPException(status_code=500, detail="Failed to register device token")
         return DeviceTokenResponse(
-            id=token.id,
-            token=token.token,
-            device_type=token.device_type,
-            is_active=token.is_active,
-            created_at=token.created_at
+            id=UUID(token_row.get('id')),
+            token=token_row.get('token'),
+            device_type=token_row.get('device_type'),
+            is_active=token_row.get('is_active', True),
+            created_at=datetime.fromisoformat(token_row.get('created_at')) if token_row.get('created_at') else datetime.utcnow()
         )
     except Exception as e:
         logger.error(f"Failed to register device token: {e}")
@@ -56,16 +57,23 @@ async def send_test_notification(
     """Send a test notification"""
     try:
         service = NotificationService()
-        
-        # Send notification in background
-        background_tasks.add_task(
-            service.send_notification,
+        type_map = {
+            "market_alert": NotificationType.MARKET_ALERT,
+            "breaking_news": NotificationType.BREAKING_NEWS,
+            "price_alert": NotificationType.PRICE_ALERT,
+            "threshold_alert": NotificationType.THRESHOLD_ALERT,
+            "system": NotificationType.SYSTEM
+        }
+        notif_type = type_map.get((request.notification_type or "system").lower(), NotificationType.SYSTEM)
+        notification = NotificationData(
             title=request.title,
             body=request.body,
+            type=notif_type,
+            severity=Severity.MEDIUM,
             data=request.data or {},
-            user_ids=request.user_ids
+            user_ids=None
         )
-        
+        background_tasks.add_task(service.send_notification, notification)
         return NotificationResponse(
             success=True,
             message="Test notification queued successfully",
@@ -84,16 +92,23 @@ async def send_user_notification(
     """Send notification to specific user"""
     try:
         service = NotificationService()
-        
-        # Send notification in background
-        background_tasks.add_task(
-            service.send_notification,
+        type_map = {
+            "market_alert": NotificationType.MARKET_ALERT,
+            "breaking_news": NotificationType.BREAKING_NEWS,
+            "price_alert": NotificationType.PRICE_ALERT,
+            "threshold_alert": NotificationType.THRESHOLD_ALERT,
+            "system": NotificationType.SYSTEM
+        }
+        notif_type = type_map.get((request.notification_type or "system").lower(), NotificationType.SYSTEM)
+        notification = NotificationData(
             title=request.title,
             body=request.body,
+            type=notif_type,
+            severity=Severity.MEDIUM,
             data=request.data or {},
             user_ids=[user_id]
         )
-        
+        background_tasks.add_task(service.send_notification, notification)
         return NotificationResponse(
             success=True,
             message=f"Notification sent to user {user_id}",
@@ -108,8 +123,10 @@ async def get_user_preferences(user_id: str):
     """Get user notification preferences"""
     try:
         service = NotificationService()
-        preferences = await service.get_user_preferences(user_id)
-        return preferences
+        preferences = await service.get_alert_preferences(user_id)
+        if not preferences:
+            raise HTTPException(status_code=404, detail="Preferences not found")
+        return NotificationPreferenceResponse(**preferences)
     except Exception as e:
         logger.error(f"Failed to get user preferences: {e}")
         raise HTTPException(status_code=500, detail="Failed to get user preferences")
@@ -122,8 +139,11 @@ async def update_user_preferences(
     """Update user notification preferences"""
     try:
         service = NotificationService()
-        updated_preferences = await service.update_user_preferences(user_id, preferences)
-        return updated_preferences
+        success = await service.update_alert_preferences(user_id, preferences.dict(exclude_none=True))
+        if not success:
+            raise HTTPException(status_code=500, detail="Failed to update user preferences")
+        updated = await service.get_alert_preferences(user_id)
+        return NotificationPreferenceResponse(**updated)
     except Exception as e:
         logger.error(f"Failed to update user preferences: {e}")
         raise HTTPException(status_code=500, detail="Failed to update user preferences")
@@ -133,7 +153,9 @@ async def deactivate_device_token(token: str):
     """Deactivate a device token"""
     try:
         service = NotificationService()
-        await service.deactivate_device_token(token)
+        success = await service.deactivate_device_token(token)
+        if not success:
+            raise HTTPException(status_code=404, detail="Device token not found")
         return {"success": True, "message": "Device token deactivated"}
     except Exception as e:
         logger.error(f"Failed to deactivate device token: {e}")

@@ -72,15 +72,15 @@ class NotificationService:
         
         logger.info(f"NotificationService initialized - Push client: {'Available' if self.push_client else 'Not Available'}")
     
-    async def register_push_token(self, user_id: str, token: str, device_type: str, device_info: Dict = None) -> bool:
-        """Register or update a push token for a user"""
+    async def register_push_token(self, user_id: str, token: str, device_type: str, device_info: Dict = None) -> Optional[Dict[str, Any]]:
+        """Register or update a push token for a user and return the token row"""
         try:
             # Check if token already exists
             existing = self.supabase.table('push_tokens').select('id').eq('token', token).execute()
             
             if existing.data:
                 # Update existing token
-                result = self.supabase.table('push_tokens').update({
+                self.supabase.table('push_tokens').update({
                     'user_id': user_id,
                     'device_type': device_type,
                     'device_info': device_info or {},
@@ -89,7 +89,7 @@ class NotificationService:
                 }).eq('token', token).execute()
             else:
                 # Insert new token
-                result = self.supabase.table('push_tokens').insert({
+                self.supabase.table('push_tokens').insert({
                     'user_id': user_id,
                     'token': token,
                     'device_type': device_type,
@@ -97,11 +97,31 @@ class NotificationService:
                     'is_active': True
                 }).execute()
             
+            # Fetch complete token row
+            row = self.supabase.table('push_tokens').select('*').eq('token', token).execute()
+            if row.data:
+                return row.data[0]
+            
             logger.info(f"Push token registered for user {user_id}")
-            return True
+            return None
             
         except Exception as e:
             logger.error(f"Error registering push token: {e}")
+            return None
+    
+    async def deactivate_device_token(self, token: str) -> bool:
+        """Deactivate a device token by setting is_active to False"""
+        try:
+            existing = self.supabase.table('push_tokens').select('id').eq('token', token).execute()
+            if not existing.data:
+                return False
+            self.supabase.table('push_tokens').update({
+                'is_active': False,
+                'updated_at': datetime.utcnow().isoformat()
+            }).eq('token', token).execute()
+            return True
+        except Exception as e:
+            logger.error(f"Error deactivating device token: {e}")
             return False
     
     async def get_user_tokens(self, user_id: str) -> List[str]:
@@ -138,107 +158,58 @@ class NotificationService:
         """Send push notification via Expo"""
         if not self.push_client or not EXPO_PUSH_AVAILABLE:
             logger.warning("Push client not available")
-            return {"success": False, "error": "Push service not available"}
+            return {"success": False, "message": "Push client not available", "tickets": []}
+        
+        messages = []
+        for token in tokens:
+            messages.append(PushMessage(
+                to=token,
+                title=notification.title,
+                body=notification.body,
+                data=notification.data or {}
+            ))
         
         try:
-            # Create push messages
-            messages = []
-            for token in tokens:
-                if not PushClient.is_exponent_push_token(token):
-                    logger.warning(f"Invalid Expo push token: {token}")
-                    continue
-                
-                message = PushMessage(
-                    to=token,
-                    title=notification.title,
-                    body=notification.body,
-                    data=notification.data or {},
-                    priority='high',
-                    sound='default',
-                    badge=1,  # This will increment the app badge
-                    category_id='MARKET_ALERT' if notification.type == NotificationType.MARKET_ALERT else 'BREAKING_NEWS'
-                )
-                messages.append(message)
-            
-            if not messages:
-                return {"success": False, "error": "No valid tokens"}
-            
-            # Send notifications in chunks
-            chunks = self._chunk_list(messages, 100)
             tickets = []
-            
-            for chunk in chunks:
-                try:
-                    ticket_batch = self.push_client.publish_multiple(chunk)
-                    tickets.extend(ticket_batch)
-                except PushServerError as e:
-                    logger.error(f"Push server error: {e}")
-                except Exception as e:
-                    logger.error(f"Error sending push notifications: {e}")
-            
-            # Process tickets to check for errors
-            successful = 0
-            failed = 0
-            
-            for ticket in tickets:
-                if ticket.status == 'ok':
-                    successful += 1
-                else:
-                    failed += 1
-                    logger.error(f"Push ticket error: {ticket.message}")
-            
-            return {
-                "success": True,
-                "sent": successful,
-                "failed": failed,
-                "total": len(tickets)
-            }
-            
+            for chunk in self._chunk_list(messages, 100):
+                response = await asyncio.get_event_loop().run_in_executor(None, self.push_client.publish, chunk)
+                tickets.extend(response)
+            return {"success": True, "message": "Push notifications sent", "tickets": tickets}
         except Exception as e:
             logger.error(f"Error sending push notifications: {e}")
-            return {"success": False, "error": str(e)}
+            return {"success": False, "message": str(e), "tickets": []}
     
     async def send_notification(self, notification: NotificationData) -> Dict[str, Any]:
-        """Send notification to users (save to DB and send push)"""
+        """Send notification to specific users or broadcast"""
         try:
-            results = {
-                "notifications_saved": 0,
-                "push_sent": 0,
-                "errors": []
-            }
-            
-            # Determine target users
-            if notification.user_ids:
-                user_ids = notification.user_ids
+            user_ids = notification.user_ids
+            if user_ids is None:
+                # Broadcast: fetch all users with push tokens
+                all_tokens = self.supabase.table('push_tokens').select('user_id', 'token').eq('is_active', True).execute()
+                tokens = [row['token'] for row in all_tokens.data]
+                
+                # Save a system notification per user if desired (optional)
+                results = await self.send_push_notification(tokens, notification)
+                return results
             else:
-                # Get all users with notifications enabled
-                prefs = self.supabase.table('alert_preferences').select('user_id').eq('push_notifications', True).execute()
-                user_ids = [p['user_id'] for p in prefs.data]
-            
-            # Save notification for each user
-            for user_id in user_ids:
-                saved = await self.save_notification(user_id, notification)
-                if saved:
-                    results["notifications_saved"] += 1
-                    
-                    # Get user's push tokens
-                    tokens = await self.get_user_tokens(user_id)
-                    if tokens:
-                        push_result = await self.send_push_notification(tokens, notification)
-                        if push_result.get("success"):
-                            results["push_sent"] += push_result.get("sent", 0)
-                            
-                            # Mark notification as delivered
-                            self.supabase.table('notifications').update({
-                                'is_delivered': True,
-                                'delivered_at': datetime.utcnow().isoformat()
-                            }).eq('id', saved['id']).execute()
-            
-            return results
-            
+                # Send to specific users
+                tokens = []
+                for uid in user_ids:
+                    tokens.extend(await self.get_user_tokens(uid))
+                save_results = []
+                for uid in user_ids:
+                    saved = await self.save_notification(uid, notification)
+                    if saved:
+                        save_results.append(saved)
+                push_results = await self.send_push_notification(tokens, notification)
+                return {
+                    "success": push_results.get("success", False),
+                    "message": push_results.get("message", "Sent"),
+                    "saved": save_results,
+                }
         except Exception as e:
             logger.error(f"Error sending notification: {e}")
-            return {"error": str(e)}
+            return {"success": False, "message": str(e)}
     
     async def get_user_notifications(self, user_id: str, limit: int = 50, offset: int = 0) -> List[Dict]:
         """Get notifications for a user"""
@@ -360,7 +331,6 @@ class NotificationService:
                     user_ids=[p['user_id'] for p in prefs.data]
                 )
                 
-                # Send notifications
                 await self.send_notification(notification)
             
             return alert
@@ -370,24 +340,18 @@ class NotificationService:
             return None
     
     async def get_market_alerts(self, commodity: Optional[str] = None, limit: int = 50) -> List[Dict]:
-        """Get recent market alerts"""
+        """Get market alerts, optionally filtered by commodity"""
         try:
-            query = self.supabase.table('market_alerts').select('*')
-            
+            query = self.supabase.table('market_alerts').select('*').order('created_at', desc=True).limit(limit)
             if commodity:
                 query = query.eq('commodity', commodity)
-            
-            result = query.order('created_at', desc=True).limit(limit).execute()
-            
-            return result.data
-            
+            result = query.execute()
+            return result.data or []
         except Exception as e:
             logger.error(f"Error fetching market alerts: {e}")
             return []
     
     def _chunk_list(self, lst: List, chunk_size: int) -> List[List]:
-        """Split a list into chunks"""
         return [lst[i:i + chunk_size] for i in range(0, len(lst), chunk_size)]
 
-# Singleton instance
 notification_service = NotificationService()

@@ -1,5 +1,5 @@
 from pydantic import BaseModel, Field
-from typing import Optional, Dict, Any
+from typing import Optional, Dict, Any, List
 from datetime import datetime
 from uuid import UUID
 
@@ -19,14 +19,14 @@ class NotificationRequest(BaseModel):
     title: str = Field(..., description="Notification title")
     body: str = Field(..., description="Notification message")
     data: Optional[Dict[str, Any]] = Field(None, description="Additional data to send with notification")
-    notification_type: Optional[str] = Field("default", description="Type of notification (market_alert, breaking_news, etc)")
+    notification_type: Optional[str] = Field("system", description="Type of notification (market_alert, breaking_news, price_alert, threshold_alert, system)")
     sound: Optional[bool] = True
     badge: Optional[int] = None
 
 class NotificationResponse(BaseModel):
-    status: str
+    success: bool
     message: str
-    notification_id: Optional[UUID] = None
+    notification_id: Optional[str] = None
 
 class NotificationPreferenceUpdate(BaseModel):
     market_alerts: Optional[bool] = None
@@ -37,6 +37,8 @@ class NotificationPreferenceUpdate(BaseModel):
     vibration_enabled: Optional[bool] = None
     quiet_hours_start: Optional[int] = None
     quiet_hours_end: Optional[int] = None
+    keywords: Optional[List[str]] = None
+    website_urls: Optional[List[str]] = None
 
 class NotificationPreferenceResponse(BaseModel):
     user_id: str
@@ -48,4 +50,6 @@ class NotificationPreferenceResponse(BaseModel):
     vibration_enabled: bool
     quiet_hours_start: Optional[int]
     quiet_hours_end: Optional[int]
+    keywords: Optional[List[str]]
+    website_urls: Optional[List[str]]
     updated_at: datetime
