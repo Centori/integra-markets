@@ -496,28 +496,38 @@ class NewsDataSources:
             logger.error(f"Error fetching Trading Economics news: {e}")
             source_tracker.update_status('Trading Economics', success=False, error=str(e))
             return []
-    def _parse_date(self, date_string: str) -> datetime:
-        """Parse various date formats to datetime object"""
+    def _parse_date(self, date_string: str):
+        """Parse various date formats to a datetime object in UTC.
+        Returns None if parsing fails to avoid mis-ordering stale items.
+        """
         try:
-            # Try parsing different date formats
-            formats = [
-                '%a, %d %b %Y %H:%M:%S %Z',  # RFC 2822
-                '%a, %d %b %Y %H:%M:%S %z',  # RFC 2822 with timezone
-                '%Y-%m-%dT%H:%M:%S%z',       # ISO 8601
-                '%Y-%m-%d %H:%M:%S',         # Simple format
-            ]
-            
-            for fmt in formats:
+            if not date_string:
+                return None
+            # Prefer robust RFC 2822 parsing with timezone when available
+            try:
+                from email.utils import parsedate_to_datetime
+                dt = parsedate_to_datetime(date_string)
+            except Exception:
+                dt = None
+            if dt is None:
+                # Try ISO-8601 parsing with Z normalization
                 try:
-                    return datetime.strptime(date_string, fmt)
-                except ValueError:
-                    continue
-                    
-            # If all formats fail, return current time
-            return datetime.now()
-            
+                    dt = datetime.fromisoformat(str(date_string).replace('Z', '+00:00'))
+                except Exception:
+                    dt = None
+            # If we parsed a datetime, normalize to UTC
+            if dt is not None:
+                try:
+                    if dt.tzinfo is None:
+                        # Assume feed timestamps without tz are UTC
+                        dt = dt.replace(tzinfo=datetime.timezone.utc)
+                    else:
+                        dt = dt.astimezone(datetime.timezone.utc)
+                except Exception:
+                    pass
+            return dt
         except Exception:
-            return datetime.now()
+            return None
 
     async def fetch_investing_news(self) -> List[Dict]:
         """Fetch news from Investing.com RSS feeds"""

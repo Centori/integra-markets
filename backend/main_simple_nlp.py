@@ -42,6 +42,16 @@ except ImportError:
     GROQ_AVAILABLE = False
     logging.warning("Groq AI service not available")
 
+# Optional DQN-enhanced sentiment analyzer
+try:
+    from services.enhanced_sentiment import enhanced_analyzer
+    from news_aggregator.news_fetcher import NewsItem as DQNNewsItem
+    DQN_AVAILABLE = True
+except Exception:
+    enhanced_analyzer = None
+    DQN_AVAILABLE = False
+    logging.warning("Enhanced DQN sentiment analyzer not available")
+
 # NLTK imports
 try:
     import nltk
@@ -58,6 +68,9 @@ load_dotenv(env_path)
 # Configure logging
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
+
+# Tunable weight for confidence nudge from phrase/driver bias
+PHRASE_CONFIDENCE_WEIGHT = float(os.getenv("PHRASE_CONFIDENCE_WEIGHT", "0.15"))
 
 # Initialize VADER analyzer
 vader_analyzer = None
@@ -142,6 +155,7 @@ class SentimentRequest(BaseModel):
     text: str = Field(..., min_length=1, description="Text to analyze")
     commodity: Optional[str] = Field(None, description="Specific commodity context")
     enhanced: bool = Field(True, description="Use enhanced analysis")
+    use_dqn: Optional[bool] = Field(False, description="Use DQN enhanced analysis")
 
 class NewsAnalysisRequest(BaseModel):
     text: str
@@ -173,6 +187,8 @@ class NewsRequest(BaseModel):
     max_enhanced: Optional[int] = Field(3, ge=1, le=10, description="Maximum number of articles to enhance with full content")
     alert_frequency: Optional[str] = Field("realtime", description="Alert frequency preference (realtime, daily, weekly)")
     min_impact: Optional[str] = Field("LOW", description="Minimum impact level for alerts (LOW, MEDIUM, HIGH)")
+    use_dqn: Optional[bool] = Field(False, description="Use DQN enhanced analysis for each article")
+    expose_trigger_keywords: Optional[bool] = Field(False, description="Expose trigger_keywords at the top-level of each article")
 
 class UserNewsRequest(BaseModel):
     user_id: str = Field(..., description="User ID in Supabase")
@@ -242,6 +258,44 @@ def get_models_status():
 @app.post('/api/sentiment')
 async def analyze_sentiment(request: SentimentRequest):
     try:
+        # Optional DQN-enhanced path
+        if getattr(request, "use_dqn", False) and DQN_AVAILABLE and enhanced_analyzer is not None:
+            try:
+                published_iso = datetime.datetime.now(datetime.timezone.utc).isoformat().replace("+00:00","Z")
+            except Exception:
+                published_iso = datetime.datetime.now().isoformat()
+            ni = DQNNewsItem(
+                title=request.text[:80],
+                source="user_input",
+                link="",
+                published=published_iso,
+                summary=request.text
+            )
+            ml_res = await enhanced_analyzer.analyze_news(ni)
+            cat = ml_res.get("sentiment","neutral")
+            if "bear" in cat:
+                sent = "BEARISH"
+            elif "bull" in cat:
+                sent = "BULLISH"
+            else:
+                sent = "NEUTRAL"
+            return {
+                "text": request.text,
+                "sentiment": sent,
+                "confidence": round(float(ml_res.get("confidence",0.5)), 3),
+                "method": "dqn",
+                "commodity_specific": request.commodity is not None,
+                "scores": {},
+                "key_drivers": [],
+                "similarity": {"bullish": 0.0, "bearish": 0.0},
+                "ml": {
+                    "raw_sentiment": ml_res.get("sentiment"),
+                    "keywords": ml_res.get("keywords", []),
+                    "market_impact": ml_res.get("market_impact"),
+                    "sectors_affected": ml_res.get("sectors_affected", {}),
+                    "alert_recommendation": ml_res.get("alert_recommendation")
+                }
+            }
         if vader_analyzer:
             # Use VADER for sentiment analysis
             scores = vader_analyzer.polarity_scores(request.text)
@@ -275,17 +329,46 @@ async def analyze_sentiment(request: SentimentRequest):
                     if keyword_count > 0:
                         confidence = min(0.95, confidence + (keyword_count * 0.05))
             
+            # Cosine-similarity key drivers adjustment
+            drivers = get_key_drivers_with_similarity(request.text, request.commodity)
+            bull_sim = float(drivers.get("bullish_similarity", 0.0))
+            bear_sim = float(drivers.get("bearish_similarity", 0.0))
+            driver_bias = bull_sim - bear_sim
+
+            # Shift neutral sentiment if drivers are clear
+            if sentiment == "NEUTRAL":
+                if driver_bias > 0.05:
+                    sentiment = "BULLISH"
+                elif driver_bias < -0.05:
+                    sentiment = "BEARISH"
+
+            # Nudge confidence by driver bias and clamp
+            confidence = max(0.05, min(0.99, confidence + PHRASE_CONFIDENCE_WEIGHT * driver_bias))
+
+            # Resolve contradictions by lowering confidence
+            if sentiment == "BULLISH" and (bear_sim - bull_sim) > 0.12:
+                sentiment = "NEUTRAL"
+                confidence = max(0.05, min(0.85, confidence - 0.1))
+            elif sentiment == "BEARISH" and (bull_sim - bear_sim) > 0.12:
+                sentiment = "NEUTRAL"
+                confidence = max(0.05, min(0.85, confidence - 0.1))
+            
             return {
                 "text": request.text,
                 "sentiment": sentiment,
                 "confidence": round(confidence, 3),
-                "method": "vader",
+                "method": "vader+cosine",
                 "commodity_specific": request.commodity is not None,
                 "scores": {
                     "compound": round(scores['compound'], 3),
                     "positive": round(scores['pos'], 3),
                     "negative": round(scores['neg'], 3),
                     "neutral": round(scores['neu'], 3)
+                },
+                "key_drivers": drivers.get("top_drivers", []),
+                "similarity": {
+                    "bullish": round(bull_sim, 6),
+                    "bearish": round(bear_sim, 6)
                 }
             }
         else:
@@ -349,21 +432,24 @@ async def get_top_movers():
 @app.post('/api/news/analysis')
 async def analyze_news(request: NewsAnalysisRequest):
     try:
-        # Analyze news using available sentiment analyzer
         sentiment_result = await analyze_sentiment(
             SentimentRequest(text=request.text, enhanced=True)
         )
-        
-        # Extract key information
+        drivers = get_key_drivers_with_similarity(request.text, None)
         keywords = extract_keywords(request.text)
         market_impact = determine_market_impact(sentiment_result["sentiment"], sentiment_result["confidence"])
-        
         return {
             "text": request.text,
             "source": request.source,
             "sentiment": sentiment_result["sentiment"],
             "confidence": sentiment_result["confidence"],
             "keywords": keywords,
+            "key_drivers": drivers.get('top_drivers', []),
+            "similarity": {
+                "bullish": round(drivers.get('bullish_similarity', 0.0), 3),
+                "bearish": round(drivers.get('bearish_similarity', 0.0), 3),
+                "diff": round(drivers.get('bullish_similarity', 0.0) - drivers.get('bearish_similarity', 0.0), 3)
+            },
             "market_impact": market_impact,
             "timestamp": datetime.datetime.now().isoformat()
         }
@@ -454,67 +540,84 @@ async def get_news_feed(request: NewsRequest):
         }.get(request.alert_frequency, 24)
         
         # Filter articles by date
-        cutoff_time = datetime.datetime.now() - datetime.timedelta(hours=request.hours_back)
+        now_utc = datetime.datetime.now(datetime.timezone.utc)
+        cutoff_time = now_utc - datetime.timedelta(hours=hours_back)
         time_filtered_articles = []
         for article in all_articles:
             try:
                 # Parse the published date
-                published_str = article.get('published', '')
-                if published_str:
-                    # Handle both datetime objects and strings
-                    if isinstance(published_str, datetime.datetime):
-                        published_date = published_str
-                    else:
-                        published_date = datetime.datetime.fromisoformat(published_str.replace('Z', '+00:00'))
-                    
-                    # Only include articles within the time window
-                    if published_date >= cutoff_time:
-                        time_filtered_articles.append(article)
-                    else:
-                        logger.debug(f"Filtering out old article: {article.get('title', '')[:50]} from {published_str}")
+                published_val = article.get('published')
+                pub_date = None
+                if isinstance(published_val, datetime.datetime):
+                    pub_date = published_val
+                elif published_val:
+                    try:
+                        pub_date = datetime.datetime.fromisoformat(str(published_val).replace('Z', '+00:00'))
+                    except Exception:
+                        pub_date = None
+
+                # Skip unparseable dates to avoid stale items appearing recent
+                if not pub_date:
+                    continue
+
+                # Normalize to UTC
+                if pub_date.tzinfo is None:
+                    pub_date = pub_date.replace(tzinfo=datetime.timezone.utc)
+                else:
+                    pub_date = pub_date.astimezone(datetime.timezone.utc)
+
+                # Only include articles within the time window
+                if pub_date >= cutoff_time:
+                    time_filtered_articles.append(article)
+                else:
+                    logger.debug(f"Filtering out old article: {article.get('title', '')[:50]} from {published_val}")
             except Exception as e:
-                # If date parsing fails, include the article (better to show than hide)
                 logger.warning(f"Could not parse date for article: {e}")
-                time_filtered_articles.append(article)
-        
+                continue
+
         all_articles = time_filtered_articles
-        logger.info(f"After time filtering ({request.hours_back}h): {len(all_articles)} articles remain")
-        
-        # If we have too few articles, progressively expand the time window
+        logger.info(f"After time filtering ({hours_back}h): {len(all_articles)} articles remain")
+
         min_articles = 5  # Minimum articles we want to show
         if len(all_articles) < min_articles:
-            logger.info(f"Only {len(all_articles)} articles found in {request.hours_back}h window, expanding search...")
-            
-            # Try expanding to 24 hours, then 48 hours
+            logger.info(f"Only {len(all_articles)} articles found in {hours_back}h window, expanding search...")
+
+            # Expand search window progressively if too few articles were found
             for expanded_hours in [24, 48]:
-                if expanded_hours <= request.hours_back:
+                if expanded_hours <= hours_back:
                     continue  # Skip if we're already searching this far back
-                
-                expanded_cutoff = datetime.datetime.now() - datetime.timedelta(hours=expanded_hours)
+
+                expanded_cutoff = now_utc - datetime.timedelta(hours=expanded_hours)
                 expanded_articles = []
-                
-                for article in results[0] if isinstance(results[0], list) else []:
+
+                for article in time_filtered_articles:
                     try:
-                        published_str = article.get('published', '')
-                        if published_str:
-                            if isinstance(published_str, datetime.datetime):
-                                published_date = published_str
-                            else:
-                                published_date = datetime.datetime.fromisoformat(published_str.replace('Z', '+00:00'))
-                            
-                            if published_date >= expanded_cutoff:
-                                # Check if not already in our list
-                                if not any(a.get('title') == article.get('title') for a in all_articles):
-                                    expanded_articles.append(article)
+                        published_val = article.get('published')
+                        pub_date = None
+                        if isinstance(published_val, datetime.datetime):
+                            pub_date = published_val
+                        elif published_val:
+                            try:
+                                pub_date = datetime.datetime.fromisoformat(str(published_val).replace('Z', '+00:00'))
+                            except Exception:
+                                pub_date = None
+                        if not pub_date:
+                            continue
+                        if pub_date.tzinfo is None:
+                            pub_date = pub_date.replace(tzinfo=datetime.timezone.utc)
+                        else:
+                            pub_date = pub_date.astimezone(datetime.timezone.utc)
+                        if pub_date >= expanded_cutoff:
+                            if not any(a.get('title') == article.get('title') for a in all_articles):
+                                expanded_articles.append(article)
                     except:
                         pass
-                
+
                 all_articles.extend(expanded_articles)
                 logger.info(f"Expanded to {expanded_hours}h: now have {len(all_articles)} articles")
-                
                 if len(all_articles) >= min_articles:
                     break
-        
+ 
         # Filter articles by commodity if specified
         if request.commodity_filter:
             commodity_filter = request.commodity_filter.lower()
@@ -525,12 +628,12 @@ async def get_news_feed(request: NewsRequest):
                 if commodity_filter in title_lower or commodity_filter in summary_lower:
                     filtered_articles.append(article)
             all_articles = filtered_articles
-        
+
         # Filter by impact level if specified
         if request.min_impact:
             impact_levels = {'LOW': 0, 'MEDIUM': 1, 'HIGH': 2}
             min_impact_level = impact_levels.get(request.min_impact.upper(), 0)
-            
+
             impact_filtered = []
             for article in all_articles:
                 article_impact = article.get('market_impact', 'LOW').upper()
@@ -538,7 +641,7 @@ async def get_news_feed(request: NewsRequest):
                     impact_filtered.append(article)
             all_articles = impact_filtered
             logger.info(f"After impact filtering (min={request.min_impact}): {len(all_articles)} articles remain")
-        
+
         # Sort by priority and date
         def article_priority(article):
             # High impact, recent articles get highest priority
@@ -547,27 +650,29 @@ async def get_news_feed(request: NewsRequest):
                 'MEDIUM': 2,
                 'LOW': 1
             }.get(article.get('market_impact', 'LOW').upper(), 0)
-            
-            published = article.get('published', '')
-            if not published:
-                return (0, 0)  # Lowest priority for articles without dates
-            
-            if isinstance(published, str):
-                try:
-                    published = datetime.datetime.fromisoformat(published.replace('Z', '+00:00'))
-                except:
-                    return (0, 0)
-            
-            # Convert to timestamp for sorting
-            date_score = published.timestamp()
-            
+
+            pub_val = article.get('published')
+            if not pub_val:
+                return (impact_score, 0)
+            try:
+                if isinstance(pub_val, datetime.datetime):
+                    pub_dt = pub_val
+                else:
+                    pub_dt = datetime.datetime.fromisoformat(str(pub_val).replace('Z', '+00:00'))
+                if pub_dt.tzinfo is None:
+                    pub_dt = pub_dt.replace(tzinfo=datetime.timezone.utc)
+                else:
+                    pub_dt = pub_dt.astimezone(datetime.timezone.utc)
+                date_score = pub_dt.timestamp()
+            except Exception:
+                date_score = 0
             return (impact_score, date_score)
-        
+
         all_articles.sort(key=article_priority, reverse=True)
-        
+
         # Limit to requested number of articles
         articles = all_articles[:request.max_articles]
-        
+         
         # Enhance articles with full content and NLTK summaries if requested
         if request.enhanced_content and NEWS_SOURCES_AVAILABLE:
             try:
@@ -596,11 +701,11 @@ async def get_news_feed(request: NewsRequest):
                 else:
                     # For regular articles, combine title and summary
                     text_for_analysis = f"{article.get('title', '')}. {article.get('summary', '')}"
-                
+
                 if vader_analyzer:
                     scores = vader_analyzer.polarity_scores(text_for_analysis)
                     compound = scores['compound']
-                    
+
                     if compound >= 0.05:
                         sentiment = "BULLISH"
                         confidence = 0.5 + (compound * 0.5)
@@ -615,48 +720,115 @@ async def get_news_feed(request: NewsRequest):
                     basic_result = basic_sentiment_analysis(text_for_analysis)
                     sentiment = basic_result['sentiment']
                     confidence = basic_result['confidence']
-                
-                # Enhance article with sentiment data
+
+                # Compute key drivers and cosine similarity for this article
+                drivers = get_key_drivers_with_similarity(text_for_analysis, request.commodity_filter)
+                bull_sim = float(drivers.get("bullish_similarity", 0.0))
+                bear_sim = float(drivers.get("bearish_similarity", 0.0))
+
+                # Normalize published time to ISO-8601 Z format
+                iso_published = None
+                try:
+                    pval = article.get('published')
+                    if isinstance(pval, datetime.datetime):
+                        pdt = pval
+                    elif pval:
+                        pdt = datetime.datetime.fromisoformat(str(pval).replace('Z', '+00:00'))
+                    else:
+                        pdt = None
+                    if pdt is not None:
+                        if pdt.tzinfo is None:
+                            pdt = pdt.replace(tzinfo=datetime.timezone.utc)
+                        else:
+                            pdt = pdt.astimezone(datetime.timezone.utc)
+                        iso_published = pdt.isoformat().replace('+00:00', 'Z')
+                except Exception:
+                    iso_published = None
+
+                # Generate trigger keywords and trader insights/ideas
+                trigger_keywords = extract_trigger_keywords_with_relevance(text_for_analysis, request.commodity_filter)
+                insights_and_ideas = generate_trader_insights_and_ideas(
+                    text=text_for_analysis,
+                    sentiment=sentiment,
+                    confidence=confidence,
+                    similarity={'bullish': bull_sim, 'bearish': bear_sim},
+                    key_drivers=drivers.get('top_drivers', []),
+                    trigger_keywords=trigger_keywords,
+                    commodity=request.commodity_filter
+                )
+
+                ml_section = None
+                if getattr(request, 'use_dqn', False) and DQN_AVAILABLE and enhanced_analyzer is not None:
+                    try:
+                        dqn_item = DQNNewsItem(
+                            title=article.get('title', '')[:120] or 'news',
+                            source=article.get('source', '') or 'unknown',
+                            link=article.get('url', '') or '',
+                            published=iso_published or datetime.datetime.now(datetime.timezone.utc).isoformat().replace('+00:00','Z'),
+                            summary=text_for_analysis
+                        )
+                        dqn_res = await enhanced_analyzer.analyze_news(dqn_item)
+                        ml_section = {
+                            'sentiment': dqn_res.get('sentiment'),
+                            'confidence': float(dqn_res.get('confidence', 0.5)),
+                            'keywords': dqn_res.get('keywords', []),
+                            'market_impact': dqn_res.get('market_impact'),
+                            'sectors_affected': dqn_res.get('sectors_affected', {}),
+                            'alert_recommendation': dqn_res.get('alert_recommendation'),
+                            'analysis_timestamp': dqn_res.get('analysis_timestamp')
+                        }
+                    except Exception as _err:
+                        logger.debug(f"DQN analysis failed for article: {_err}")
+                        ml_section = None
+
                 enhanced_article = {
                     'id': len(enhanced_articles) + 1,
                     'title': article.get('title', ''),
                     'summary': article.get('summary', ''),
                     'source': article.get('source', ''),
                     'source_url': article.get('url', ''),
-                    'time_published': article.get('published', datetime.datetime.now().isoformat()),
+                    'time_published': iso_published or datetime.datetime.now(datetime.timezone.utc).isoformat().replace('+00:00', 'Z'),
                     'sentiment': sentiment,
                     'sentiment_score': round(confidence, 2),
                     'categories': [article.get('category', 'general')],
                     'tickers': extract_commodity_tickers(text_for_analysis),
                     'keywords': extract_keywords(text_for_analysis),
-                    # Include enhanced content fields if available
+                    'key_drivers': drivers.get('top_drivers', []),
+                    'similarity': {'bullish': round(bull_sim, 6), 'bearish': round(bear_sim, 6)},
+                    'trader_insights': insights_and_ideas.get('insights', []),
+                    'trade_ideas': insights_and_ideas.get('trade_ideas', []),
+                    'trigger_keywords': trigger_keywords if getattr(request, 'expose_trigger_keywords', False) else None,
+                    'ml': ml_section,
                     'enhanced': article.get('enhanced', False),
                     'word_count': article.get('word_count'),
                     'enhancement_method': article.get('enhancement_method')
                 }
-                
+
                 # Remove None values from enhanced_article
                 enhanced_article = {k: v for k, v in enhanced_article.items() if v is not None}
                 enhanced_articles.append(enhanced_article)
-                
+
             except Exception as e:
                 logger.error(f"Error processing article: {e}")
-                # Add article without sentiment if processing fails
                 enhanced_article = {
                     'id': len(enhanced_articles) + 1,
                     'title': article.get('title', ''),
                     'summary': article.get('summary', ''),
                     'source': article.get('source', ''),
                     'source_url': article.get('url', ''),
-                    'time_published': article.get('published', datetime.datetime.now().isoformat()),
+                    'time_published': iso_published or datetime.datetime.now(datetime.timezone.utc).isoformat().replace('+00:00', 'Z'),
                     'sentiment': 'NEUTRAL',
                     'sentiment_score': 0.5,
                     'categories': [article.get('category', 'general')],
                     'tickers': [],
-                    'keywords': []
+                    'keywords': [],
+                    'key_drivers': [],
+                    'similarity': {'bullish': 0.0, 'bearish': 0.0},
+                    'trader_insights': [],
+                    'trade_ideas': []
                 }
                 enhanced_articles.append(enhanced_article)
-        
+
         logger.info(f"Fetched and processed {len(enhanced_articles)} news articles")
         
         # Calculate enhancement statistics
@@ -1088,6 +1260,120 @@ def extract_trigger_keywords_with_relevance(text: str, commodity: Optional[str] 
     
     return result
 
+
+def generate_trader_insights_and_ideas(
+    text: str,
+    sentiment: str,
+    confidence: float,
+    similarity: Dict[str, float],
+    key_drivers: List[Dict[str, Any]],
+    trigger_keywords: Optional[List[Dict[str, Any]]] = None,
+    commodity: Optional[str] = None,
+) -> Dict[str, Any]:
+    insights: List[str] = []
+    trade_ideas: List[Dict[str, Any]] = []
+
+    text_lower = (text or "").lower()
+    bull_sim = float(similarity.get("bullish", 0.0))
+    bear_sim = float(similarity.get("bearish", 0.0))
+
+    # Select top driver phrases for human-friendly context
+    top_driver_phrases = [d.get("phrase") for d in (key_drivers or [])][:3]
+    driver_summary = ", ".join(filter(None, top_driver_phrases)) if top_driver_phrases else None
+
+    # Determine balance vs. lean
+    sim_delta = abs(bull_sim - bear_sim)
+    is_balanced = (sentiment == "NEUTRAL" and bull_sim > 0.03 and bear_sim > 0.03 and sim_delta <= 0.07)
+
+    # Macro cues
+    mentions_usd = any(k in text_lower for k in ["usd", "dxy", "dollar", "greenback"]) \
+        or any(k in text_lower for k in ["fed", "rate", "rates", "real yield", "yields"])  # overlap with inflation/rates
+    mentions_inflation = any(k in text_lower for k in ["inflation", "cpi", "ppi", "core pce"]) \
+        or any(k in text_lower for k in ["deflation", "stagflation"])  
+
+    # Build insights
+    if is_balanced:
+        insights.append("Sentiment is balanced across different perspectives")
+    else:
+        if sentiment == "BULLISH" or bull_sim > bear_sim:
+            msg = "Tone leans bullish"
+            if driver_summary:
+                msg += f"; drivers: {driver_summary}"
+            insights.append(msg)
+        elif sentiment == "BEARISH" or bear_sim > bull_sim:
+            msg = "Tone leans bearish"
+            if driver_summary:
+                msg += f"; drivers: {driver_summary}"
+            insights.append(msg)
+        else:
+            insights.append("Sentiment is mixed; watch for confirmation cues")
+
+    if mentions_usd or mentions_inflation:
+        insights.append("Track USD strength and inflation expectations")
+
+    # Key factor synthesis from triggers and drivers
+    factors: List[str] = []
+    if trigger_keywords:
+        # take top 3 keywords by relevance
+        sorted_trigs = sorted(trigger_keywords, key=lambda x: x.get("relevance", 0), reverse=True)[:3]
+        factors.extend([t.get("keyword") for t in sorted_trigs if t.get("keyword")])
+    if not factors and driver_summary:
+        factors.extend(top_driver_phrases[:2])
+    if not factors:
+        factors = ["Market", "Prices"]
+
+    # Deduplicate while preserving order and trim overly long
+    dedup_factors = list(dict.fromkeys([f for f in factors if f]))
+    insights.append("Key factors: " + ", ".join(dedup_factors)[:240])
+
+    # Trade ideas
+    def idea_dict(idea: str, rationale: str, risk: str) -> Dict[str, Any]:
+        return {"idea": idea, "rationale": rationale, "risk_factors": risk}
+
+    # Rationale helpers
+    sim_note = f"bullish={bull_sim:.2f}, bearish={bear_sim:.2f}"
+    factor_note = ", ".join(dedup_factors) if dedup_factors else "market drivers"
+
+    if is_balanced:
+        trade_ideas.append(
+            idea_dict(
+                idea="Fade extremes; wait for breakout confirmation",
+                rationale=f"Balanced tone; {sim_note}. Focus on {factor_note}.",
+                risk="Sudden data/geopolitical shocks may invalidate range assumptions"
+            )
+        )
+    elif sentiment == "BULLISH" or bull_sim > bear_sim:
+        label = (commodity or "commodity").upper()
+        trade_ideas.append(
+            idea_dict(
+                idea=f"Consider tactical long exposure in {label} on dips",
+                rationale=f"Bullish lean with drivers: {driver_summary or factor_note}; {sim_note}",
+                risk="Reversal risk if inventories build or USD strengthens materially"
+            )
+        )
+    else:
+        label = (commodity or "commodity").upper()
+        trade_ideas.append(
+            idea_dict(
+                idea=f"Consider defensive/short setups in {label} on rallies",
+                rationale=f"Bearish lean with drivers: {driver_summary or factor_note}; {sim_note}",
+                risk="Short squeeze risk if supply disruptions emerge or risk-on resumes"
+            )
+        )
+
+    # Secondary confirmation idea when macro is prominent
+    if mentions_usd or mentions_inflation:
+        trade_ideas.append(
+            idea_dict(
+                idea="Use macro releases (CPI/Fed) as catalysts",
+                rationale="Align entries around key macro prints affecting USD and real yields",
+                risk="Event volatility; slippage if outcomes surprise vs. consensus"
+            )
+        )
+
+    return {"insights": insights, "trade_ideas": trade_ideas}
+
+
 def determine_market_impact(sentiment: str, confidence: float) -> str:
     """Determine market impact based on sentiment and confidence"""
     if confidence >= 0.8:
@@ -1129,6 +1415,151 @@ def extract_commodity_tickers(text: str) -> List[str]:
             tickers.extend(ticker_list)
     
     return list(set(tickers))  # Remove duplicates
+
+# ---- Cosine-similarity key driver helper with LRU cache ----
+# Lightweight lexical cosine similarity scoring for bullish/bearish phrases.
+# This avoids heavy embedding deps while giving explainable drivers.
+try:
+    from functools import lru_cache as _lru_cache
+except Exception:  # graceful fallback if functools missing
+    def _lru_cache(maxsize=256):
+        def deco(fn):
+            cache = {}
+            def wrapper(*args):
+                if args in cache:
+                    return cache[args]
+                res = fn(*args)
+                if len(cache) >= maxsize:
+                    try:
+                        cache.pop(next(iter(cache)))
+                    except StopIteration:
+                        pass
+                cache[args] = res
+                return res
+            return wrapper
+        return deco
+
+import math
+import re
+from typing import Tuple
+
+def _normalize_text(s: str) -> str:
+    s = (s or "").lower()
+    s = re.sub(r"[^a-z0-9\s]+", " ", s)
+    s = re.sub(r"\s+", " ", s).strip()
+    return s
+
+def _tokenize(s: str):
+    return _normalize_text(s).split()
+
+def _vectorize(tokens) -> dict:
+    bag = {}
+    for t in tokens:
+        bag[t] = bag.get(t, 0) + 1
+    return bag
+
+def _cosine(a: dict, b: dict) -> float:
+    if not a or not b:
+        return 0.0
+    num = 0.0
+    for k, v in a.items():
+        if k in b:
+            num += v * b[k]
+    den = math.sqrt(sum(v*v for v in a.values())) * math.sqrt(sum(v*v for v in b.values()))
+    if den == 0:
+        return 0.0
+    return num / den
+
+# Curated financial phrases inspired by user-provided examples
+# Weights allow emphasizing high-value multi-word phrases
+_DEF_BULLISH = {
+    "oil prices rebound": 1.0,
+    "considering increasing its imports": 1.0,
+    "reversed much of the losses": 0.9,
+    "recovery": 0.8,
+    "wind of trader opinion has changed direction": 1.0,
+    "significant q4 rally": 1.0,
+    "boost is positive for short-term": 1.0,
+    "sustainability is questionable": 0.3,  # cautionary but often within bullish context
+    "prompting caution": 0.2,               # low bullish weight; mainly used for context
+    "favorable macroeconomic environment": 1.0,
+    "lower inflation": 1.0,
+    "unlikely to raise interest rates further": 1.0,
+    "generally positive": 1.0,
+    "significant impact": 0.8,
+    "potential supply disruptions": 1.0,
+    "strait of hormuz": 1.0,
+    "prices have surged": 1.0,
+    "contango": 1.0,
+    "contago": 0.8,  # handle common misspelling
+}
+
+_DEF_BEARISH = {
+    "prices will plummet": 1.0,
+    "bearish forecast suggests": 1.0,
+    "current red-hot performance as unsustainable": 1.0,
+    "recent price surge is due for a correction": 1.0,
+    "if the prediction holds true": 0.6,  # conditional tone often preceding caution
+    "it could lead to a significant shift in market sentiment": 0.8,
+    "potential buying opportunity at lower prices": 1.0,
+    "rising inventory levels": 1.0,
+    "backwardation": 1.0,
+    "prices will plummet by": 1.0,
+    "unsustainable": 0.8,
+    "correction": 0.8
+}
+
+@_lru_cache(maxsize=1024)
+def get_key_drivers_with_similarity(text: str, commodity: Optional[str] = None) -> dict:
+    """Return top bullish/bearish drivers and cosine-based similarity scores.
+    Cached by normalized text and commodity for fast repeated calls.
+    """
+    if not text:
+        return {"top_drivers": [], "bullish_similarity": 0.0, "bearish_similarity": 0.0}
+
+    context = f"{commodity} {text}" if commodity else text
+    ctx_tokens = _tokenize(context)
+    ctx_vec = _vectorize(ctx_tokens)
+
+    results = []
+
+    # score bullish
+    for phrase, w in _DEF_BULLISH.items():
+        p_vec = _vectorize(_tokenize(phrase))
+        sim = _cosine(ctx_vec, p_vec)
+        if sim > 0:
+            results.append({
+                "phrase": phrase,
+                "category": "BULLISH",
+                "score": round(sim * float(w), 6)
+            })
+
+    # score bearish
+    for phrase, w in _DEF_BEARISH.items():
+        p_vec = _vectorize(_tokenize(phrase))
+        sim = _cosine(ctx_vec, p_vec)
+        if sim > 0:
+            results.append({
+                "phrase": phrase,
+                "category": "BEARISH",
+                "score": round(sim * float(w), 6)
+            })
+
+    if not results:
+        return {"top_drivers": [], "bullish_similarity": 0.0, "bearish_similarity": 0.0}
+
+    # Take globally strongest drivers for explainability
+    top = sorted(results, key=lambda r: r["score"], reverse=True)[:8]
+    bull_scores = [r["score"] for r in top if r["category"] == "BULLISH"]
+    bear_scores = [r["score"] for r in top if r["category"] == "BEARISH"]
+    bull_sim = float(sum(bull_scores) / len(bull_scores)) if bull_scores else 0.0
+    bear_sim = float(sum(bear_scores) / len(bear_scores)) if bear_scores else 0.0
+
+    return {
+        "top_drivers": top,
+        "bullish_similarity": round(bull_sim, 6),
+        "bearish_similarity": round(bear_sim, 6)
+    }
 
 async def get_live_news_data(max_articles: int = 20) -> dict:
     """Fetch live news data from RSS feeds with fallback"""
