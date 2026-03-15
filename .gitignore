@@ -99,6 +99,9 @@ docs/site/
 .mypy_cache/
 .dmypy.json
 dmypy.json
+backend/__pycache__/
+backend/**/__pycache__/
+backend/.venv*/
 
 # UV package manager
 uv.lock

@@ -114,7 +114,8 @@ class GroqAIService:
         self.models = {
             "llama": "llama-3.3-70b-versatile",  # Latest Llama 3.3 model
             "llama-fast": "llama-3.1-8b-instant",  # Fast model for quick responses
-            "gemma": "gemma2-9b-it"                # Google's Gemma 2 model
+            "gemma": "gemma2-9b-it",               # Google's Gemma 2 model
+            "compound": os.getenv("GROQ_COMPOUND_MODEL", "compound-beta")
         }
         self.default_model = "llama"  # Use Llama 3.3 by default
         self.search_engine = DDGS() if SEARCH_AVAILABLE else None
@@ -674,6 +675,58 @@ class GroqAIService:
             
         except Exception as e:
             logger.error(f"Groq completion error: {e}")
+            return {"error": str(e)}
+
+    async def analyze_news_compound(
+        self,
+        text: str,
+        commodity: Optional[str] = None,
+        model: str = "compound"
+    ) -> Dict[str, Any]:
+        if not self.client:
+            return {"error": "Groq client not initialized"}
+        schema_hint = {
+            "summary": "string",
+            "sentiment": "BULLISH|BEARISH|NEUTRAL",
+            "sentiment_score": 0.0,
+            "keywords": [],
+            "what_it_means_for_traders": "string",
+            "trade_ideas": [
+                {
+                    "direction": "long|short|neutral",
+                    "rationale": "string",
+                    "conditions": "string",
+                    "risk_management": "string",
+                    "confidence": 0.0
+                }
+            ]
+        }
+        prompt = (
+            f"Analyze the following financial news text and return a concise JSON only response.\n"
+            f"Commodity context: {commodity or 'general market'}\n"
+            f"Text:\n{text}\n\n"
+            "Return JSON with keys: summary, sentiment, sentiment_score, keywords, "
+            "what_it_means_for_traders, trade_ideas. "
+            "Sentiment must be one of BULLISH, BEARISH, NEUTRAL. "
+            "Sentiment_score must be a float between 0 and 1. "
+            "Keywords should be 3-7 short terms. "
+            "Trade ideas should be 1-3 items with direction, rationale, conditions, risk_management, confidence."
+        )
+        try:
+            result = await self._get_completion(
+                prompt,
+                mode=ResponseMode.JSON_OBJECT,
+                model=model
+            )
+            if isinstance(result, dict) and "error" in result and "content" in result:
+                return result
+            if isinstance(result, dict):
+                return result
+            try:
+                return json.loads(result)
+            except:
+                return {"error": "Invalid JSON response", "content": result, "schema": schema_hint}
+        except Exception as e:
             return {"error": str(e)}
     
     async def generate_market_report(

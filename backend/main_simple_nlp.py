@@ -242,6 +242,25 @@ def get_models_status():
 @app.post('/api/sentiment')
 async def analyze_sentiment(request: SentimentRequest):
     try:
+        if GROQ_AVAILABLE and groq_service and request.enhanced:
+            try:
+                ai = await groq_service.analyze_news_compound(request.text, request.commodity)
+                if isinstance(ai, dict) and ai.get("sentiment") and ai.get("sentiment_score") is not None:
+                    return {
+                        "text": request.text,
+                        "sentiment": ai["sentiment"],
+                        "confidence": round(float(ai["sentiment_score"]), 3),
+                        "method": "groq_compound",
+                        "commodity_specific": request.commodity is not None,
+                        "ai": {
+                            "summary": ai.get("summary"),
+                            "keywords": ai.get("keywords"),
+                            "what_it_means_for_traders": ai.get("what_it_means_for_traders"),
+                            "trade_ideas": ai.get("trade_ideas")
+                        }
+                    }
+            except Exception as e:
+                logger.error(f"GROQ compound sentiment error: {e}")
         if vader_analyzer:
             # Use VADER for sentiment analysis
             scores = vader_analyzer.polarity_scores(request.text)
@@ -357,7 +376,13 @@ async def analyze_news(request: NewsAnalysisRequest):
         # Extract key information
         keywords = extract_keywords(request.text)
         market_impact = determine_market_impact(sentiment_result["sentiment"], sentiment_result["confidence"])
-        
+        ai_insights = None
+        if GROQ_AVAILABLE and groq_service:
+            try:
+                ai_insights = await groq_service.analyze_news_compound(request.text)
+            except Exception as e:
+                logger.error(f"Compound analysis error: {e}")
+                ai_insights = None
         return {
             "text": request.text,
             "source": request.source,
@@ -365,6 +390,7 @@ async def analyze_news(request: NewsAnalysisRequest):
             "confidence": sentiment_result["confidence"],
             "keywords": keywords,
             "market_impact": market_impact,
+            "ai_insights": ai_insights,
             "timestamp": datetime.datetime.now().isoformat()
         }
     except Exception as e:
