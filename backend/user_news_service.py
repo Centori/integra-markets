@@ -33,6 +33,160 @@ except ImportError:
 
 logger = logging.getLogger(__name__)
 
+def _clamp(value: float, lower: float, upper: float) -> float:
+    return max(lower, min(upper, value))
+
+def normalize_commodity(commodity: Optional[str], text: Optional[str] = None) -> Optional[str]:
+    alias_map = {
+        "oil": "oil",
+        "crude": "oil",
+        "crude oil": "oil",
+        "wti": "oil",
+        "brent": "oil",
+        "gas": "gas",
+        "nat gas": "gas",
+        "natural gas": "gas",
+        "lng": "gas",
+        "gold": "gold",
+        "silver": "silver",
+        "bitcoin": "bitcoin",
+        "btc": "bitcoin",
+        "wheat": "wheat",
+        "corn": "corn",
+        "macro": "macro",
+        "weather": "weather"
+    }
+    if commodity:
+        return alias_map.get(commodity.strip().lower(), commodity.strip().lower())
+    if not text:
+        return None
+    text_lower = text.lower()
+    for alias, normalized in alias_map.items():
+        if alias in text_lower:
+            return normalized
+    return None
+
+def get_commodity_rulebook() -> Dict[str, Dict[str, List[Dict[str, str]]]]:
+    return {
+        "oil": {
+            "bullish": [
+                {"pattern": r"opec\+?.{0,20}(cut|reduce|curb)", "signal": "OPEC supply cut"},
+                {"pattern": r"(inventory|stockpile).{0,12}(draw|drop|fall)", "signal": "Inventory draw"},
+                {"pattern": r"(sanctions|embargo|conflict|war).{0,24}(oil|crude|shipping|export)?", "signal": "Supply disruption risk"}
+            ],
+            "bearish": [
+                {"pattern": r"(production|output|supply).{0,18}(rise|increase|boost|grow)", "signal": "Supply growth"},
+                {"pattern": r"(inventory|stockpile).{0,12}(build|rise|increase)", "signal": "Inventory build"},
+                {"pattern": r"demand.{0,18}(slow|weak|fall|decline)", "signal": "Demand weakness"}
+            ]
+        },
+        "gas": {
+            "bullish": [
+                {"pattern": r"(cold|freeze|arctic|winter storm)", "signal": "Heating demand surge"},
+                {"pattern": r"(storage|inventory).{0,12}(draw|drop|below)", "signal": "Storage draw"}
+            ],
+            "bearish": [
+                {"pattern": r"(warm|mild).{0,18}(weather|winter)", "signal": "Weak heating demand"},
+                {"pattern": r"(storage|inventory).{0,12}(build|surplus|above)", "signal": "Storage surplus"}
+            ]
+        },
+        "gold": {
+            "bullish": [
+                {"pattern": r"(rate cut|dovish|lower yields|yield fall|yield drops?)", "signal": "Lower real-rate pressure"},
+                {"pattern": r"(geopolitical|conflict|war|safe[- ]haven)", "signal": "Safe-haven demand"},
+                {"pattern": r"(dollar|usd).{0,18}(weak|falls?|declines?)", "signal": "Dollar weakness"}
+            ],
+            "bearish": [
+                {"pattern": r"(rate hike|hawkish|higher yields|yield rise|yield jumps?)", "signal": "Higher yield pressure"},
+                {"pattern": r"(dollar|usd).{0,18}(strong|rall(y|ies)|rises?)", "signal": "Dollar strength"}
+            ]
+        },
+        "silver": {
+            "bullish": [
+                {"pattern": r"(rate cut|dovish|lower yields)", "signal": "Lower-rate support"},
+                {"pattern": r"(solar|electronics|industrial demand).{0,18}(rise|strong|increase)", "signal": "Industrial demand strength"}
+            ],
+            "bearish": [
+                {"pattern": r"(rate hike|hawkish|higher yields)", "signal": "Higher-rate pressure"},
+                {"pattern": r"(industrial|manufacturing).{0,18}(slowdown|weakness|contract)", "signal": "Industrial demand weakness"}
+            ]
+        },
+        "bitcoin": {
+            "bullish": [
+                {"pattern": r"(etf|spot etf).{0,18}(inflow|approval|demand)", "signal": "ETF demand"},
+                {"pattern": r"(rate cut|liquidity|easing|dovish)", "signal": "Liquidity tailwind"}
+            ],
+            "bearish": [
+                {"pattern": r"(sec|regulator|crackdown|ban|lawsuit)", "signal": "Regulatory pressure"},
+                {"pattern": r"(hack|liquidation|outflow)", "signal": "Market stress"}
+            ]
+        },
+        "wheat": {
+            "bullish": [
+                {"pattern": r"(drought|flood|freeze|frost|heatwave)", "signal": "Crop risk"},
+                {"pattern": r"(export ban|supply shortage|crop damage)", "signal": "Supply tightening"}
+            ],
+            "bearish": [
+                {"pattern": r"(bumper crop|record harvest|strong yield)", "signal": "Strong harvest"},
+                {"pattern": r"(rainfall|weather).{0,18}(improve|favorable)", "signal": "Improving crop conditions"}
+            ]
+        },
+        "corn": {
+            "bullish": [
+                {"pattern": r"(drought|heatwave|crop stress|yield loss)", "signal": "Crop stress"},
+                {"pattern": r"(ethanol demand|export sales).{0,18}(rise|strong)", "signal": "Demand support"}
+            ],
+            "bearish": [
+                {"pattern": r"(record crop|strong yield|ample supply)", "signal": "Ample supply"}
+            ]
+        }
+    }
+
+def analyze_market_sentiment(text: str, commodity: Optional[str], scores: Optional[Dict[str, float]] = None) -> Dict[str, Any]:
+    normalized = normalize_commodity(commodity, text)
+    if scores:
+        compound = scores["compound"]
+        base_score = compound
+    else:
+        base_score = 0.0
+    rulebook = get_commodity_rulebook()
+    matched_signals: List[Dict[str, str]] = []
+    directional_score = 0.0
+    if normalized in rulebook:
+        text_lower = text.lower()
+        bullish_hits = [
+            entry["signal"] for entry in rulebook[normalized]["bullish"]
+            if re.search(entry["pattern"], text_lower)
+        ]
+        bearish_hits = [
+            entry["signal"] for entry in rulebook[normalized]["bearish"]
+            if re.search(entry["pattern"], text_lower)
+        ]
+        directional_score = _clamp(0.22 * len(bullish_hits) - 0.22 * len(bearish_hits), -0.9, 0.9)
+        matched_signals = (
+            [{"signal": signal, "direction": "bullish"} for signal in bullish_hits] +
+            [{"signal": signal, "direction": "bearish"} for signal in bearish_hits]
+        )[:6]
+    combined_score = (base_score * 0.4) + (directional_score * 0.6) if matched_signals else base_score
+    if combined_score >= 0.12:
+        sentiment = "POSITIVE"
+        sentiment_score = _clamp(0.55 + abs(combined_score) * 0.35, 0.5, 0.96)
+    elif combined_score <= -0.12:
+        sentiment = "NEGATIVE"
+        sentiment_score = _clamp(0.45 - abs(combined_score) * 0.05, 0.0, 0.49)
+    else:
+        sentiment = "NEUTRAL"
+        sentiment_score = 0.5
+    return {
+        "commodity": normalized,
+        "sentiment": sentiment,
+        "sentiment_score": round(sentiment_score, 2),
+        "market_context": {
+            "directional_score": round(combined_score, 3),
+            "matched_signals": matched_signals
+        }
+    }
+
 class UserNewsService:
     """Service for fetching news based on user preferences"""
     
@@ -226,18 +380,12 @@ class UserNewsService:
                                     # Perform VADER sentiment analysis on full article
                                     if VADER_AVAILABLE and vader_analyzer and full_text:
                                         scores = vader_analyzer.polarity_scores(full_text)
-                                        compound = scores['compound']
-                                        
-                                        # Map VADER scores to sentiment labels
-                                        if compound >= 0.05:
-                                            news_item['sentiment'] = 'POSITIVE'
-                                            news_item['sentiment_score'] = round(0.5 + (compound * 0.5), 2)
-                                        elif compound <= -0.05:
-                                            news_item['sentiment'] = 'NEGATIVE'
-                                            news_item['sentiment_score'] = round(0.5 - (abs(compound) * 0.5), 2)
-                                        else:
-                                            news_item['sentiment'] = 'NEUTRAL'
-                                            news_item['sentiment_score'] = 0.5
+                                        analysis = analyze_market_sentiment(full_text, None, scores)
+                                        news_item['sentiment'] = analysis['sentiment']
+                                        news_item['sentiment_score'] = analysis['sentiment_score']
+                                        news_item['market_context'] = analysis['market_context']
+                                        if analysis['commodity']:
+                                            news_item['commodity'] = analysis['commodity']
                                     else:
                                         # Use basic sentiment if VADER not available
                                         self._add_basic_sentiment(news_item, full_text or title)
@@ -355,6 +503,7 @@ class UserNewsService:
         
         for item in news:
             text = (item.get('title', '') + ' ' + item.get('summary', '')).lower()
+            normalized_commodity = normalize_commodity(None, text)
             
             # Count sentiment words
             pos_count = sum(1 for word in positive_words if word in text)
@@ -370,6 +519,13 @@ class UserNewsService:
             else:
                 item['sentiment'] = 'NEUTRAL'
                 item['sentiment_score'] = 0.5
+            contextual = analyze_market_sentiment(text, normalized_commodity)
+            if contextual['market_context']['matched_signals']:
+                item['sentiment'] = contextual['sentiment']
+                item['sentiment_score'] = contextual['sentiment_score']
+                item['market_context'] = contextual['market_context']
+                if contextual['commodity']:
+                    item['commodity'] = contextual['commodity']
             
             # Tag relevant commodities
             item['related_commodities'] = [c for c in commodities if c.lower() in text]

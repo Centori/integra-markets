@@ -15,6 +15,7 @@ from typing import Optional, List, Dict, Any
 import datetime
 import logging
 import requests
+import re
 
 # Load environment variables
 parent_dir = Path(__file__).parent.parent
@@ -91,6 +92,196 @@ class SentimentRequest(BaseModel):
 
 class MarketDataRequest(BaseModel):
     commodities: List[str] = ["OIL", "GOLD", "WHEAT", "NAT GAS"]
+
+def _clamp(value: float, lower: float, upper: float) -> float:
+    return max(lower, min(upper, value))
+
+def normalize_commodity(commodity: Optional[str], text: Optional[str] = None) -> Optional[str]:
+    alias_map = {
+        "oil": "oil",
+        "crude": "oil",
+        "crude oil": "oil",
+        "wti": "oil",
+        "brent": "oil",
+        "gas": "gas",
+        "nat gas": "gas",
+        "natural gas": "gas",
+        "lng": "gas",
+        "gold": "gold",
+        "silver": "silver",
+        "bitcoin": "bitcoin",
+        "btc": "bitcoin",
+        "wheat": "wheat",
+        "corn": "corn",
+        "macro": "macro",
+        "weather": "weather"
+    }
+    if commodity:
+        return alias_map.get(commodity.strip().lower(), commodity.strip().lower())
+    if not text:
+        return None
+    text_lower = text.lower()
+    for alias, normalized in alias_map.items():
+        if alias in text_lower:
+            return normalized
+    return None
+
+def get_commodity_rulebook() -> Dict[str, Dict[str, List[Dict[str, str]]]]:
+    return {
+        "oil": {
+            "bullish": [
+                {"pattern": r"opec\+?.{0,20}(cut|reduce|curb)", "signal": "OPEC supply cut"},
+                {"pattern": r"(inventory|stockpile).{0,12}(draw|drop|fall)", "signal": "Inventory draw"},
+                {"pattern": r"(sanctions|embargo|conflict|war).{0,24}(oil|crude|shipping|export)?", "signal": "Supply disruption risk"},
+                {"pattern": r"(hurricane|storm|outage|disruption).{0,24}(production|supply|export|offshore)?", "signal": "Production disruption"}
+            ],
+            "bearish": [
+                {"pattern": r"(production|output|supply).{0,18}(rise|increase|boost|grow)", "signal": "Supply growth"},
+                {"pattern": r"(inventory|stockpile).{0,12}(build|rise|increase)", "signal": "Inventory build"},
+                {"pattern": r"demand.{0,18}(slow|weak|fall|decline)", "signal": "Demand weakness"},
+                {"pattern": r"(recession|slowdown|demand destruction)", "signal": "Macro demand risk"}
+            ]
+        },
+        "gas": {
+            "bullish": [
+                {"pattern": r"(cold|freeze|arctic|winter storm)", "signal": "Heating demand surge"},
+                {"pattern": r"(storage|inventory).{0,12}(draw|drop|below)", "signal": "Storage draw"},
+                {"pattern": r"(lng|pipeline).{0,18}(outage|disruption|constraint)", "signal": "Supply constraint"}
+            ],
+            "bearish": [
+                {"pattern": r"(warm|mild).{0,18}(weather|winter)", "signal": "Weak heating demand"},
+                {"pattern": r"(storage|inventory).{0,12}(build|surplus|above)", "signal": "Storage surplus"},
+                {"pattern": r"production.{0,18}(rise|increase|record)", "signal": "Production increase"}
+            ]
+        },
+        "gold": {
+            "bullish": [
+                {"pattern": r"(rate cut|cuts rates|dovish|lower yields|yield fall|yield drops?)", "signal": "Lower real-rate pressure"},
+                {"pattern": r"(inflation|cpi).{0,18}(rise|hot|sticky)", "signal": "Inflation hedge demand"},
+                {"pattern": r"(geopolitical|conflict|war|safe[- ]haven)", "signal": "Safe-haven demand"},
+                {"pattern": r"(dollar|usd).{0,18}(weak|falls?|declines?)", "signal": "Dollar weakness"}
+            ],
+            "bearish": [
+                {"pattern": r"(rate hike|hawkish|higher yields|yield rise|yield jumps?)", "signal": "Higher yield pressure"},
+                {"pattern": r"(dollar|usd).{0,18}(strong|rall(y|ies)|rises?)", "signal": "Dollar strength"}
+            ]
+        },
+        "silver": {
+            "bullish": [
+                {"pattern": r"(rate cut|dovish|lower yields)", "signal": "Lower-rate support"},
+                {"pattern": r"(solar|electronics|industrial demand).{0,18}(rise|strong|increase)", "signal": "Industrial demand strength"}
+            ],
+            "bearish": [
+                {"pattern": r"(rate hike|hawkish|higher yields)", "signal": "Higher-rate pressure"},
+                {"pattern": r"(industrial|manufacturing).{0,18}(slowdown|weakness|contract)", "signal": "Industrial demand weakness"}
+            ]
+        },
+        "bitcoin": {
+            "bullish": [
+                {"pattern": r"(etf|spot etf).{0,18}(inflow|approval|demand)", "signal": "ETF demand"},
+                {"pattern": r"(rate cut|liquidity|easing|dovish)", "signal": "Liquidity tailwind"},
+                {"pattern": r"(institutional|adoption|treasury).{0,18}(buy|demand|allocation)", "signal": "Institutional adoption"}
+            ],
+            "bearish": [
+                {"pattern": r"(sec|regulator|crackdown|ban|lawsuit)", "signal": "Regulatory pressure"},
+                {"pattern": r"(hack|liquidation|outflow)", "signal": "Market stress"},
+                {"pattern": r"(rate hike|higher yields|tightening)", "signal": "Liquidity headwind"}
+            ]
+        },
+        "wheat": {
+            "bullish": [
+                {"pattern": r"(drought|flood|freeze|frost|heatwave)", "signal": "Crop risk"},
+                {"pattern": r"(export ban|supply shortage|crop damage)", "signal": "Supply tightening"},
+                {"pattern": r"(yield|harvest).{0,18}(fall|drop|miss)", "signal": "Weak harvest outlook"}
+            ],
+            "bearish": [
+                {"pattern": r"(bumper crop|record harvest|strong yield)", "signal": "Strong harvest"},
+                {"pattern": r"(export|supply).{0,18}(increase|recover)", "signal": "Supply recovery"}
+            ]
+        },
+        "corn": {
+            "bullish": [
+                {"pattern": r"(drought|heatwave|crop stress|yield loss)", "signal": "Crop stress"},
+                {"pattern": r"(ethanol demand|export sales).{0,18}(rise|strong)", "signal": "Demand support"}
+            ],
+            "bearish": [
+                {"pattern": r"(record crop|strong yield|ample supply)", "signal": "Ample supply"},
+                {"pattern": r"(rainfall|weather).{0,18}(improve|favorable)", "signal": "Improving crop conditions"}
+            ]
+        },
+        "macro": {
+            "bullish": [
+                {"pattern": r"(soft landing|rate cut|disinflation|stimulus)", "signal": "Growth-supportive macro"},
+                {"pattern": r"(cpi|inflation).{0,18}(cool|ease|slow)", "signal": "Cooling inflation"}
+            ],
+            "bearish": [
+                {"pattern": r"(recession|slowdown|hard landing)", "signal": "Growth downside risk"},
+                {"pattern": r"(cpi|inflation).{0,18}(hot|sticky|rise)", "signal": "Inflation pressure"},
+                {"pattern": r"(hawkish|rate hike|tightening)", "signal": "Tighter policy"}
+            ]
+        },
+        "weather": {
+            "bullish": [
+                {"pattern": r"(hurricane|storm|drought|flood|freeze|heatwave)", "signal": "Weather event risk"},
+                {"pattern": r"(forecast|models?).{0,18}(worsen|intensif(y|ies))", "signal": "Forecast deterioration"}
+            ],
+            "bearish": [
+                {"pattern": r"(forecast|models?).{0,18}(improve|moderate|weaken)", "signal": "Forecast improvement"},
+                {"pattern": r"(storm|hurricane).{0,18}(downgrade|dissipate)", "signal": "Event weakening"}
+            ]
+        }
+    }
+
+def analyze_market_sentiment(text: str, commodity: Optional[str], scores: Dict[str, float]) -> Dict[str, Any]:
+    normalized = normalize_commodity(commodity, text)
+    compound = scores["compound"]
+    if compound >= 0.05:
+        base_sentiment = "BULLISH"
+    elif compound <= -0.05:
+        base_sentiment = "BEARISH"
+    else:
+        base_sentiment = "NEUTRAL"
+    base_confidence = _clamp(abs(compound), 0.0, 1.0)
+    rulebook = get_commodity_rulebook()
+    matched_signals: List[Dict[str, str]] = []
+    directional_score = 0.0
+    if normalized in rulebook:
+        text_lower = text.lower()
+        bullish_hits = [
+            entry["signal"] for entry in rulebook[normalized]["bullish"]
+            if re.search(entry["pattern"], text_lower)
+        ]
+        bearish_hits = [
+            entry["signal"] for entry in rulebook[normalized]["bearish"]
+            if re.search(entry["pattern"], text_lower)
+        ]
+        directional_score = _clamp(0.22 * len(bullish_hits) - 0.22 * len(bearish_hits), -0.9, 0.9)
+        matched_signals = (
+            [{"signal": signal, "direction": "bullish"} for signal in bullish_hits] +
+            [{"signal": signal, "direction": "bearish"} for signal in bearish_hits]
+        )[:6]
+    combined_score = (compound * 0.4) + (directional_score * 0.6) if matched_signals else compound
+    if combined_score >= 0.12:
+        sentiment = "BULLISH"
+    elif combined_score <= -0.12:
+        sentiment = "BEARISH"
+    else:
+        sentiment = "NEUTRAL"
+    confidence = _clamp(
+        base_confidence + (min(0.18, len(matched_signals) * 0.03) if matched_signals else 0.0),
+        0.0,
+        0.96
+    )
+    return {
+        "sentiment": sentiment,
+        "confidence": round(confidence, 3),
+        "commodity": normalized,
+        "market_context": {
+            "base_sentiment": base_sentiment,
+            "directional_score": round(directional_score, 3),
+            "matched_signals": matched_signals
+        }
+    }
 
 # Root endpoint
 @app.get('/')
@@ -231,21 +422,15 @@ Provide:
     if NLTK_AVAILABLE:
         try:
             scores = sia.polarity_scores(request.text)
-            
-            if scores['compound'] > 0.1:
-                sentiment = "BULLISH"
-            elif scores['compound'] < -0.1:
-                sentiment = "BEARISH"
-            else:
-                sentiment = "NEUTRAL"
-            
+            market_result = analyze_market_sentiment(request.text, request.commodity, scores)
             return {
                 "text": request.text,
-                "sentiment": sentiment,
-                "confidence": abs(scores['compound']),
+                "sentiment": market_result["sentiment"],
+                "confidence": market_result["confidence"],
                 "method": "nltk_vader",
                 "scores": scores,
                 "commodity": request.commodity,
+                "market_context": market_result["market_context"],
                 "timestamp": datetime.datetime.now().isoformat()
             }
         except Exception as e:
