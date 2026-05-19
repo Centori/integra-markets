@@ -1,4 +1,0 @@
-Traceback (most recent call last):
-  File "/Users/lm/Desktop/integra/integra-markets/backend/main_simple_nlp.py", line 8, in <module>
-    from dotenv import load_dotenv
-ModuleNotFoundError: No module named 'dotenv'

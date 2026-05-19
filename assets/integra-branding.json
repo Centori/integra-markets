@@ -1,0 +1,76 @@
+{
+  "brand": {
+    "name": "integra",
+    "company": "Integra Markets",
+    "description": "AI-powered market intelligence platform"
+  },
+  "colors": {
+    "primary": "#4ECCA3",
+    "primaryDark": "#3AB89B",
+    "background": "#121212",
+    "backgroundLight": "#1E1E1E",
+    "text": "white",
+    "textSecondary": "#A0A0A0",
+    "accent": "#FF9999"
+  },
+  "assets": {
+    "icon": {
+      "name": "integra-icon-i",
+      "letter": "i",
+      "background": "#4ECCA3",
+      "foreground": "white",
+      "sizes": [16, 32, 64, 128, 256, 512, 1024]
+    },
+    "logo": {
+      "variants": [
+        {
+          "name": "integra-text-emerald",
+          "text": "integra",
+          "color": "#4ECCA3",
+          "background": "#000000",
+          "style": "bold"
+        },
+        {
+          "name": "integra-text-white",
+          "text": "integra",
+          "color": "white",
+          "background": "#000000",
+          "style": "bold"
+        },
+        {
+          "name": "integra-modern",
+          "text": "integra",
+          "color": "black",
+          "background": "#A0A0A0",
+          "accents": "#FF9999",
+          "style": "pixelated"
+        },
+        {
+          "name": "integra-minimal",
+          "text": "integra",
+          "color": "white",
+          "background": "#000000",
+          "style": "minimal"
+        }
+      ]
+    },
+    "typography": {
+      "fontFamily": "system-ui, -apple-system, sans-serif",
+      "fontWeight": 600,
+      "letterSpacing": "normal"
+    }
+  },
+  "usage": {
+    "appIcon": {
+      "background": "#4ECCA3",
+      "letter": "i",
+      "description": "Primary app icon for iOS and Android"
+    },
+    "branding": {
+      "primary": "integra-text-emerald",
+      "dark": "integra-text-white",
+      "modern": "integra-modern",
+      "description": "Logo variations for different use cases"
+    }
+  }
+}
