@@ -44,3 +44,5 @@ export const IntegraIconITransparent = ({ size = 512 }: { size?: number }) => {
     </svg>
   );
 };
+
+export default IntegraIconI;

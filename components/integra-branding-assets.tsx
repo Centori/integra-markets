@@ -130,3 +130,29 @@ export const IntegraBrandingMinimal = () => {
     </svg>
   );
 };
+
+export default function IntegraBrandingAssets() {
+  return (
+    <div className="space-y-8">
+      <div className="bg-black p-6 rounded-lg overflow-x-auto">
+        <h3 className="text-lg font-semibold text-white mb-4">Emerald Green Variant</h3>
+        <IntegraBrandingText />
+      </div>
+
+      <div className="bg-black p-6 rounded-lg overflow-x-auto">
+        <h3 className="text-lg font-semibold text-white mb-4">White Variant</h3>
+        <IntegraBrandingTextWhite />
+      </div>
+
+      <div className="bg-white p-6 rounded-lg overflow-x-auto">
+        <h3 className="text-lg font-semibold text-black mb-4">Modern Variant with Accents</h3>
+        <IntegraBrandingModern />
+      </div>
+
+      <div className="bg-black p-6 rounded-lg overflow-x-auto">
+        <h3 className="text-lg font-semibold text-white mb-4">Minimal Variant</h3>
+        <IntegraBrandingMinimal />
+      </div>
+    </div>
+  );
+}
