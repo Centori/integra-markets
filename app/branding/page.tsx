@@ -1,31 +1,81 @@
 'use client';
 
-import IntegraBrandingAssets from '@/components/integra-branding-assets';
-import IntegraIconI from '@/components/integra-icon-i';
+import Image from 'next/image';
 
 export default function BrandingPage() {
   return (
     <div className="min-h-screen bg-black p-8">
       <div className="max-w-7xl mx-auto">
         <h1 className="text-4xl font-bold text-white mb-4">Integra Markets Branding</h1>
-        <p className="text-gray-400 mb-12">Complete branding system with icons, logos, and assets</p>
+        <p className="text-gray-400 mb-12">Complete branding system with icons, logos, and assets adapted from premium fintech design</p>
 
         {/* App Icon Section */}
         <section className="mb-16">
           <h2 className="text-2xl font-bold text-white mb-6">App Icon - Letter "i"</h2>
-          <div className="grid grid-cols-2 md:grid-cols-4 gap-6">
-            <IntegraIconI size={128} />
-            <IntegraIconI size={96} />
-            <IntegraIconI size={64} />
-            <IntegraIconI size={48} />
+          <div className="bg-gray-900 p-8 rounded-lg flex items-center justify-center">
+            <Image
+              src="/integra-icon-i.png"
+              alt="Integra Markets App Icon"
+              width={256}
+              height={256}
+              className="rounded-lg"
+            />
           </div>
-          <p className="text-gray-400 mt-4">Emerald green icon with white "i" letter. Scalable from 16px to 1024px.</p>
+          <p className="text-gray-400 mt-4">Emerald green app icon with white "i" letter. Perfect for iOS and Android app stores.</p>
         </section>
 
         {/* Branding Assets Section */}
         <section className="mb-16">
           <h2 className="text-2xl font-bold text-white mb-6">Text Branding Variants</h2>
-          <IntegraBrandingAssets />
+          <div className="space-y-8">
+            {/* Emerald Green Variant */}
+            <div className="bg-gray-900 p-6 rounded-lg">
+              <h3 className="text-lg font-semibold text-white mb-4">Emerald Green Variant</h3>
+              <Image
+                src="/integra-branding-emerald.png"
+                alt="Integra branding in emerald green"
+                width={800}
+                height={200}
+                className="w-full rounded"
+              />
+            </div>
+
+            {/* White Variant */}
+            <div className="bg-gray-900 p-6 rounded-lg">
+              <h3 className="text-lg font-semibold text-white mb-4">White Variant</h3>
+              <Image
+                src="/integra-branding-white.png"
+                alt="Integra branding in white"
+                width={800}
+                height={200}
+                className="w-full rounded"
+              />
+            </div>
+
+            {/* Modern Variant */}
+            <div className="bg-gray-900 p-6 rounded-lg">
+              <h3 className="text-lg font-semibold text-white mb-4">Modern Variant with Pixelated Accents</h3>
+              <Image
+                src="/integra-branding-modern.png"
+                alt="Integra branding modern design"
+                width={800}
+                height={200}
+                className="w-full rounded"
+              />
+            </div>
+
+            {/* Minimal Variant */}
+            <div className="bg-gray-900 p-6 rounded-lg">
+              <h3 className="text-lg font-semibold text-white mb-4">Minimal Variant</h3>
+              <Image
+                src="/integra-branding-minimal.png"
+                alt="Integra branding minimal"
+                width={800}
+                height={200}
+                className="w-full rounded"
+              />
+            </div>
+          </div>
         </section>
 
         {/* Color Palette */}
