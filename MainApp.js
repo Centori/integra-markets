@@ -13,6 +13,7 @@ import TodayDashboard from './app/components/TodayDashboard';
 import AlertsScreen from './app/components/AlertsScreen';
 import ProfileScreen from './app/components/ProfileScreen';
 import PredictionMarketsScreen from './app/screens/PredictionMarketsScreen';
+import PolymarketPreviewScreen from './app/components/PolymarketPreviewScreen';
 import IntegraLoadingPage from './app/components/IntegraLoadingPage';
 import ErrorBoundary from './app/components/ErrorBoundary';
 import AsyncStorage from '@react-native-async-storage/async-storage';
@@ -24,7 +25,9 @@ if (typeof global.__DEV__ === 'undefined') {
 }
 
 const MainApp = () => {
-  const [activeTab, setActiveTab] = useState('Today');
+  // Open the preview surface by default in development so UI work can be inspected
+  // even if the live dashboard is currently unstable on web.
+  const [activeTab, setActiveTab] = useState(__DEV__ ? 'Preview' : 'Today');
   const [isLoading, setIsLoading] = useState(true);
   const [agentActive, setAgentActive] = useState(true);
 
@@ -63,6 +66,8 @@ const MainApp = () => {
         return <PredictionMarketsScreen />;
       case 'Alerts':
         return <AlertsScreen />;
+      case 'Preview':
+        return <PolymarketPreviewScreen onBack={() => setActiveTab('Today')} />;
       case 'Profile':
         return <ProfileScreen />;
       default:
@@ -107,6 +112,20 @@ const MainApp = () => {
             />
             <Text style={[styles.navText, activeTab === 'Alerts' && styles.navTextActive]}>
               Alerts
+            </Text>
+          </TouchableOpacity>
+
+          <TouchableOpacity
+            style={[styles.navItem, activeTab === 'Preview' && styles.navItemActive]}
+            onPress={() => setActiveTab('Preview')}
+          >
+            <Ionicons
+              name={activeTab === 'Preview' ? 'eye' : 'eye-outline'}
+              size={24}
+              color={activeTab === 'Preview' ? '#4ECCA3' : '#666666'}
+            />
+            <Text style={[styles.navText, activeTab === 'Preview' && styles.navTextActive]}>
+              Preview
             </Text>
           </TouchableOpacity>
 

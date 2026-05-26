@@ -4,6 +4,7 @@ import { Ionicons, MaterialIcons, MaterialCommunityIcons } from '@expo/vector-ic
 import { dashboardApi, sentimentApi, marketDataApi } from '../services/api';
 import IntegraIcon from './IntegraIcon';
 import AIAnalysisOverlay from './AIAnalysisOverlay';
+import { getPreferredSourceUrl } from '../utils/polymarketLinks';
 
 const TodayDashboard = ({ agentActive }) => {
   const [selectedFilter, setSelectedFilter] = useState('All');
@@ -38,7 +39,10 @@ const [marketData, setMarketData] = useState(null);
           headline: article.title,
           summary: article.summary,
           source: article.source,
-          sourceUrl: article.source_url || article.url || getSourceUrl(article.source),
+          sourceUrl: getPreferredSourceUrl(article) || getSourceUrl(article.source),
+          eventUrl: article.event_url || article.eventUrl || article.polymarket_url || article.polymarketUrl,
+          eventSlug: article.event_slug || article.eventSlug || article.slug || article.polymarket_slug || article.polymarketSlug,
+          polymarketContext: article.polymarket_context || article.polymarketContext,
           timeAgo: formatTimeAgo(article.time_published),
           sentiment: article.ensemble_sentiment || article.sentiment,
           sentimentScore: article.sentiment_score ? article.sentiment_score.toFixed(2) : "0.50",

@@ -1,14 +1,22 @@
 import React, { useState, useEffect } from 'react';
-import { View, Text, StyleSheet, Modal, TouchableOpacity, ScrollView, Platform, Clipboard, Alert, ActivityIndicator } from 'react-native';
+import { View, Text, StyleSheet, Modal, TouchableOpacity, ScrollView, Platform, Clipboard, Alert, ActivityIndicator, Linking } from 'react-native';
 import { MaterialIcons } from '@expo/vector-icons';
 import ChatInterface from './ChatInterface';
+import PolymarketIcon from './PolymarketIcon';
 import { useBookmarks } from '../providers/BookmarkProvider';
 import newsAnalysisService from '../services/newsAnalysisService';
+import { getPreferredSourceUrl } from '../utils/polymarketLinks';
 
 interface NewsData {
     title: string;
     summary: string;
     source: string;
+    sourceUrl?: string;
+    eventUrl?: string;
+    polymarketUrl?: string;
+    polymarketContext?: {
+        slug?: string;
+    };
     timeAgo: string;
     sentiment: string;
     sentimentScore: number;
@@ -24,9 +32,11 @@ const AIAnalysisOverlay: React.FC<AIAnalysisOverlayProps> = ({ newsData, isVisib
     const [showChat, setShowChat] = useState(false);
     const [isLoading, setIsLoading] = useState(false);
     const [analysisData, setAnalysisData] = useState<any>(null);
-    const { addBookmark, removeBookmark, isBookmarked, bookmarks } = useBookmarks();
+    const { addNewsBookmark, removeBookmark, isBookmarked, bookmarks } = useBookmarks();
     
     const isCurrentlyBookmarked = newsData ? isBookmarked(newsData.title) : false;
+    const isPolymarketAnalysis = newsData?.source?.toLowerCase?.() === 'polymarket';
+    const preferredSourceUrl = newsData ? getPreferredSourceUrl(newsData) : null;
     
     // Fetch analysis when component mounts or newsData changes
     useEffect(() => {
@@ -70,10 +80,11 @@ const AIAnalysisOverlay: React.FC<AIAnalysisOverlayProps> = ({ newsData, isVisib
                 }
             } else {
                 // Add new bookmark with AI analysis data
-                await addBookmark({
+                await addNewsBookmark({
                     title: newsData.title,
                     summary: analysisData.summary,
                     source: newsData.source,
+                    sourceUrl: preferredSourceUrl || undefined,
                     sentiment: analysisData.finBertSentiment.bullish > analysisData.finBertSentiment.bearish 
                         ? (analysisData.finBertSentiment.bullish > analysisData.finBertSentiment.neutral ? 'BULLISH' : 'NEUTRAL')
                         : (analysisData.finBertSentiment.bearish > analysisData.finBertSentiment.neutral ? 'BEARISH' : 'NEUTRAL'),
@@ -98,14 +109,35 @@ const AIAnalysisOverlay: React.FC<AIAnalysisOverlayProps> = ({ newsData, isVisib
         Alert.alert('Copied!', `${sectionName} copied to clipboard`);
     };
 
+    const handleSourcePress = async () => {
+        if (!preferredSourceUrl) {
+            Alert.alert(
+                'Source Unavailable',
+                isPolymarketAnalysis
+                    ? 'No canonical Polymarket event URL is attached to this analysis yet.'
+                    : 'No source URL is available for this article.'
+            );
+            return;
+        }
+
+        try {
+            await Linking.openURL(preferredSourceUrl);
+        } catch (error) {
+            console.error('Error opening source URL:', error);
+            Alert.alert('Unable to Open Link', 'The source link could not be opened.');
+        }
+    };
+
     const formatAnalysisForCopy = () => {
         if (!analysisData) return '';
         
         const sentiment = `Bullish: ${analysisData.finBertSentiment.bullish}%, Bearish: ${analysisData.finBertSentiment.bearish}%, Neutral: ${analysisData.finBertSentiment.neutral}%`;
-        const drivers = analysisData.keyDrivers?.map(d => `${d.text} (${d.score})`).join(', ') || 'N/A';
-        const insights = analysisData.traderInsights?.map((insight, i) => `${i + 1}. ${insight}`).join('\n') || 'N/A';
+        const drivers = analysisData.keyDrivers?.map((d: { text: string; score: number }) => `${d.text} (${d.score})`).join(', ') || 'N/A';
+        const insights = analysisData.traderInsights?.map((insight: string, i: number) => `${i + 1}. ${insight}`).join('\n') || 'N/A';
         
-        return `INTEGRA AI ANALYSIS\n\nArticle: ${newsData.title}\nSource: ${newsData.source}\n\nSUMMARY:\n${analysisData.summary}\n\nSENTIMENT:\n${sentiment}\n\nKEY DRIVERS:\n${drivers}\n\nMARKET IMPACT:\n${analysisData.marketImpact.level} (Confidence: ${analysisData.marketImpact.confidence})\n\nTRADER INSIGHTS:\n${insights}`;
+        const header = isPolymarketAnalysis ? 'POLYMARKET ANALYSIS' : 'INTEGRA AI ANALYSIS';
+        const sourceLine = preferredSourceUrl ? `Source: ${newsData.source} (${preferredSourceUrl})` : `Source: ${newsData.source}`;
+        return `${header}\n\nArticle: ${newsData.title}\n${sourceLine}\n\nSUMMARY:\n${analysisData.summary}\n\nSENTIMENT:\n${sentiment}\n\nKEY DRIVERS:\n${drivers}\n\nMARKET IMPACT:\n${analysisData.marketImpact.level} (Confidence: ${analysisData.marketImpact.confidence})\n\nTRADER INSIGHTS:\n${insights}`;
     };
 
     // Show loading indicator while fetching
@@ -156,7 +188,19 @@ const AIAnalysisOverlay: React.FC<AIAnalysisOverlayProps> = ({ newsData, isVisib
                         <ScrollView showsVerticalScrollIndicator={false}>
                         {/* Header */}
                         <View style={styles.header}>
-                            <Text style={styles.title}>Integra Analysis</Text>
+                            <View style={styles.headerBrand}>
+                                {isPolymarketAnalysis ? (
+                                    <>
+                                        <PolymarketIcon size={28} rounded={false} style={undefined} />
+                                        <View>
+                                            <Text style={styles.title}>Polymarket Analysis</Text>
+                                            <Text style={styles.brandSubtitle}>Event-driven market intelligence</Text>
+                                        </View>
+                                    </>
+                                ) : (
+                                    <Text style={styles.title}>Integra Analysis</Text>
+                                )}
+                            </View>
                             <View style={styles.headerActions}>
                                 <TouchableOpacity 
                                     style={styles.copyButton}
@@ -179,8 +223,8 @@ const AIAnalysisOverlay: React.FC<AIAnalysisOverlayProps> = ({ newsData, isVisib
                         
                         {/* Article Title and Source */}
                         <Text style={styles.articleTitle}>{newsData.title}</Text>
-                        <TouchableOpacity>
-                            <Text style={styles.source}>{newsData.source}</Text>
+                        <TouchableOpacity onPress={handleSourcePress} disabled={!preferredSourceUrl}>
+                            <Text style={[styles.source, preferredSourceUrl ? styles.sourceLink : null]}>{newsData.source}</Text>
                         </TouchableOpacity>
                         
                         {/* Summary Section */}
@@ -253,7 +297,7 @@ const AIAnalysisOverlay: React.FC<AIAnalysisOverlayProps> = ({ newsData, isVisib
                                 <TouchableOpacity 
                                     style={styles.sectionCopyButton}
                                     onPress={() => copyToClipboard(
-                                        analysisData.keyDrivers.map(d => `${d.text} (${d.score})`).join(', '),
+                                        analysisData.keyDrivers.map((d: { text: string; score: number }) => `${d.text} (${d.score})`).join(', '),
                                         'Key Drivers'
                                     )}
                                 >
@@ -298,14 +342,14 @@ const AIAnalysisOverlay: React.FC<AIAnalysisOverlayProps> = ({ newsData, isVisib
                                 <TouchableOpacity 
                                     style={styles.sectionCopyButton}
                                     onPress={() => copyToClipboard(
-                                        analysisData.traderInsights.map((insight, i) => `${i + 1}. ${insight}`).join('\n'),
+                                        analysisData.traderInsights.map((insight: string, i: number) => `${i + 1}. ${insight}`).join('\n'),
                                         'Trader Insights'
                                     )}
                                 >
                                     <MaterialIcons name="content-copy" size={16} color="#A0A0A0" />
                                 </TouchableOpacity>
                             </View>
-                            {analysisData.traderInsights.map((insight, index) => (
+                            {analysisData.traderInsights.map((insight: string, index: number) => (
                                 <View key={index} style={styles.insightRow}>
                                     <Text style={styles.bulletPoint}>•</Text>
                                     <Text style={styles.insightText}>{insight}</Text>
@@ -409,10 +453,22 @@ const styles = StyleSheet.create({
         borderBottomWidth: 1,
         borderBottomColor: '#333333',
     },
+    headerBrand: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        gap: 10,
+        flexShrink: 1,
+        paddingRight: 12,
+    },
     title: {
         fontSize: 22,
         fontWeight: '600',
         color: '#ECECEC',
+    },
+    brandSubtitle: {
+        fontSize: 12,
+        color: '#8FA7FF',
+        marginTop: 2,
     },
     headerActions: {
         flexDirection: 'row',
@@ -443,6 +499,9 @@ const styles = StyleSheet.create({
         fontSize: 16,
         color: '#4A9EFF',
         marginBottom: 20,
+    },
+    sourceLink: {
+        color: '#4ECCA3',
     },
     section: {
         marginBottom: 24,
@@ -616,4 +675,3 @@ const styles = StyleSheet.create({
 });
 
 export default AIAnalysisOverlay;
-

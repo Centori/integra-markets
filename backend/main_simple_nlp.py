@@ -10,7 +10,17 @@ from supabase import create_client, Client
 import datetime
 import logging
 import re
+import base64
+import hashlib
+from urllib.parse import urlparse
 from contextlib import asynccontextmanager
+from uuid import uuid4
+
+try:
+    from cryptography.fernet import Fernet
+    CONNECTOR_CRYPTO_AVAILABLE = True
+except ImportError:
+    CONNECTOR_CRYPTO_AVAILABLE = False
 
 # Import article summarizer
 try:
@@ -148,6 +158,14 @@ class NewsAnalysisRequest(BaseModel):
     text: str
     source: Optional[str] = None
 
+class OverallSentimentRequest(BaseModel):
+    topic_text: str = Field(..., min_length=1, description="Market topic or question to score against recent headlines")
+    commodity: Optional[str] = Field(None, description="Optional commodity override")
+    max_headlines: int = Field(20, ge=5, le=50, description="Maximum recent headlines to include")
+    refresh_if_empty: bool = Field(True, description="Fetch the latest feed if the recent-headlines cache is empty")
+    event_url: Optional[str] = Field(None, description="Canonical Polymarket event URL for event-driven analysis")
+    event_slug: Optional[str] = Field(None, description="Canonical Polymarket event slug")
+
 class ArticleSummarizeRequest(BaseModel):
     url: str = Field(..., description="URL of the article to summarize")
     sentences: int = Field(5, ge=1, le=10, description="Number of sentences in summary")
@@ -187,6 +205,349 @@ class ComprehensiveAnalysisRequest(BaseModel):
     include_preprocessing: bool = Field(True, description="Include preprocessing with trigger keywords")
     include_finbert: bool = Field(True, description="Include FinBERT sentiment analysis")
 
+class LexiconExplainRequest(BaseModel):
+    text: str = Field(..., min_length=1, description="Text to analyze with the commodity lexicon")
+    commodity: Optional[str] = Field(None, description="Commodity context to force during analysis")
+    include_rulebook: bool = Field(False, description="Include the underlying commodity rulebook in the response")
+
+class DashboardSentimentEngineRequest(BaseModel):
+    commodities: Optional[List[str]] = Field(None, description="Tracked commodities to include in the dashboard snapshot")
+    max_headlines: int = Field(15, ge=5, le=50, description="Maximum headlines per commodity snapshot")
+    refresh_if_empty: bool = Field(True, description="Fetch headlines if the dashboard cache is empty")
+
+class ConnectorCredentialRequest(BaseModel):
+    auth_type: str = Field("api_key", description="Credential mode: none, api_key, or bearer")
+    api_key: Optional[str] = Field(None, description="User-provided API key or subscription token")
+    bearer_token: Optional[str] = Field(None, description="User-provided bearer token")
+    api_key_header: Optional[str] = Field("Authorization", description="Header name used when auth_type is api_key")
+    persist_secret: bool = Field(True, description="Store the credential encrypted for future connector runs")
+
+class PolymarketConnectorRequest(BaseModel):
+    user_id: str = Field(..., description="Owning user ID")
+    name: str = Field(..., min_length=1, description="User-visible connector name")
+    source_mode: str = Field("tenant_private", description="shared, hybrid, or tenant_private")
+    base_url: Optional[str] = Field("https://polymarket.com", description="Base endpoint or portal URL for the connector")
+    event_url: Optional[str] = Field(None, description="Optional canonical Polymarket event URL")
+    event_slug: Optional[str] = Field(None, description="Optional Polymarket event slug")
+    website_urls: Optional[List[str]] = Field(default_factory=list, description="Optional user-owned source URLs")
+    custom_headers: Optional[Dict[str, str]] = Field(default_factory=dict, description="Additional pass-through headers")
+    use_personal_subscription: bool = Field(True, description="Whether this connector should use the user's own vendor credentials")
+    bypass_shared_limits: bool = Field(True, description="Whether requests should avoid shared platform source pools")
+    rate_limit_per_minute: Optional[int] = Field(None, ge=1, le=10000, description="Tenant-specific limit for this connector")
+    cache_ttl_seconds: int = Field(60, ge=0, le=3600, description="Connector-local cache TTL")
+    credentials: Optional[ConnectorCredentialRequest] = Field(None, description="Optional BYO credential payload")
+
+class PolymarketConnectorValidationRequest(BaseModel):
+    connector: PolymarketConnectorRequest
+
+class PolymarketSentimentRequest(BaseModel):
+    topic_text: str = Field(..., min_length=1, description="Market topic or question to score")
+    user_id: Optional[str] = Field(None, description="Optional owning user ID when resolving a saved connector")
+    connector_id: Optional[str] = Field(None, description="Optional saved Polymarket connector ID")
+    event_url: Optional[str] = Field(None, description="Canonical Polymarket event URL")
+    event_slug: Optional[str] = Field(None, description="Canonical Polymarket event slug")
+    max_headlines: int = Field(20, ge=5, le=50, description="Maximum headlines to include")
+    refresh_if_empty: bool = Field(True, description="Fetch headlines if cache is empty")
+    credentials: Optional[ConnectorCredentialRequest] = Field(None, description="Optional one-off BYO credential without saving")
+
+RECENT_NEWS_CACHE: Dict[str, Any] = {
+    "timestamp": None,
+    "articles": []
+}
+
+PREDICTION_MARKET_CONNECTORS_TABLE = "prediction_market_connectors"
+
+COMMODITY_METADATA: Dict[str, Dict[str, Any]] = {
+    "oil": {
+        "display_name": "Oil",
+        "category": "energy",
+        "dashboard_symbol": "OIL",
+        "aliases": ["oil", "crude", "crude oil", "wti", "brent"]
+    },
+    "gas": {
+        "display_name": "Natural Gas",
+        "category": "energy",
+        "dashboard_symbol": "NAT GAS",
+        "aliases": ["gas", "nat gas", "natural gas", "lng"]
+    },
+    "gold": {
+        "display_name": "Gold",
+        "category": "metals",
+        "dashboard_symbol": "GOLD",
+        "aliases": ["gold"]
+    },
+    "silver": {
+        "display_name": "Silver",
+        "category": "metals",
+        "dashboard_symbol": "SILVER",
+        "aliases": ["silver"]
+    },
+    "uranium": {
+        "display_name": "Uranium",
+        "category": "energy transition",
+        "dashboard_symbol": "URANIUM",
+        "aliases": ["uranium", "u3o8"]
+    },
+    "forex": {
+        "display_name": "Forex",
+        "category": "macro",
+        "dashboard_symbol": "FOREX",
+        "aliases": ["forex", "fx", "usd", "dollar", "eurusd", "usdjpy"]
+    },
+    "bitcoin": {
+        "display_name": "Bitcoin",
+        "category": "digital assets",
+        "dashboard_symbol": "BTC",
+        "aliases": ["bitcoin", "btc"]
+    },
+    "wheat": {
+        "display_name": "Wheat",
+        "category": "agriculture",
+        "dashboard_symbol": "WHEAT",
+        "aliases": ["wheat"]
+    },
+    "corn": {
+        "display_name": "Corn",
+        "category": "agriculture",
+        "dashboard_symbol": "CORN",
+        "aliases": ["corn"]
+    },
+    "macro": {
+        "display_name": "Macro",
+        "category": "macro",
+        "dashboard_symbol": "MACRO",
+        "aliases": ["macro"]
+    },
+    "weather": {
+        "display_name": "Weather",
+        "category": "weather",
+        "dashboard_symbol": "WEATHER",
+        "aliases": ["weather"]
+    }
+}
+
+def get_connector_cipher() -> Optional["Fernet"]:
+    secret = os.getenv("CONNECTOR_ENCRYPTION_KEY")
+    if not secret or not CONNECTOR_CRYPTO_AVAILABLE:
+        return None
+
+    try:
+        raw_key = secret.encode("utf-8")
+        if len(raw_key) != 44:
+            raw_key = base64.urlsafe_b64encode(hashlib.sha256(raw_key).digest())
+        return Fernet(raw_key)
+    except Exception as exc:
+        logger.error(f"Connector encryption setup failed: {exc}")
+        return None
+
+def mask_secret(secret: Optional[str]) -> Optional[str]:
+    if not secret:
+        return None
+    if len(secret) <= 8:
+        return "*" * len(secret)
+    return f"{secret[:4]}...{secret[-4:]}"
+
+def serialize_connector_credentials(credentials: Optional[ConnectorCredentialRequest]) -> Dict[str, Any]:
+    if not credentials:
+        return {
+            "auth_type": "none",
+            "api_key_header": None,
+            "has_secret": False,
+            "masked_secret": None,
+            "persisted": False
+        }
+
+    secret_value = credentials.api_key or credentials.bearer_token
+    return {
+        "auth_type": credentials.auth_type,
+        "api_key_header": credentials.api_key_header,
+        "has_secret": bool(secret_value),
+        "masked_secret": mask_secret(secret_value),
+        "persisted": bool(secret_value and credentials.persist_secret)
+    }
+
+def encrypt_connector_secret(secret: Optional[str]) -> Optional[str]:
+    if not secret:
+        return None
+
+    cipher = get_connector_cipher()
+    if not cipher:
+        raise HTTPException(
+            status_code=503,
+            detail="Connector secret persistence requires CONNECTOR_ENCRYPTION_KEY and cryptography support"
+        )
+
+    return cipher.encrypt(secret.encode("utf-8")).decode("utf-8")
+
+def normalize_polymarket_connector_payload(payload: PolymarketConnectorRequest, encrypt_secret: bool = True) -> Dict[str, Any]:
+    canonical_slug = extract_polymarket_event_slug(payload.event_slug) or extract_polymarket_event_slug(payload.event_url)
+    canonical_url = payload.event_url if is_official_polymarket_event_url(payload.event_url) else build_polymarket_event_url(canonical_slug)
+    credentials_summary = serialize_connector_credentials(payload.credentials)
+    secret_value = None
+    if payload.credentials:
+        secret_value = payload.credentials.api_key or payload.credentials.bearer_token
+
+    return {
+        "provider": "polymarket",
+        "name": payload.name.strip(),
+        "user_id": payload.user_id,
+        "source_mode": payload.source_mode,
+        "base_url": payload.base_url or "https://polymarket.com",
+        "event_url": canonical_url,
+        "event_slug": canonical_slug,
+        "website_urls": payload.website_urls or [],
+        "custom_headers": payload.custom_headers or {},
+        "use_personal_subscription": payload.use_personal_subscription,
+        "bypass_shared_limits": payload.bypass_shared_limits,
+        "rate_limit_per_minute": payload.rate_limit_per_minute,
+        "cache_ttl_seconds": payload.cache_ttl_seconds,
+        "auth_type": credentials_summary["auth_type"],
+        "api_key_header": credentials_summary["api_key_header"],
+        "credential_mask": credentials_summary["masked_secret"],
+        "credential_encrypted": (
+            encrypt_connector_secret(secret_value)
+            if encrypt_secret and secret_value and payload.credentials and payload.credentials.persist_secret
+            else None
+        ),
+        "credential_persisted": credentials_summary["persisted"],
+        "has_secret": credentials_summary["has_secret"],
+        "auth_via_app": bool(secret_value),
+        "vendor_auth_still_required": bool(secret_value),
+        "created_at": datetime.datetime.now(datetime.timezone.utc).isoformat(),
+        "updated_at": datetime.datetime.now(datetime.timezone.utc).isoformat()
+    }
+
+def build_polymarket_connector_assessment(payload: Dict[str, Any]) -> Dict[str, Any]:
+    warnings: List[str] = []
+    if payload["has_secret"]:
+        warnings.append("Vendor access is still authenticated by the user's own Polymarket or upstream subscription credential.")
+    else:
+        warnings.append("Public event metadata can work without a private credential, but private or premium endpoints require BYO credentials.")
+
+    if not payload["credential_persisted"] and payload["has_secret"]:
+        warnings.append("Credential was accepted only for the current request and will not be reused later.")
+
+    return {
+        "provider": "polymarket",
+        "source_mode": payload["source_mode"],
+        "app_manages_auth_replay": payload["has_secret"],
+        "vendor_auth_still_required": payload["vendor_auth_still_required"],
+        "bypass_shared_limits": payload["bypass_shared_limits"],
+        "uses_personal_subscription": payload["use_personal_subscription"],
+        "warnings": warnings
+    }
+
+def require_supabase() -> Client:
+    if not supabase:
+        raise HTTPException(status_code=503, detail="Supabase is not configured")
+    return supabase
+
+def serialize_saved_polymarket_connector(record: Dict[str, Any]) -> Dict[str, Any]:
+    return {
+        "id": record.get("id"),
+        "provider": record.get("provider", "polymarket"),
+        "name": record.get("name"),
+        "user_id": record.get("user_id"),
+        "source_mode": record.get("source_mode", "tenant_private"),
+        "base_url": record.get("base_url"),
+        "event_url": record.get("event_url"),
+        "event_slug": record.get("event_slug"),
+        "website_urls": record.get("website_urls") or [],
+        "custom_headers": record.get("custom_headers") or {},
+        "use_personal_subscription": bool(record.get("use_personal_subscription")),
+        "bypass_shared_limits": bool(record.get("bypass_shared_limits")),
+        "rate_limit_per_minute": record.get("rate_limit_per_minute"),
+        "cache_ttl_seconds": record.get("cache_ttl_seconds", 60),
+        "auth": {
+            "auth_type": record.get("auth_type", "none"),
+            "api_key_header": record.get("api_key_header"),
+            "has_secret": bool(record.get("has_secret")),
+            "masked_secret": record.get("credential_mask"),
+            "persisted": bool(record.get("credential_persisted"))
+        },
+        "authentication": {
+            "validated_by_app": bool(record.get("has_secret")),
+            "vendor_auth_still_required": bool(record.get("vendor_auth_still_required", record.get("has_secret"))),
+            "app_manages_auth_replay": bool(record.get("auth_via_app")),
+            "credential_status": "stored_encrypted" if record.get("credential_persisted") else "not_stored"
+        },
+        "created_at": record.get("created_at"),
+        "updated_at": record.get("updated_at")
+    }
+
+def fetch_saved_polymarket_connector(connector_id: str, user_id: Optional[str] = None) -> Dict[str, Any]:
+    db = require_supabase()
+    query = db.table(PREDICTION_MARKET_CONNECTORS_TABLE).select("*").eq("id", connector_id).eq("provider", "polymarket")
+    if user_id:
+        query = query.eq("user_id", user_id)
+    result = query.execute()
+    if not getattr(result, "data", None):
+        raise HTTPException(status_code=404, detail="Polymarket connector not found")
+    return result.data[0]
+
+def validate_connector_credentials(credentials: Optional[ConnectorCredentialRequest]) -> None:
+    if not credentials:
+        return
+
+    auth_type = (credentials.auth_type or "none").lower()
+    if auth_type not in {"none", "api_key", "bearer"}:
+        raise HTTPException(status_code=400, detail="auth_type must be one of: none, api_key, bearer")
+    if auth_type == "api_key" and not credentials.api_key:
+        raise HTTPException(status_code=400, detail="api_key is required when auth_type is api_key")
+    if auth_type == "bearer" and not credentials.bearer_token:
+        raise HTTPException(status_code=400, detail="bearer_token is required when auth_type is bearer")
+
+def validate_polymarket_connector_request(payload: PolymarketConnectorRequest) -> Dict[str, Any]:
+    validate_connector_credentials(payload.credentials)
+
+    source_mode = payload.source_mode.lower()
+    if source_mode not in {"shared", "hybrid", "tenant_private"}:
+        raise HTTPException(status_code=400, detail="source_mode must be one of: shared, hybrid, tenant_private")
+
+    canonical_slug = extract_polymarket_event_slug(payload.event_slug) or extract_polymarket_event_slug(payload.event_url)
+    canonical_event_url = payload.event_url if is_official_polymarket_event_url(payload.event_url) else build_polymarket_event_url(canonical_slug)
+
+    return {
+        "canonical_event_url": canonical_event_url,
+        "canonical_event_slug": canonical_slug,
+        "authentication": build_polymarket_connector_assessment(normalize_polymarket_connector_payload(payload, encrypt_secret=False)),
+        "storage_supported": bool(get_connector_cipher() or not (payload.credentials and (payload.credentials.api_key or payload.credentials.bearer_token) and payload.credentials.persist_secret))
+    }
+
+def serialize_commodity_rulebook(commodity: str) -> Dict[str, Any]:
+    rulebook = get_commodity_rulebook()
+    normalized = normalize_commodity(commodity)
+    if not normalized or normalized not in rulebook:
+        raise HTTPException(status_code=404, detail=f"Unsupported commodity '{commodity}'")
+
+    metadata = COMMODITY_METADATA.get(normalized, {})
+    bullish_rules = rulebook[normalized]["bullish"]
+    bearish_rules = rulebook[normalized]["bearish"]
+
+    return {
+        "commodity": normalized,
+        "display_name": metadata.get("display_name", normalized.title()),
+        "category": metadata.get("category", "general"),
+        "dashboard_symbol": metadata.get("dashboard_symbol", normalized.upper()),
+        "aliases": metadata.get("aliases", [normalized]),
+        "bullish_rules": bullish_rules,
+        "bearish_rules": bearish_rules,
+        "rule_count": len(bullish_rules) + len(bearish_rules)
+    }
+
+async def ensure_recent_news_cache(max_headlines: int, commodity_filter: Optional[str] = None) -> List[Dict[str, Any]]:
+    articles = RECENT_NEWS_CACHE.get("articles") or []
+    if articles:
+        return articles
+
+    news_result = await get_news_feed(
+        NewsRequest(
+            max_articles=max(max_headlines, 20),
+            commodity_filter=commodity_filter
+        )
+    )
+    return news_result.get("articles", [])
+
 # Root endpoint
 @app.get('/')
 def read_root():
@@ -205,6 +566,14 @@ def read_root():
             "/api/sentiment",
             "/api/sentiment/market",
             "/api/sentiment/movers", 
+            "/api/prediction-market/connectors/polymarket",
+            "/api/prediction-market/connectors/polymarket/{user_id}",
+            "/api/prediction-market/connectors/polymarket/validate",
+            "/api/prediction-market/polymarket/sentiment",
+            "/api/lexicon/commodities",
+            "/api/lexicon/commodities/{commodity}",
+            "/api/lexicon/explain",
+            "/api/dashboard/sentiment-engine",
             "/api/news/analysis",
             "/api/news/feed",
             "/api/user/news",
@@ -237,6 +606,231 @@ def get_models_status():
         "finbert_available": False,  # Not in this simplified version
         "groq_available": groq_service is not None,
         "models_loaded": vader_analyzer is not None or groq_service is not None
+    }
+
+@app.post('/api/prediction-market/connectors/polymarket/validate')
+def validate_polymarket_connector(request: PolymarketConnectorValidationRequest):
+    validation = validate_polymarket_connector_request(request.connector)
+    payload = normalize_polymarket_connector_payload(request.connector, encrypt_secret=False)
+    return {
+        "provider": "polymarket",
+        "connector_preview": {
+            "name": payload["name"],
+            "user_id": payload["user_id"],
+            "source_mode": payload["source_mode"],
+            "base_url": payload["base_url"],
+            "event_url": validation["canonical_event_url"],
+            "event_slug": validation["canonical_event_slug"],
+            "website_urls": payload["website_urls"],
+            "rate_limit_per_minute": payload["rate_limit_per_minute"],
+            "cache_ttl_seconds": payload["cache_ttl_seconds"]
+        },
+        "auth": {
+            "auth_type": payload["auth_type"],
+            "api_key_header": payload["api_key_header"],
+            "has_secret": payload["has_secret"],
+            "masked_secret": payload["credential_mask"],
+            "persist_secret": payload["credential_persisted"],
+            "storage_supported": validation["storage_supported"]
+        },
+        "authentication": validation["authentication"],
+        "message": "Your app validates and optionally stores the credential, but vendor access is still authenticated against the user's own Polymarket or upstream subscription."
+    }
+
+@app.post('/api/prediction-market/connectors/polymarket')
+def create_polymarket_connector(request: PolymarketConnectorRequest):
+    validate_polymarket_connector_request(request)
+    db = require_supabase()
+    payload = normalize_polymarket_connector_payload(request)
+    connector_id = str(uuid4())
+    insert_payload = {
+        "id": connector_id,
+        **payload
+    }
+    result = db.table(PREDICTION_MARKET_CONNECTORS_TABLE).insert(insert_payload).execute()
+    if not getattr(result, "data", None):
+        raise HTTPException(status_code=500, detail="Failed to persist Polymarket connector")
+    saved = serialize_saved_polymarket_connector(result.data[0])
+    saved["message"] = "Connector stored. Your app can now replay this tenant-scoped credential for Polymarket-related sentiment and source fetches."
+    return saved
+
+@app.get('/api/prediction-market/connectors/polymarket/{user_id}')
+def list_polymarket_connectors(user_id: str):
+    db = require_supabase()
+    result = db.table(PREDICTION_MARKET_CONNECTORS_TABLE).select("*").eq("provider", "polymarket").eq("user_id", user_id).order("created_at", desc=True).execute()
+    connectors = [serialize_saved_polymarket_connector(record) for record in (getattr(result, "data", None) or [])]
+    return {
+        "provider": "polymarket",
+        "count": len(connectors),
+        "connectors": connectors
+    }
+
+@app.delete('/api/prediction-market/connectors/polymarket/{connector_id}')
+def delete_polymarket_connector(connector_id: str, user_id: Optional[str] = None):
+    db = require_supabase()
+    query = db.table(PREDICTION_MARKET_CONNECTORS_TABLE).delete().eq("id", connector_id).eq("provider", "polymarket")
+    if user_id:
+        query = query.eq("user_id", user_id)
+    result = query.execute()
+    if not getattr(result, "data", None):
+        raise HTTPException(status_code=404, detail="Polymarket connector not found")
+    return {"success": True, "deleted_id": connector_id}
+
+@app.post('/api/prediction-market/polymarket/sentiment')
+async def get_polymarket_connector_sentiment(request: PolymarketSentimentRequest):
+    connector_record = None
+    credentials_summary = serialize_connector_credentials(request.credentials)
+
+    if request.connector_id:
+        connector_record = fetch_saved_polymarket_connector(request.connector_id, request.user_id)
+        if not request.event_url:
+            request.event_url = connector_record.get("event_url")
+        if not request.event_slug:
+            request.event_slug = connector_record.get("event_slug")
+        if connector_record.get("auth_type"):
+            credentials_summary = {
+                "auth_type": connector_record.get("auth_type", "none"),
+                "api_key_header": connector_record.get("api_key_header"),
+                "has_secret": bool(connector_record.get("has_secret")),
+                "masked_secret": connector_record.get("credential_mask"),
+                "persisted": bool(connector_record.get("credential_persisted"))
+            }
+
+    overview = await get_overall_news_sentiment(
+        OverallSentimentRequest(
+            topic_text=request.topic_text,
+            max_headlines=request.max_headlines,
+            refresh_if_empty=request.refresh_if_empty,
+            event_url=request.event_url,
+            event_slug=request.event_slug
+        )
+    )
+    overview["provider"] = "polymarket"
+    overview["connector_context"] = {
+        "connector_id": connector_record.get("id") if connector_record else None,
+        "source_mode": connector_record.get("source_mode", "shared") if connector_record else "shared",
+        "uses_personal_subscription": bool(connector_record.get("use_personal_subscription")) if connector_record else credentials_summary["has_secret"],
+        "bypass_shared_limits": bool(connector_record.get("bypass_shared_limits")) if connector_record else credentials_summary["has_secret"],
+        "auth": credentials_summary,
+        "authentication": {
+            "validated_by_app": credentials_summary["has_secret"],
+            "vendor_auth_still_required": credentials_summary["has_secret"],
+            "app_manages_auth_replay": bool(connector_record and connector_record.get("auth_via_app")),
+            "message": "Your app validates and optionally replays the BYO credential, but the upstream vendor still performs the actual authentication."
+        }
+    }
+    return overview
+
+@app.get('/api/lexicon/commodities')
+def get_commodity_lexicon_catalog():
+    rulebook = get_commodity_rulebook()
+    commodities = []
+    for commodity in sorted(rulebook.keys()):
+        commodity_payload = serialize_commodity_rulebook(commodity)
+        commodities.append({
+            "commodity": commodity_payload["commodity"],
+            "display_name": commodity_payload["display_name"],
+            "category": commodity_payload["category"],
+            "dashboard_symbol": commodity_payload["dashboard_symbol"],
+            "aliases": commodity_payload["aliases"],
+            "rule_count": commodity_payload["rule_count"]
+        })
+
+    return {
+        "count": len(commodities),
+        "commodities": commodities,
+        "version": app.version
+    }
+
+@app.get('/api/lexicon/commodities/{commodity}')
+def get_commodity_lexicon_detail(commodity: str):
+    return serialize_commodity_rulebook(commodity)
+
+@app.post('/api/lexicon/explain')
+async def explain_commodity_lexicon(request: LexiconExplainRequest):
+    scores = vader_analyzer.polarity_scores(request.text) if vader_analyzer else None
+    sentiment_result = analyze_market_sentiment(request.text, request.commodity, scores)
+    rulebook_payload = None
+    if request.include_rulebook and sentiment_result.get("commodity"):
+        rulebook_payload = serialize_commodity_rulebook(sentiment_result["commodity"])
+
+    return {
+        "text": request.text,
+        "commodity": sentiment_result.get("commodity"),
+        "sentiment": sentiment_result.get("sentiment"),
+        "confidence": sentiment_result.get("confidence"),
+        "method": sentiment_result.get("method"),
+        "market_context": sentiment_result.get("market_context", {}),
+        "keywords": extract_keywords(request.text),
+        "tickers": extract_commodity_tickers(request.text),
+        "rulebook": rulebook_payload,
+        "timestamp": datetime.datetime.now().isoformat()
+    }
+
+@app.post('/api/dashboard/sentiment-engine')
+async def get_dashboard_sentiment_engine(request: DashboardSentimentEngineRequest):
+    requested_commodities = request.commodities or ["oil", "gas", "gold", "wheat"]
+    normalized_requested: List[str] = []
+    for commodity in requested_commodities:
+        normalized = normalize_commodity(commodity)
+        if normalized and normalized not in normalized_requested and normalized in get_commodity_rulebook():
+            normalized_requested.append(normalized)
+
+    if not normalized_requested:
+        normalized_requested = ["oil", "gas", "gold", "wheat"]
+
+    articles = await ensure_recent_news_cache(request.max_headlines, normalized_requested[0] if len(normalized_requested) == 1 else None)
+
+    commodity_snapshots = []
+    sentiment_labels = {"BULLISH": 0, "BEARISH": 0, "NEUTRAL": 0}
+    for commodity in normalized_requested:
+        lexicon_detail = serialize_commodity_rulebook(commodity)
+        overview = build_headline_sentiment_overview(
+            lexicon_detail["display_name"],
+            articles,
+            commodity=commodity,
+            max_headlines=request.max_headlines
+        )
+        sentiment_labels[overview["overall_sentiment"]] = sentiment_labels.get(overview["overall_sentiment"], 0) + 1
+        commodity_snapshots.append({
+            "commodity": commodity,
+            "display_name": lexicon_detail["display_name"],
+            "category": lexicon_detail["category"],
+            "dashboard_symbol": lexicon_detail["dashboard_symbol"],
+            "aliases": lexicon_detail["aliases"],
+            "rule_count": lexicon_detail["rule_count"],
+            "overall_sentiment": overview["overall_sentiment"],
+            "confidence": overview["confidence"],
+            "headline_count": overview["headline_count"],
+            "target_assets": overview["target_assets"],
+            "summary": overview["summary"],
+            "matched_signals": overview.get("matched_signals", []),
+            "sample_headlines": overview.get("sample_headlines", []),
+            "sentiment_breakdown": overview.get("sentiment_breakdown", {}),
+            "lexicon": {
+                "bullish_rules": lexicon_detail["bullish_rules"],
+                "bearish_rules": lexicon_detail["bearish_rules"]
+            }
+        })
+
+    if sentiment_labels["BULLISH"] > sentiment_labels["BEARISH"]:
+        overall_sentiment = "BULLISH"
+    elif sentiment_labels["BEARISH"] > sentiment_labels["BULLISH"]:
+        overall_sentiment = "BEARISH"
+    else:
+        overall_sentiment = "NEUTRAL"
+
+    avg_confidence = round(
+        sum(snapshot["confidence"] for snapshot in commodity_snapshots) / max(len(commodity_snapshots), 1),
+        3
+    )
+
+    return {
+        "overall_sentiment": overall_sentiment,
+        "confidence": avg_confidence,
+        "commodities": commodity_snapshots,
+        "cache_timestamp": RECENT_NEWS_CACHE.get("timestamp"),
+        "generated_at": datetime.datetime.now().isoformat()
     }
 
 # Enhanced sentiment analysis
@@ -458,7 +1052,7 @@ async def get_news_feed(request: NewsRequest):
         }.get(request.alert_frequency, 24)
         
         # Filter articles by date
-        cutoff_time = datetime.datetime.now() - datetime.timedelta(hours=request.hours_back)
+        cutoff_time = datetime.datetime.now(datetime.timezone.utc) - datetime.timedelta(hours=hours_back)
         time_filtered_articles = []
         for article in all_articles:
             try:
@@ -467,9 +1061,14 @@ async def get_news_feed(request: NewsRequest):
                 if published_str:
                     # Handle both datetime objects and strings
                     if isinstance(published_str, datetime.datetime):
-                        published_date = published_str
+                        published_date = (
+                            published_str if published_str.tzinfo
+                            else published_str.replace(tzinfo=datetime.timezone.utc)
+                        )
                     else:
                         published_date = datetime.datetime.fromisoformat(published_str.replace('Z', '+00:00'))
+                        if published_date.tzinfo is None:
+                            published_date = published_date.replace(tzinfo=datetime.timezone.utc)
                     
                     # Only include articles within the time window
                     if published_date >= cutoff_time:
@@ -482,19 +1081,19 @@ async def get_news_feed(request: NewsRequest):
                 time_filtered_articles.append(article)
         
         all_articles = time_filtered_articles
-        logger.info(f"After time filtering ({request.hours_back}h): {len(all_articles)} articles remain")
+        logger.info(f"After time filtering ({hours_back}h): {len(all_articles)} articles remain")
         
         # If we have too few articles, progressively expand the time window
         min_articles = 5  # Minimum articles we want to show
         if len(all_articles) < min_articles:
-            logger.info(f"Only {len(all_articles)} articles found in {request.hours_back}h window, expanding search...")
+            logger.info(f"Only {len(all_articles)} articles found in {hours_back}h window, expanding search...")
             
             # Try expanding to 24 hours, then 48 hours
             for expanded_hours in [24, 48]:
-                if expanded_hours <= request.hours_back:
+                if expanded_hours <= hours_back:
                     continue  # Skip if we're already searching this far back
                 
-                expanded_cutoff = datetime.datetime.now() - datetime.timedelta(hours=expanded_hours)
+                expanded_cutoff = datetime.datetime.now(datetime.timezone.utc) - datetime.timedelta(hours=expanded_hours)
                 expanded_articles = []
                 
                 for article in results[0] if isinstance(results[0], list) else []:
@@ -502,9 +1101,14 @@ async def get_news_feed(request: NewsRequest):
                         published_str = article.get('published', '')
                         if published_str:
                             if isinstance(published_str, datetime.datetime):
-                                published_date = published_str
+                                published_date = (
+                                    published_str if published_str.tzinfo
+                                    else published_str.replace(tzinfo=datetime.timezone.utc)
+                                )
                             else:
                                 published_date = datetime.datetime.fromisoformat(published_str.replace('Z', '+00:00'))
+                                if published_date.tzinfo is None:
+                                    published_date = published_date.replace(tzinfo=datetime.timezone.utc)
                             
                             if published_date >= expanded_cutoff:
                                 # Check if not already in our list
@@ -663,6 +1267,14 @@ async def get_news_feed(request: NewsRequest):
         
         # Calculate enhancement statistics
         enhanced_count = sum(1 for article in enhanced_articles if article.get('enhanced', False))
+        RECENT_NEWS_CACHE["timestamp"] = datetime.datetime.now().isoformat()
+        RECENT_NEWS_CACHE["articles"] = enhanced_articles[:50]
+        overall_sentiment = build_headline_sentiment_overview(
+            request.commodity_filter or "commodities market",
+            enhanced_articles,
+            commodity=request.commodity_filter,
+            max_headlines=min(request.max_articles or 20, 20)
+        )
         
         return {
             'status': 'success',
@@ -673,13 +1285,39 @@ async def get_news_feed(request: NewsRequest):
             'analysis_method': 'vader' if vader_analyzer else 'basic',
             'content_enhanced': request.enhanced_content or False,
             'enhanced_articles_count': enhanced_count,
-            'enhancement_method': 'nltk_summarization' if request.enhanced_content else None
+            'enhancement_method': 'nltk_summarization' if request.enhanced_content else None,
+            'overall_sentiment': overall_sentiment
         }
     
     except Exception as e:
         logger.error(f"News feed error: {e}")
         # Return mock data as fallback
         return get_mock_news_data(request.max_articles)
+
+@app.post('/api/news/overall-sentiment')
+async def get_overall_news_sentiment(request: OverallSentimentRequest):
+    """Aggregate the latest cached headlines into a market-level sentiment summary."""
+    articles = RECENT_NEWS_CACHE.get("articles") or []
+
+    if not articles and request.refresh_if_empty:
+        news_result = await get_news_feed(
+            NewsRequest(
+                max_articles=max(request.max_headlines, 20),
+                commodity_filter=request.commodity
+            )
+        )
+        articles = news_result.get("articles", [])
+
+    overview = build_headline_sentiment_overview(
+        request.topic_text,
+        articles,
+        commodity=request.commodity,
+        max_headlines=request.max_headlines,
+        event_url=request.event_url,
+        event_slug=request.event_slug
+    )
+    overview["cache_timestamp"] = RECENT_NEWS_CACHE.get("timestamp")
+    return overview
 
 # New: User-specific news via Supabase preferences
 @app.post('/api/user/news')
@@ -941,6 +1579,14 @@ def normalize_commodity(commodity: Optional[str], text: Optional[str] = None) ->
         "lng": "gas",
         "gold": "gold",
         "silver": "silver",
+        "uranium": "uranium",
+        "u3o8": "uranium",
+        "forex": "forex",
+        "fx": "forex",
+        "usd": "forex",
+        "dollar": "forex",
+        "eurusd": "forex",
+        "usdjpy": "forex",
         "bitcoin": "bitcoin",
         "btc": "bitcoin",
         "wheat": "wheat",
@@ -1011,6 +1657,30 @@ def get_commodity_rulebook() -> Dict[str, Dict[str, List[Dict[str, str]]]]:
                 {"pattern": r"(rate hike|hawkish|higher yields)", "signal": "Higher-rate pressure"},
                 {"pattern": r"(industrial|manufacturing).{0,18}(slowdown|weakness|contract)", "signal": "Industrial demand weakness"},
                 {"pattern": r"(dollar|usd).{0,18}(strong|rises?)", "signal": "Dollar strength"}
+            ]
+        },
+        "uranium": {
+            "bullish": [
+                {"pattern": r"(nuclear|reactor|smr|small modular reactor).{0,24}(build|approval|restart|expand)", "signal": "Nuclear demand growth"},
+                {"pattern": r"(uranium|fuel supply).{0,24}(shortage|tight|disruption|sanction)", "signal": "Fuel supply tightening"},
+                {"pattern": r"(energy security|baseload power)", "signal": "Energy security support"}
+            ],
+            "bearish": [
+                {"pattern": r"(nuclear|reactor).{0,24}(delay|shutdown|closure|cancel)", "signal": "Reactor demand delay"},
+                {"pattern": r"(uranium|fuel supply).{0,24}(surplus|glut|oversupply)", "signal": "Fuel oversupply"},
+                {"pattern": r"(regulatory|policy).{0,24}(pushback|block|ban)", "signal": "Policy headwind"}
+            ]
+        },
+        "forex": {
+            "bullish": [
+                {"pattern": r"(hawkish fed|rate hike|higher yields|dollar strength|usd rally)", "signal": "Dollar-positive macro"},
+                {"pattern": r"(safe[- ]haven|risk-off|flight to quality)", "signal": "Defensive FX bid"},
+                {"pattern": r"(ecb|boj|boe).{0,24}(dovish|cut|ease)", "signal": "Foreign central-bank easing"}
+            ],
+            "bearish": [
+                {"pattern": r"(dovish fed|rate cut|lower yields|dollar weakness|usd falls?)", "signal": "Dollar-negative macro"},
+                {"pattern": r"(risk-on|carry trade|growth rebound)", "signal": "Risk-on FX rotation"},
+                {"pattern": r"(ecb|boj|boe).{0,24}(hawkish|hike|tighten)", "signal": "Foreign central-bank support"}
             ]
         },
         "bitcoin": {
@@ -1158,6 +1828,205 @@ def analyze_market_sentiment(text: str, commodity: Optional[str] = None, scores:
             "directional_score": fundamental["directional_score"],
             "matched_signals": fundamental["matched_signals"]
         }
+    }
+
+def infer_market_targets(topic_text: str, commodity: Optional[str] = None) -> List[str]:
+    """Infer the most relevant target assets for a market/topic prompt."""
+    normalized = normalize_commodity(commodity, topic_text)
+    if normalized:
+        if normalized == "macro":
+            return ["forex", "gold"]
+        if normalized == "weather":
+            return ["oil", "gas"]
+        return [normalized]
+
+    text_lower = topic_text.lower()
+    target_rules = [
+        (["wti", "brent", "crude", "opec", "hormuz", "oil", "shipping", "refinery"], ["oil"]),
+        (["gold", "bullion", "safe haven"], ["gold"]),
+        (["silver"], ["silver"]),
+        (["uranium", "u3o8", "nuclear", "reactor", "smr"], ["uranium"]),
+        (["forex", "fx", "usd", "dollar", "eur", "jpy", "gbp", "cad", "aud", "boj", "ecb", "boe"], ["forex"]),
+        (["iran", "israel", "middle east", "strait of hormuz", "sanctions"], ["oil", "gold", "silver"]),
+        (["fed", "rate cut", "rate hike", "inflation", "cpi", "payrolls", "central bank"], ["gold", "silver", "forex"]),
+        (["risk-on", "risk-off", "recession", "growth"], ["gold", "forex"])
+    ]
+
+    inferred: List[str] = []
+    for keywords, assets in target_rules:
+        if any(keyword in text_lower for keyword in keywords):
+            for asset in assets:
+                if asset not in inferred:
+                    inferred.append(asset)
+    return inferred[:3]
+
+def is_official_polymarket_event_url(value: Optional[str]) -> bool:
+    if not value:
+        return False
+
+    try:
+        parsed = urlparse(value)
+    except Exception:
+        return False
+
+    return parsed.netloc in {"polymarket.com", "www.polymarket.com"} and parsed.path.startswith("/event/")
+
+def build_polymarket_event_url(slug: Optional[str]) -> Optional[str]:
+    if not slug:
+        return None
+
+    normalized_slug = slug.strip().lstrip("/").removeprefix("event/").rstrip("/")
+    if not normalized_slug:
+        return None
+
+    return f"https://polymarket.com/event/{normalized_slug}"
+
+def extract_polymarket_event_slug(value: Optional[str]) -> Optional[str]:
+    if not value:
+        return None
+
+    if is_official_polymarket_event_url(value):
+        parsed = urlparse(value)
+        slug = re.sub(r"^/event/", "", parsed.path).rstrip("/")
+        return slug or None
+
+    normalized_slug = value.strip().lstrip("/").removeprefix("event/").rstrip("/")
+    return normalized_slug or None
+
+def score_article_relevance(article: Dict[str, Any], topic_text: str, target_assets: List[str]) -> float:
+    """Rank how useful a cached headline is for a topic-specific aggregate read."""
+    article_text = f"{article.get('title', '')} {article.get('summary', '')}".lower()
+    topic_lower = topic_text.lower()
+    score = 0.0
+
+    article_commodity = normalize_commodity(article.get("commodity"), article_text)
+    direct_asset_match = False
+    if article_commodity and article_commodity in target_assets:
+        score += 2.0
+        direct_asset_match = True
+
+    if article.get("sentiment") in {"BULLISH", "BEARISH"}:
+        score += 0.2
+
+    for asset in target_assets:
+        if asset in article_text:
+            score += 1.5
+            direct_asset_match = True
+
+    # For specific commodity dashboards, require an explicit commodity match.
+    if target_assets and target_assets[0] not in {"macro", "weather"} and not direct_asset_match:
+        return 0.0
+
+    shared_keywords = set(extract_keywords(topic_lower)).intersection(extract_keywords(article_text))
+    score += min(1.0, len(shared_keywords) * 0.25)
+
+    if any(keyword in article_text and keyword in topic_lower for keyword in ["iran", "israel", "opec", "fed", "inflation", "hormuz", "nuclear", "usd"]):
+        score += 1.25
+
+    return score
+
+def build_headline_sentiment_overview(
+    topic_text: str,
+    articles: List[Dict[str, Any]],
+    commodity: Optional[str] = None,
+    max_headlines: int = 20,
+    event_url: Optional[str] = None,
+    event_slug: Optional[str] = None
+) -> Dict[str, Any]:
+    """Summarize the last N relevant headlines into a single market-facing sentiment read."""
+    canonical_event_slug = extract_polymarket_event_slug(event_slug) or extract_polymarket_event_slug(event_url)
+    canonical_event_url = event_url if is_official_polymarket_event_url(event_url) else build_polymarket_event_url(canonical_event_slug)
+    target_assets = infer_market_targets(topic_text, commodity)
+    ranked_articles = sorted(
+        articles,
+        key=lambda article: score_article_relevance(article, topic_text, target_assets),
+        reverse=True
+    )
+    relevant_articles = [
+        article for article in ranked_articles
+        if score_article_relevance(article, topic_text, target_assets) > 0
+    ][:max_headlines]
+
+    primary_target = target_assets[0] if target_assets else normalize_commodity(commodity, topic_text)
+    if not relevant_articles:
+        primary_label = primary_target.upper() if primary_target else "the market"
+        return {
+            "topic_text": topic_text,
+            "primary_target": primary_target,
+            "target_assets": [asset.upper() for asset in target_assets],
+            "overall_sentiment": "NEUTRAL",
+            "confidence": 0.5,
+            "headline_count": 0,
+            "summary": f"No recent relevant headlines were available, so the overall sentiment for {primary_label} remains neutral.",
+            "sentiment_breakdown": {"bullish": 0, "bearish": 0, "neutral": 0},
+            "sample_headlines": [],
+            "method": "recent_headlines_cache",
+            "event_url": canonical_event_url,
+            "event_slug": canonical_event_slug,
+            "source_url": canonical_event_url
+        }
+
+    weighted_score = 0.0
+    total_weight = 0.0
+    sentiment_breakdown = {"bullish": 0, "bearish": 0, "neutral": 0}
+    signals: List[str] = []
+
+    for article in relevant_articles:
+        article_text = f"{article.get('title', '')}. {article.get('summary', '')}"
+        article_commodity = primary_target or normalize_commodity(article.get("commodity"), article_text)
+        market_result = analyze_market_sentiment(article_text, article_commodity)
+        article_score = market_result["confidence"]
+        if market_result["sentiment"] == "BULLISH":
+            weighted_score += article_score
+            sentiment_breakdown["bullish"] += 1
+        elif market_result["sentiment"] == "BEARISH":
+            weighted_score -= article_score
+            sentiment_breakdown["bearish"] += 1
+        else:
+            sentiment_breakdown["neutral"] += 1
+        total_weight += max(article_score, 0.2)
+        for signal in market_result.get("market_context", {}).get("matched_signals", []):
+            label = signal.get("signal")
+            if label and label not in signals:
+                signals.append(label)
+
+    normalized_score = weighted_score / total_weight if total_weight else 0.0
+    if normalized_score >= 0.15:
+        overall_sentiment = "BULLISH"
+    elif normalized_score <= -0.15:
+        overall_sentiment = "BEARISH"
+    else:
+        overall_sentiment = "NEUTRAL"
+
+    confidence = _clamp(
+        0.52 + abs(normalized_score) * 0.35 + min(0.1, len(relevant_articles) * 0.01),
+        0.5,
+        0.95
+    )
+    label = (primary_target or "market").upper()
+    summary = (
+        f"Overall sentiment across the last {len(relevant_articles)} relevant headlines is "
+        f"{overall_sentiment.lower()} for {label}, based on {sentiment_breakdown['bullish']} bullish, "
+        f"{sentiment_breakdown['bearish']} bearish, and {sentiment_breakdown['neutral']} neutral reads."
+    )
+    if signals:
+        summary += f" Key drivers include {', '.join(signals[:3]).lower()}."
+
+    return {
+        "topic_text": topic_text,
+        "primary_target": primary_target,
+        "target_assets": [asset.upper() for asset in target_assets],
+        "overall_sentiment": overall_sentiment,
+        "confidence": round(confidence, 3),
+        "headline_count": len(relevant_articles),
+        "summary": summary,
+        "sentiment_breakdown": sentiment_breakdown,
+        "sample_headlines": [article.get("title", "") for article in relevant_articles[:5]],
+        "matched_signals": signals[:5],
+        "method": "recent_headlines_cache",
+        "event_url": canonical_event_url,
+        "event_slug": canonical_event_slug,
+        "source_url": canonical_event_url
     }
 
 def extract_keywords(text: str) -> List[str]:
