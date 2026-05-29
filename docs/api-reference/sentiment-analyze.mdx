@@ -32,18 +32,7 @@ classification with confidence, and (when matched) the commodity context.
   trying to detect the commodity itself.
 </ParamField>
 
-<ParamField body="enhanced" type="boolean" default="true">
-  When `true`, the request first attempts the Groq compound analyzer which
-  also returns a summary, keywords, and trade-idea text. When `false`, only
-  the VADER + commodity-rules path runs.
-</ParamField>
-
 ## Response
-
-The response shape depends on which analyzer ran. The `method` field tells
-you which path was taken.
-
-### `method: "commodity_vader"` (most common)
 
 <ResponseField name="sentiment" type="string">
   One of `BULLISH`, `BEARISH`, `NEUTRAL`.
@@ -54,7 +43,7 @@ you which path was taken.
 </ResponseField>
 
 <ResponseField name="method" type="string">
-  Identifier of the analyzer used.
+  Identifier of the analyzer used (currently `commodity_vader`).
 </ResponseField>
 
 <ResponseField name="commodity" type="string">
@@ -71,26 +60,6 @@ you which path was taken.
 
 <ResponseField name="scores" type="object">
   Underlying VADER scores: `compound`, `positive`, `negative`, `neutral`.
-</ResponseField>
-
-### `method: "groq_compound"` (when `enhanced=true` and Groq is available)
-
-Same top-level fields plus an `ai` object:
-
-<ResponseField name="ai.summary" type="string">
-  One-paragraph summary of the article in plain English.
-</ResponseField>
-
-<ResponseField name="ai.keywords" type="array">
-  Salient terms extracted from the text.
-</ResponseField>
-
-<ResponseField name="ai.what_it_means_for_traders" type="string">
-  Plain-English read on market implications.
-</ResponseField>
-
-<ResponseField name="ai.trade_ideas" type="array">
-  Optional list of directional trade-idea strings.
 </ResponseField>
 
 ## Example
@@ -187,4 +156,3 @@ console.log(await response.json());
 
 - Single-text inputs only — for batch analysis, use [`POST /api/news/analysis`](/api-reference/sentiment-market) which accepts a feed of headlines.
 - The commodity rules are versioned. Check [`GET /api/lexicon/commodities`](/api-reference/sentiment-market) for the current rule set.
-- Responses are not deterministic across `enhanced` modes; the Groq path may return slightly different scores than VADER for the same text.
