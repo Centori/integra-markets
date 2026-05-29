@@ -1170,7 +1170,7 @@ No authorization required
 [[Back to top]](#) [[Back to API list]](../README.md#documentation-for-api-endpoints) [[Back to Model list]](../README.md#documentation-for-models) [[Back to README]](../README.md)
 
 # **get_polymarket_connector_sentiment_api_prediction_market_polymarket_sentiment_post**
-> object get_polymarket_connector_sentiment_api_prediction_market_polymarket_sentiment_post(polymarket_sentiment_request)
+> PolymarketSentimentResponse get_polymarket_connector_sentiment_api_prediction_market_polymarket_sentiment_post(polymarket_sentiment_request)
 
 Get Polymarket Connector Sentiment
 
@@ -1180,6 +1180,7 @@ Get Polymarket Connector Sentiment
 ```python
 import integra_markets
 from integra_markets.models.polymarket_sentiment_request import PolymarketSentimentRequest
+from integra_markets.models.polymarket_sentiment_response import PolymarketSentimentResponse
 from integra_markets.rest import ApiException
 from pprint import pprint
 
@@ -1216,7 +1217,7 @@ Name | Type | Description  | Notes
 
 ### Return type
 
-**object**
+[**PolymarketSentimentResponse**](PolymarketSentimentResponse.md)
 
 ### Authorization
 

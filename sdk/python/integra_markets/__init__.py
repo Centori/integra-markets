@@ -44,9 +44,14 @@ __all__ = [
     "NewsAnalysisRequest",
     "NewsRequest",
     "OverallSentimentRequest",
+    "PolymarketAuthenticationMeta",
+    "PolymarketConnectorAuthSummary",
+    "PolymarketConnectorContext",
     "PolymarketConnectorRequest",
     "PolymarketConnectorValidationRequest",
     "PolymarketSentimentRequest",
+    "PolymarketSentimentResponse",
+    "SentimentBreakdown",
     "SentimentRequest",
     "UserNewsRequest",
     "ValidationError",
@@ -83,9 +88,14 @@ from integra_markets.models.location_inner import LocationInner as LocationInner
 from integra_markets.models.news_analysis_request import NewsAnalysisRequest as NewsAnalysisRequest
 from integra_markets.models.news_request import NewsRequest as NewsRequest
 from integra_markets.models.overall_sentiment_request import OverallSentimentRequest as OverallSentimentRequest
+from integra_markets.models.polymarket_authentication_meta import PolymarketAuthenticationMeta as PolymarketAuthenticationMeta
+from integra_markets.models.polymarket_connector_auth_summary import PolymarketConnectorAuthSummary as PolymarketConnectorAuthSummary
+from integra_markets.models.polymarket_connector_context import PolymarketConnectorContext as PolymarketConnectorContext
 from integra_markets.models.polymarket_connector_request import PolymarketConnectorRequest as PolymarketConnectorRequest
 from integra_markets.models.polymarket_connector_validation_request import PolymarketConnectorValidationRequest as PolymarketConnectorValidationRequest
 from integra_markets.models.polymarket_sentiment_request import PolymarketSentimentRequest as PolymarketSentimentRequest
+from integra_markets.models.polymarket_sentiment_response import PolymarketSentimentResponse as PolymarketSentimentResponse
+from integra_markets.models.sentiment_breakdown import SentimentBreakdown as SentimentBreakdown
 from integra_markets.models.sentiment_request import SentimentRequest as SentimentRequest
 from integra_markets.models.user_news_request import UserNewsRequest as UserNewsRequest
 from integra_markets.models.validation_error import ValidationError as ValidationError

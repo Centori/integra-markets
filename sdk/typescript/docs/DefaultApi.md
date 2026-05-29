@@ -1152,7 +1152,7 @@ No authorization required
 
 ## getPolymarketConnectorSentimentApiPredictionMarketPolymarketSentimentPost
 
-> any getPolymarketConnectorSentimentApiPredictionMarketPolymarketSentimentPost(polymarketSentimentRequest)
+> PolymarketSentimentResponse getPolymarketConnectorSentimentApiPredictionMarketPolymarketSentimentPost(polymarketSentimentRequest)
 
 Get Polymarket Connector Sentiment
 
@@ -1195,7 +1195,7 @@ example().catch(console.error);
 
 ### Return type
 
-**any**
+[**PolymarketSentimentResponse**](PolymarketSentimentResponse.md)
 
 ### Authorization
 

@@ -235,7 +235,9 @@
             "description": "Successful Response",
             "content": {
               "application/json": {
-                "schema": {}
+                "schema": {
+                  "$ref": "#/components/schemas/PolymarketSentimentResponse"
+                }
               }
             }
           },
@@ -1646,6 +1648,138 @@
         ],
         "title": "OverallSentimentRequest"
       },
+      "PolymarketAuthenticationMeta": {
+        "properties": {
+          "validated_by_app": {
+            "type": "boolean",
+            "title": "Validated By App",
+            "description": "True when the BYO credential is present and validated",
+            "default": false
+          },
+          "vendor_auth_still_required": {
+            "type": "boolean",
+            "title": "Vendor Auth Still Required",
+            "description": "True when the upstream vendor still performs auth",
+            "default": false
+          },
+          "app_manages_auth_replay": {
+            "type": "boolean",
+            "title": "App Manages Auth Replay",
+            "description": "True when the connector replays the credential upstream",
+            "default": false
+          },
+          "message": {
+            "type": "string",
+            "title": "Message",
+            "description": "Human-readable summary of the authentication boundary",
+            "default": ""
+          }
+        },
+        "type": "object",
+        "title": "PolymarketAuthenticationMeta"
+      },
+      "PolymarketConnectorAuthSummary": {
+        "properties": {
+          "auth_type": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Auth Type",
+            "description": "Credential mode: none, api_key, or bearer"
+          },
+          "api_key_header": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Api Key Header",
+            "description": "Header name when auth_type is api_key"
+          },
+          "has_secret": {
+            "type": "boolean",
+            "title": "Has Secret",
+            "description": "Whether a credential is present",
+            "default": false
+          },
+          "masked_secret": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Masked Secret",
+            "description": "Masked preview of the credential"
+          },
+          "persisted": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Persisted",
+            "description": "Whether the credential is stored for reuse"
+          }
+        },
+        "type": "object",
+        "title": "PolymarketConnectorAuthSummary"
+      },
+      "PolymarketConnectorContext": {
+        "properties": {
+          "connector_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Connector Id",
+            "description": "Saved connector ID, if any"
+          },
+          "source_mode": {
+            "type": "string",
+            "title": "Source Mode",
+            "description": "shared, hybrid, or tenant_private",
+            "default": "shared"
+          },
+          "uses_personal_subscription": {
+            "type": "boolean",
+            "title": "Uses Personal Subscription",
+            "description": "True when this request used the user's own credential",
+            "default": false
+          },
+          "bypass_shared_limits": {
+            "type": "boolean",
+            "title": "Bypass Shared Limits",
+            "description": "True when this request avoided shared rate limits",
+            "default": false
+          },
+          "auth": {
+            "$ref": "#/components/schemas/PolymarketConnectorAuthSummary"
+          },
+          "authentication": {
+            "$ref": "#/components/schemas/PolymarketAuthenticationMeta"
+          }
+        },
+        "type": "object",
+        "title": "PolymarketConnectorContext"
+      },
       "PolymarketConnectorRequest": {
         "properties": {
           "user_id": {
@@ -1884,6 +2018,198 @@
           "topic_text"
         ],
         "title": "PolymarketSentimentRequest"
+      },
+      "PolymarketSentimentResponse": {
+        "properties": {
+          "topic_text": {
+            "type": "string",
+            "title": "Topic Text",
+            "description": "Echo of the original request topic"
+          },
+          "primary_target": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Primary Target",
+            "description": "Canonical asset key (internal)"
+          },
+          "commodity": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Commodity",
+            "description": "Commodity key, alias of primary_target"
+          },
+          "display_name": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Display Name",
+            "description": "Title-cased commodity name for UI"
+          },
+          "target_assets": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Target Assets",
+            "description": "All inferred asset symbols (uppercase)"
+          },
+          "overall_sentiment": {
+            "type": "string",
+            "title": "Overall Sentiment",
+            "description": "One of BULLISH, BEARISH, NEUTRAL"
+          },
+          "confidence": {
+            "type": "number",
+            "maximum": 1.0,
+            "minimum": 0.0,
+            "title": "Confidence",
+            "description": "Confidence in the overall classification"
+          },
+          "headline_count": {
+            "type": "integer",
+            "title": "Headline Count",
+            "description": "Number of relevant headlines used",
+            "default": 0
+          },
+          "summary": {
+            "type": "string",
+            "title": "Summary",
+            "description": "Human-readable aggregate summary"
+          },
+          "sentiment_breakdown": {
+            "$ref": "#/components/schemas/SentimentBreakdown"
+          },
+          "sample_headlines": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Sample Headlines",
+            "description": "Up to 5 representative headlines"
+          },
+          "matched_signals": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Matched Signals",
+            "description": "Up to 5 keyword features driving the score"
+          },
+          "method": {
+            "type": "string",
+            "title": "Method",
+            "description": "Identifier of the analyzer used",
+            "default": "recent_headlines_cache"
+          },
+          "event_url": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Event Url",
+            "description": "Canonical Polymarket event URL"
+          },
+          "event_slug": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Event Slug",
+            "description": "Canonical Polymarket event slug"
+          },
+          "source_url": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Source Url",
+            "description": "Canonical source URL (mirrors event_url)"
+          },
+          "cache_timestamp": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Cache Timestamp",
+            "description": "ISO timestamp of the headline cache snapshot"
+          },
+          "connector_context": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/PolymarketConnectorContext"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Connector / auth provenance for this response"
+          }
+        },
+        "type": "object",
+        "required": [
+          "topic_text",
+          "overall_sentiment",
+          "confidence",
+          "summary"
+        ],
+        "title": "PolymarketSentimentResponse"
+      },
+      "SentimentBreakdown": {
+        "properties": {
+          "bullish": {
+            "type": "integer",
+            "title": "Bullish",
+            "description": "Headlines classified bullish",
+            "default": 0
+          },
+          "bearish": {
+            "type": "integer",
+            "title": "Bearish",
+            "description": "Headlines classified bearish",
+            "default": 0
+          },
+          "neutral": {
+            "type": "integer",
+            "title": "Neutral",
+            "description": "Headlines classified neutral",
+            "default": 0
+          }
+        },
+        "type": "object",
+        "title": "SentimentBreakdown"
       },
       "SentimentRequest": {
         "properties": {

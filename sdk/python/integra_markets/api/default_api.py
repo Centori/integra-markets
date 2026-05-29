@@ -29,6 +29,7 @@ from integra_markets.models.overall_sentiment_request import OverallSentimentReq
 from integra_markets.models.polymarket_connector_request import PolymarketConnectorRequest
 from integra_markets.models.polymarket_connector_validation_request import PolymarketConnectorValidationRequest
 from integra_markets.models.polymarket_sentiment_request import PolymarketSentimentRequest
+from integra_markets.models.polymarket_sentiment_response import PolymarketSentimentResponse
 from integra_markets.models.sentiment_request import SentimentRequest
 from integra_markets.models.user_news_request import UserNewsRequest
 
@@ -4658,7 +4659,7 @@ class DefaultApi:
         _content_type: Optional[StrictStr] = None,
         _headers: Optional[Dict[StrictStr, Any]] = None,
         _host_index: Annotated[StrictInt, Field(ge=0, le=0)] = 0,
-    ) -> object:
+    ) -> PolymarketSentimentResponse:
         """Get Polymarket Connector Sentiment
 
 
@@ -4695,7 +4696,7 @@ class DefaultApi:
         )
 
         _response_types_map: Dict[str, Optional[str]] = {
-            '200': "object",
+            '200': "PolymarketSentimentResponse",
             '422': "HTTPValidationError",
         }
         response_data = self.api_client.call_api(
@@ -4725,7 +4726,7 @@ class DefaultApi:
         _content_type: Optional[StrictStr] = None,
         _headers: Optional[Dict[StrictStr, Any]] = None,
         _host_index: Annotated[StrictInt, Field(ge=0, le=0)] = 0,
-    ) -> ApiResponse[object]:
+    ) -> ApiResponse[PolymarketSentimentResponse]:
         """Get Polymarket Connector Sentiment
 
 
@@ -4762,7 +4763,7 @@ class DefaultApi:
         )
 
         _response_types_map: Dict[str, Optional[str]] = {
-            '200': "object",
+            '200': "PolymarketSentimentResponse",
             '422': "HTTPValidationError",
         }
         response_data = self.api_client.call_api(
@@ -4829,7 +4830,7 @@ class DefaultApi:
         )
 
         _response_types_map: Dict[str, Optional[str]] = {
-            '200': "object",
+            '200': "PolymarketSentimentResponse",
             '422': "HTTPValidationError",
         }
         response_data = self.api_client.call_api(

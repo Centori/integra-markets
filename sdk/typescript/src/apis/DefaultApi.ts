@@ -79,6 +79,11 @@ import {
     PolymarketSentimentRequestToJSON,
 } from '../models/PolymarketSentimentRequest';
 import {
+    type PolymarketSentimentResponse,
+    PolymarketSentimentResponseFromJSON,
+    PolymarketSentimentResponseToJSON,
+} from '../models/PolymarketSentimentResponse';
+import {
     type SentimentRequest,
     SentimentRequestFromJSON,
     SentimentRequestToJSON,
@@ -588,12 +593,12 @@ export interface DefaultApiInterface {
      * @throws {RequiredError}
      * @memberof DefaultApiInterface
      */
-    getPolymarketConnectorSentimentApiPredictionMarketPolymarketSentimentPostRaw(requestParameters: GetPolymarketConnectorSentimentApiPredictionMarketPolymarketSentimentPostRequest, initOverrides?: RequestInit | runtime.InitOverrideFunction): Promise<runtime.ApiResponse<any>>;
+    getPolymarketConnectorSentimentApiPredictionMarketPolymarketSentimentPostRaw(requestParameters: GetPolymarketConnectorSentimentApiPredictionMarketPolymarketSentimentPostRequest, initOverrides?: RequestInit | runtime.InitOverrideFunction): Promise<runtime.ApiResponse<PolymarketSentimentResponse>>;
 
     /**
      * Get Polymarket Connector Sentiment
      */
-    getPolymarketConnectorSentimentApiPredictionMarketPolymarketSentimentPost(requestParameters: GetPolymarketConnectorSentimentApiPredictionMarketPolymarketSentimentPostRequest, initOverrides?: RequestInit | runtime.InitOverrideFunction): Promise<any>;
+    getPolymarketConnectorSentimentApiPredictionMarketPolymarketSentimentPost(requestParameters: GetPolymarketConnectorSentimentApiPredictionMarketPolymarketSentimentPostRequest, initOverrides?: RequestInit | runtime.InitOverrideFunction): Promise<PolymarketSentimentResponse>;
 
     /**
      * Creates request options for getTopMoversApiSentimentMoversGet without sending the request
@@ -1684,21 +1689,17 @@ export class DefaultApi extends runtime.BaseAPI implements DefaultApiInterface {
     /**
      * Get Polymarket Connector Sentiment
      */
-    async getPolymarketConnectorSentimentApiPredictionMarketPolymarketSentimentPostRaw(requestParameters: GetPolymarketConnectorSentimentApiPredictionMarketPolymarketSentimentPostRequest, initOverrides?: RequestInit | runtime.InitOverrideFunction): Promise<runtime.ApiResponse<any>> {
+    async getPolymarketConnectorSentimentApiPredictionMarketPolymarketSentimentPostRaw(requestParameters: GetPolymarketConnectorSentimentApiPredictionMarketPolymarketSentimentPostRequest, initOverrides?: RequestInit | runtime.InitOverrideFunction): Promise<runtime.ApiResponse<PolymarketSentimentResponse>> {
         const requestOptions = await this.getPolymarketConnectorSentimentApiPredictionMarketPolymarketSentimentPostRequestOpts(requestParameters);
         const response = await this.request(requestOptions, initOverrides);
 
-        if (this.isJsonMime(response.headers.get('content-type'))) {
-            return new runtime.JSONApiResponse<any>(response);
-        } else {
-            return new runtime.TextApiResponse(response) as any;
-        }
+        return new runtime.JSONApiResponse(response, (jsonValue) => PolymarketSentimentResponseFromJSON(jsonValue));
     }
 
     /**
      * Get Polymarket Connector Sentiment
      */
-    async getPolymarketConnectorSentimentApiPredictionMarketPolymarketSentimentPost(requestParameters: GetPolymarketConnectorSentimentApiPredictionMarketPolymarketSentimentPostRequest, initOverrides?: RequestInit | runtime.InitOverrideFunction): Promise<any> {
+    async getPolymarketConnectorSentimentApiPredictionMarketPolymarketSentimentPost(requestParameters: GetPolymarketConnectorSentimentApiPredictionMarketPolymarketSentimentPostRequest, initOverrides?: RequestInit | runtime.InitOverrideFunction): Promise<PolymarketSentimentResponse> {
         const response = await this.getPolymarketConnectorSentimentApiPredictionMarketPolymarketSentimentPostRaw(requestParameters, initOverrides);
         return await response.value();
     }

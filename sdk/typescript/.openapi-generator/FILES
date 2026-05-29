@@ -1,6 +1,5 @@
 .gitignore
 .npmignore
-.openapi-generator-ignore
 README.md
 docs/AIAnalysisRequest.md
 docs/AIChatRequest.md
@@ -19,9 +18,14 @@ docs/LocationInner.md
 docs/NewsAnalysisRequest.md
 docs/NewsRequest.md
 docs/OverallSentimentRequest.md
+docs/PolymarketAuthenticationMeta.md
+docs/PolymarketConnectorAuthSummary.md
+docs/PolymarketConnectorContext.md
 docs/PolymarketConnectorRequest.md
 docs/PolymarketConnectorValidationRequest.md
 docs/PolymarketSentimentRequest.md
+docs/PolymarketSentimentResponse.md
+docs/SentimentBreakdown.md
 docs/SentimentRequest.md
 docs/UserNewsRequest.md
 docs/ValidationError.md
@@ -45,9 +49,14 @@ src/models/LocationInner.ts
 src/models/NewsAnalysisRequest.ts
 src/models/NewsRequest.ts
 src/models/OverallSentimentRequest.ts
+src/models/PolymarketAuthenticationMeta.ts
+src/models/PolymarketConnectorAuthSummary.ts
+src/models/PolymarketConnectorContext.ts
 src/models/PolymarketConnectorRequest.ts
 src/models/PolymarketConnectorValidationRequest.ts
 src/models/PolymarketSentimentRequest.ts
+src/models/PolymarketSentimentResponse.ts
+src/models/SentimentBreakdown.ts
 src/models/SentimentRequest.ts
 src/models/UserNewsRequest.ts
 src/models/ValidationError.ts
