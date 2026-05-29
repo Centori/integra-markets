@@ -1,0 +1,185 @@
+---
+title: "Polymarket connectors"
+description: "Set up, validate, list, and delete Polymarket BYO connectors."
+---
+
+A **Polymarket connector** is a saved configuration that tells the
+Integra Markets API how to reach Polymarket on behalf of a specific user.
+Connectors support the Bring-Your-Own-Credential (BYO) pattern: each user
+supplies their own Polymarket access, so usage and rate limits stay
+scoped to that user.
+
+You typically need a connector before calling
+[`POST /api/prediction-market/polymarket/sentiment`](/api-reference/prediction-market/sentiment),
+unless you pass `credentials` inline on every request.
+
+## Validate
+
+Preview a connector configuration without saving it. Useful when the user
+is filling out a form and you want to confirm the URL + credentials work
+before persisting.
+
+<api>POST https://api.integramarkets.app/api/prediction-market/connectors/polymarket/validate</api>
+
+### Request
+
+<ParamField body="connector" type="object" required>
+  A `PolymarketConnectorRequest` object — see the [create section
+  below](#create) for the full shape.
+</ParamField>
+
+```bash
+curl -X POST https://api.integramarkets.app/api/prediction-market/connectors/polymarket/validate \
+  -H "Authorization: Bearer $INTEGRA_API_KEY" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "connector": {
+      "user_id": "<supabase-user-uuid>",
+      "name": "my-polymarket",
+      "event_url": "https://polymarket.com/event/will-fed-cut-rates-march"
+    }
+  }'
+```
+
+The response echoes the connector with any normalised fields and surfaces
+any validation issues (bad URL, unreachable host, invalid credentials).
+Nothing is persisted.
+
+## Create
+
+<api>POST https://api.integramarkets.app/api/prediction-market/connectors/polymarket</api>
+
+### Body
+
+<ParamField body="user_id" type="string" required>
+  Owning Supabase user UUID. Connectors are scoped per user.
+</ParamField>
+
+<ParamField body="name" type="string" required>
+  User-visible name (e.g. `personal`, `team-alpha`).
+</ParamField>
+
+<ParamField body="source_mode" type="string" default="tenant_private">
+  One of `shared`, `hybrid`, or `tenant_private`. Use `tenant_private` for
+  BYO so the user's traffic isn't pooled with others.
+</ParamField>
+
+<ParamField body="base_url" type="string" default="https://polymarket.com">
+  Base endpoint or portal URL.
+</ParamField>
+
+<ParamField body="event_url" type="string">
+  Optional canonical Polymarket event URL.
+</ParamField>
+
+<ParamField body="event_slug" type="string">
+  Optional event slug (an alternative to `event_url`).
+</ParamField>
+
+<ParamField body="website_urls" type="string[]">
+  Optional list of user-owned source URLs (e.g. private blogs, paid
+  news subscriptions the user has access to).
+</ParamField>
+
+<ParamField body="custom_headers" type="object">
+  Pass-through HTTP headers added to every outbound request.
+</ParamField>
+
+<ParamField body="use_personal_subscription" type="boolean" default="true">
+  When `true`, requests are made with the user's own vendor credentials
+  rather than a shared platform key.
+</ParamField>
+
+<ParamField body="bypass_shared_limits" type="boolean" default="true">
+  When `true`, requests avoid the shared platform rate-limit pool. Set
+  with care; the user's own quota applies instead.
+</ParamField>
+
+<ParamField body="rate_limit_per_minute" type="integer">
+  Optional 1 to 10,000. Tenant-specific limit; defaults to the platform
+  default when omitted.
+</ParamField>
+
+<ParamField body="cache_ttl_seconds" type="integer" default="60">
+  0 to 3600. Connector-local cache TTL for the same request signature.
+</ParamField>
+
+<ParamField body="credentials" type="object">
+  Optional BYO credential payload. See [Credentials](#credentials) below.
+</ParamField>
+
+### Credentials
+
+<ParamField body="credentials.auth_type" type="string" default="api_key">
+  One of `none`, `api_key`, or `bearer`.
+</ParamField>
+
+<ParamField body="credentials.api_key" type="string">
+  The user's API key or subscription token.
+</ParamField>
+
+<ParamField body="credentials.bearer_token" type="string">
+  The user's bearer token (used when `auth_type` is `bearer`).
+</ParamField>
+
+<ParamField body="credentials.api_key_header" type="string" default="Authorization">
+  Header name when `auth_type` is `api_key`. Some vendors require
+  `X-API-Key` instead of `Authorization`.
+</ParamField>
+
+<ParamField body="credentials.persist_secret" type="boolean" default="true">
+  Store the credential encrypted for future connector runs. Set to
+  `false` to validate without saving the secret.
+</ParamField>
+
+### Example
+
+```bash
+curl -X POST https://api.integramarkets.app/api/prediction-market/connectors/polymarket \
+  -H "Authorization: Bearer $INTEGRA_API_KEY" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "user_id": "<supabase-user-uuid>",
+    "name": "personal",
+    "event_url": "https://polymarket.com/event/will-fed-cut-rates-march",
+    "credentials": {
+      "auth_type": "api_key",
+      "api_key": "<users-polymarket-token>",
+      "persist_secret": true
+    }
+  }'
+```
+
+## List
+
+<api>GET https://api.integramarkets.app/api/prediction-market/connectors/polymarket/{user_id}</api>
+
+Returns all connectors owned by `user_id`. Credentials are never returned
+in plaintext — only metadata (name, event URL, last used, etc.).
+
+```bash
+curl https://api.integramarkets.app/api/prediction-market/connectors/polymarket/<user-id> \
+  -H "Authorization: Bearer $INTEGRA_API_KEY"
+```
+
+## Delete
+
+<api>DELETE https://api.integramarkets.app/api/prediction-market/connectors/polymarket/{connector_id}</api>
+
+Removes the connector and its encrypted credential. Subsequent calls that
+reference this `connector_id` will return `404`.
+
+```bash
+curl -X DELETE https://api.integramarkets.app/api/prediction-market/connectors/polymarket/<connector-id> \
+  -H "Authorization: Bearer $INTEGRA_API_KEY"
+```
+
+## Patterns
+
+- **Browser flow**: validate as the user types, only call create on
+  submit. This gives instant feedback without saving incomplete configs.
+- **Server-only flow**: skip the connector entirely and pass `credentials`
+  inline on each sentiment request. Simpler for short-lived integrations,
+  but the credential travels with every call.
+- **One connector per environment**: name them `local`, `staging`,
+  `prod` so traffic is attributable in your audit logs.
