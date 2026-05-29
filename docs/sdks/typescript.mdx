@@ -1,0 +1,156 @@
+---
+title: "TypeScript SDK"
+description: "Fully-typed TypeScript client for Node.js, browsers, and React Native."
+---
+
+The TypeScript SDK (`@integra-markets/sdk`) is auto-generated from the
+OpenAPI spec using `typescript-fetch`. It works in Node 18+, modern
+browsers, and React Native.
+
+<Note>
+  Until the package is published to npm, install from a local checkout
+  (see [Install from source](#install-from-source) below). npm release is
+  planned for `v0.2.0`.
+</Note>
+
+## Requirements
+
+- Node 18+ (uses the global `fetch`)
+- TypeScript 4.5+ (optional but recommended)
+- An API key — see [Authentication](/authentication)
+
+## Install from source
+
+```bash
+git clone https://github.com/Centori/integra-markets.git
+cd integra-markets/sdk/typescript
+npm install
+npm run build
+npm pack            # produces integra-markets-sdk-0.1.0.tgz
+```
+
+Then install the tarball in your project:
+
+```bash
+npm install /path/to/integra-markets-sdk-0.1.0.tgz
+```
+
+## Quickstart
+
+```typescript
+import {
+  Configuration,
+  DefaultApi,
+  SentimentRequest,
+} from "@integra-markets/sdk";
+
+const config = new Configuration({
+  basePath: "https://api.integramarkets.app",
+  accessToken: process.env.INTEGRA_API_KEY,
+});
+
+const api = new DefaultApi(config);
+
+const result = await api.analyzeSentimentApiSentimentPost({
+  sentimentRequest: {
+    text: "OPEC announces surprise production cut",
+    commodity: "crude_oil",
+  } as SentimentRequest,
+});
+
+console.log(result);
+```
+
+<Warning>
+  Method names currently include the HTTP path
+  (e.g. `analyzeSentimentApiSentimentPost`). Clean operation IDs are
+  planned for v0.2.
+</Warning>
+
+## Managing API keys
+
+```typescript
+import { ApiKeysApi, CreateKeyRequest } from "@integra-markets/sdk";
+
+const keys = new ApiKeysApi(config);
+
+const created = await keys.createKeyApiKeysPost({
+  createKeyRequest: {
+    userId: "<supabase-user-uuid>",
+    name: "frontend-prod",
+  } as CreateKeyRequest,
+});
+
+console.log("New key (copy now, shown once):", created.key);
+
+const list = await keys.listKeysApiKeysGet({
+  userId: "<supabase-user-uuid>",
+});
+list.forEach((k) => console.log(`${k.prefix} — ${k.name}`));
+
+await keys.revokeKeyApiKeysKeyIdDelete({
+  keyId: created.id,
+  userId: "<supabase-user-uuid>",
+});
+```
+
+## Error handling
+
+The SDK throws a `Response` object (the raw `fetch` response) on non-2xx
+status. Wrap calls and inspect `status` for diagnostics.
+
+```typescript
+try {
+  await api.analyzeSentimentApiSentimentPost({ sentimentRequest });
+} catch (err) {
+  if (err instanceof Response) {
+    if (err.status === 401) console.error("Invalid or revoked API key");
+    else if (err.status === 429) console.error("Rate limit hit; back off");
+    else console.error(`HTTP ${err.status}`, await err.text());
+  } else {
+    throw err;
+  }
+}
+```
+
+## React Native usage
+
+The SDK works in React Native with one caveat: you must polyfill `fetch`
+streams if you target older RN versions. RN 0.76+ supports them natively.
+
+```typescript
+// app/services/integraClient.ts
+import { Configuration, DefaultApi } from "@integra-markets/sdk";
+
+export const integra = new DefaultApi(
+  new Configuration({
+    basePath: process.env.EXPO_PUBLIC_API_URL,
+    accessToken: process.env.EXPO_PUBLIC_INTEGRA_API_KEY,
+  })
+);
+```
+
+<Warning>
+  Don't ship an API key in a client-side `EXPO_PUBLIC_*` env var if it can
+  call expensive endpoints. Proxy through your own server and inject the
+  key there.
+</Warning>
+
+## Configuration
+
+| Option | Default | Notes |
+| --- | --- | --- |
+| `basePath` | `https://api.integramarkets.app` | Base URL. |
+| `accessToken` | `undefined` | Required. Sent as `Authorization: Bearer …`. |
+| `fetchApi` | global `fetch` | Override for testing (mocks, retries). |
+| `middleware` | `[]` | Array of pre/post hooks for logging, tracing, etc. |
+
+## Regenerating the SDK
+
+```bash
+cd integra-markets
+bash sdk-generator/generate.sh
+```
+
+Reads `openapi.json` from the repo root, rewrites `sdk/typescript/` (and
+`sdk/python/`).

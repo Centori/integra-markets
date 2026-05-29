@@ -1,0 +1,123 @@
+---
+title: "Python SDK"
+description: "Type-hinted Python client for the Integra Markets API."
+---
+
+The Python SDK (`integra_markets`) is auto-generated from the OpenAPI spec
+and stays in sync with the API. It provides a typed `ApiClient`, model
+classes, and per-tag API classes for sentiment, AI, keys, and more.
+
+<Note>
+  Until the package is published to PyPI, install directly from the repo
+  (see [Install from source](#install-from-source) below). PyPI release
+  is planned for `v0.2.0`.
+</Note>
+
+## Requirements
+
+- Python 3.9 or newer
+- An API key — see [Authentication](/authentication)
+
+## Install from source
+
+```bash
+git clone https://github.com/Centori/integra-markets.git
+cd integra-markets/sdk/python
+pip install .
+```
+
+## Quickstart
+
+```python
+import os
+import integra_markets
+from integra_markets.models import SentimentRequest
+
+config = integra_markets.Configuration(
+    host="https://api.integramarkets.app",
+    access_token=os.environ["INTEGRA_API_KEY"],
+)
+
+with integra_markets.ApiClient(config) as client:
+    api = integra_markets.DefaultApi(client)
+    result = api.analyze_sentiment_api_sentiment_post(
+        SentimentRequest(
+            text="OPEC announces surprise production cut",
+            commodity="crude_oil",
+        )
+    )
+    print(result)
+```
+
+<Warning>
+  Method names are currently verbose — they include the HTTP path in the
+  function name (e.g. `analyze_sentiment_api_sentiment_post`). This is a
+  known limitation of the v0.1 generator config; clean operation IDs are
+  planned for v0.2.
+</Warning>
+
+## Managing API keys programmatically
+
+The keys API lets you create, list, and revoke API keys for any user. In
+production you typically call these from a server using a different
+Supabase-authenticated session, not from a user's browser.
+
+```python
+from integra_markets.models import CreateKeyRequest
+
+with integra_markets.ApiClient(config) as client:
+    keys = integra_markets.ApiKeysApi(client)
+
+    created = keys.create_key_api_keys_post(
+        CreateKeyRequest(user_id="<supabase-user-uuid>", name="local-dev")
+    )
+    print("New key (copy now, shown once):", created.key)
+
+    for k in keys.list_keys_api_keys_get(user_id="<supabase-user-uuid>"):
+        print(f"{k.prefix} — {k.name} — last used {k.last_used_at}")
+
+    keys.revoke_key_api_keys_key_id_delete(
+        key_id=created.id,
+        user_id="<supabase-user-uuid>",
+    )
+```
+
+## Error handling
+
+The SDK raises `integra_markets.ApiException` on non-2xx responses. The
+exception exposes `status`, `reason`, and `body` for diagnostics.
+
+```python
+from integra_markets.exceptions import ApiException
+
+try:
+    api.analyze_sentiment_api_sentiment_post(SentimentRequest(text="..."))
+except ApiException as exc:
+    if exc.status == 401:
+        print("Invalid or revoked API key")
+    elif exc.status == 429:
+        print("Rate limit hit; back off")
+    else:
+        raise
+```
+
+## Configuration
+
+| Option | Default | Notes |
+| --- | --- | --- |
+| `host` | `https://api.integramarkets.app` | Base URL. |
+| `access_token` | `None` | Required. Sent as `Authorization: Bearer …`. |
+| `verify_ssl` | `True` | Disable only for local testing against `localhost`. |
+| `connection_pool_maxsize` | `4` | Tune for high-concurrency servers. |
+
+## Regenerating the SDK
+
+When the API spec changes, regenerate the client:
+
+```bash
+cd integra-markets
+bash sdk-generator/generate.sh
+```
+
+This reads `openapi.json` from the repo root and rewrites `sdk/python/`.
+The script also regenerates the TypeScript SDK in the same pass.
