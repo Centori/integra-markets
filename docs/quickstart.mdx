@@ -1,0 +1,116 @@
+---
+title: "Quickstart"
+description: "Make your first call to the Integra Markets API in under five minutes."
+---
+
+The Integra Markets API gives you programmatic access to commodity-aware
+sentiment analysis. This page walks you from zero to a working API call.
+
+## 1. Get an API key
+
+Open the dashboard at <a href="https://www.integramarkets.app/dashboard/api-keys">integramarkets.app/dashboard/api-keys</a>,
+sign in, and click **Create key**.
+
+<Warning>
+  Copy the key when it's first shown. We store only a hash; you can't view the
+  full key again. If you lose it, revoke and create a new one.
+</Warning>
+
+Your key looks like:
+
+```
+ik_live_xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx
+```
+
+## 2. Make your first call
+
+Run a sentiment analysis on a headline. This single call exercises auth,
+rate limiting, and the core sentiment pipeline.
+
+<CodeGroup>
+
+```bash cURL
+curl https://api.integramarkets.app/api/sentiment \
+  -H "Authorization: Bearer $INTEGRA_API_KEY" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "text": "OPEC announces surprise production cut, sending crude futures higher"
+  }'
+```
+
+```python Python
+import os
+import requests
+
+response = requests.post(
+    "https://api.integramarkets.app/api/sentiment",
+    headers={
+        "Authorization": f"Bearer {os.environ['INTEGRA_API_KEY']}",
+        "Content-Type": "application/json",
+    },
+    json={
+        "text": "OPEC announces surprise production cut, sending crude futures higher",
+    },
+    timeout=30,
+)
+response.raise_for_status()
+print(response.json())
+```
+
+```typescript TypeScript
+const response = await fetch("https://api.integramarkets.app/api/sentiment", {
+  method: "POST",
+  headers: {
+    Authorization: `Bearer ${process.env.INTEGRA_API_KEY}`,
+    "Content-Type": "application/json",
+  },
+  body: JSON.stringify({
+    text: "OPEC announces surprise production cut, sending crude futures higher",
+  }),
+});
+
+if (!response.ok) {
+  throw new Error(`Request failed: ${response.status}`);
+}
+
+console.log(await response.json());
+```
+
+</CodeGroup>
+
+## 3. Read the response
+
+```json
+{
+  "sentiment": "BULLISH",
+  "score": 0.72,
+  "confidence": 0.85,
+  "commodity": "crude_oil",
+  "matched_signals": ["production_cut", "futures_higher"]
+}
+```
+
+| Field | Meaning |
+| --- | --- |
+| `sentiment` | One of `BULLISH`, `BEARISH`, `NEUTRAL`. |
+| `score` | Magnitude of the directional signal, 0 to 1. |
+| `confidence` | Model confidence in this classification, 0 to 1. |
+| `commodity` | Detected commodity if the text is commodity-specific. |
+| `matched_signals` | Keyword features that drove the classification. |
+
+## 4. Next steps
+
+<CardGroup cols={2}>
+  <Card title="Authentication" icon="key" href="/authentication">
+    Header format, key rotation, and how to revoke a leaked key.
+  </Card>
+  <Card title="Sentiment reference" icon="chart-line" href="/api-reference/sentiment-analyze">
+    Full request and response schema, error codes, examples.
+  </Card>
+  <Card title="Python SDK" icon="python" href="/sdks/python">
+    Type-safe Python client with retries and timeouts.
+  </Card>
+  <Card title="TypeScript SDK" icon="js" href="/sdks/typescript">
+    Browser + Node.js client with full type definitions.
+  </Card>
+</CardGroup>

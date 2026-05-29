@@ -1,0 +1,107 @@
+---
+title: "Authentication"
+description: "How Integra Markets API keys work and how to keep them safe."
+---
+
+Every request to the Integra Markets API is authenticated with an API key
+sent as a Bearer token in the `Authorization` header.
+
+```
+Authorization: Bearer ik_live_xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx
+```
+
+## Key format
+
+Production keys are prefixed with `ik_live_` followed by 32 URL-safe
+characters. The first 12 characters (the *prefix*) are stored on our side
+in plaintext so you can identify a key in the dashboard; the rest is
+stored only as a SHA-256 hash. We compare hashes in constant time on every
+request.
+
+<Warning>
+  We never store the full key. If you lose it, you must revoke it and
+  create a new one — there is no recovery flow.
+</Warning>
+
+## Creating a key
+
+<Steps>
+  <Step title="Sign in to the dashboard">
+    Visit <a href="https://www.integramarkets.app/dashboard/api-keys">integramarkets.app/dashboard/api-keys</a>.
+  </Step>
+  <Step title="Click Create key">
+    Give it a name (e.g. `local-dev`, `staging-server`). Names are free-form
+    and only visible to you.
+  </Step>
+  <Step title="Copy the key immediately">
+    The full key is shown exactly once. Copy it to a secrets manager or
+    `.env` file before you close the modal.
+  </Step>
+</Steps>
+
+You can have up to **10 active keys** per account. Revoke unused keys to
+free slots.
+
+## Using a key
+
+Store the key in an environment variable, never in source control.
+
+<CodeGroup>
+
+```bash .env
+INTEGRA_API_KEY=ik_live_xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx
+```
+
+```python Python
+import os
+import requests
+
+headers = {
+    "Authorization": f"Bearer {os.environ['INTEGRA_API_KEY']}",
+}
+```
+
+```typescript TypeScript
+const headers = {
+  Authorization: `Bearer ${process.env.INTEGRA_API_KEY}`,
+};
+```
+
+</CodeGroup>
+
+## Revoking a key
+
+A revoked key is rejected immediately on the next request — there is no
+caching window. Revoke from the dashboard, or with the API:
+
+```bash
+curl -X DELETE https://api.integramarkets.app/api/keys/$KEY_ID \
+  -H "Authorization: Bearer $INTEGRA_API_KEY"
+```
+
+## Rotating a key
+
+To rotate without downtime:
+
+1. Create the new key.
+2. Deploy the new key to your application.
+3. Verify traffic is using the new key (check the **Last used** column in
+   the dashboard).
+4. Revoke the old key.
+
+## Errors
+
+| Status | Reason |
+| --- | --- |
+| `401 Unauthorized` | Missing, malformed, or revoked key. |
+| `403 Forbidden` | Key is valid but lacks the required scope. |
+| `429 Too Many Requests` | Rate limit exceeded. See [Limits](/limits). |
+
+## Security recommendations
+
+- **Never commit keys to git.** Use `.env` files and a secrets manager.
+- **Rotate on suspected compromise.** Cheap and immediate.
+- **Use one key per environment.** Separate keys for `local`, `staging`,
+  and `production` make it easy to revoke a single blast radius.
+- **Set up rate alerts** on your monitoring of choice — sudden bursts often
+  indicate a leaked key being abused.

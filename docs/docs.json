@@ -1,0 +1,75 @@
+{
+  "$schema": "https://mintlify.com/docs.json",
+  "theme": "mint",
+  "name": "Integra Markets API",
+  "colors": {
+    "primary": "#4ECCA3",
+    "light": "#7FE6C0",
+    "dark": "#2BAE7E"
+  },
+  "favicon": "/favicon.png",
+  "navigation": {
+    "tabs": [
+      {
+        "tab": "Guides",
+        "groups": [
+          {
+            "group": "Get started",
+            "pages": ["quickstart", "authentication"]
+          },
+          {
+            "group": "Concepts",
+            "pages": ["pricing", "limits"]
+          }
+        ]
+      },
+      {
+        "tab": "API reference",
+        "groups": [
+          {
+            "group": "Sentiment",
+            "pages": [
+              "api-reference/sentiment-analyze",
+              "api-reference/sentiment-market"
+            ]
+          },
+          {
+            "group": "Keys",
+            "pages": [
+              "api-reference/keys-create",
+              "api-reference/keys-list",
+              "api-reference/keys-revoke"
+            ]
+          }
+        ]
+      },
+      {
+        "tab": "SDKs",
+        "groups": [
+          {
+            "group": "Clients",
+            "pages": ["sdks/python", "sdks/typescript"]
+          }
+        ]
+      }
+    ]
+  },
+  "navbar": {
+    "links": [
+      {
+        "label": "Dashboard",
+        "href": "https://www.integramarkets.app/dashboard"
+      }
+    ],
+    "primary": {
+      "type": "button",
+      "label": "Get API key",
+      "href": "https://www.integramarkets.app/dashboard/api-keys"
+    }
+  },
+  "footer": {
+    "socials": {
+      "github": "https://github.com/Centori/integra-markets"
+    }
+  }
+}
