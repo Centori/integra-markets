@@ -23,7 +23,7 @@ module.exports = {
     '!app/**/*.d.ts',
     '!app/**/node_modules/**',
   ],
-  moduleNameMapping: {
+  moduleNameMapper: {
     '^@/(.*)$': '<rootDir>/app/$1',
   },
   watchPathIgnorePatterns: [
