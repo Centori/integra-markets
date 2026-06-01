@@ -8,23 +8,16 @@ and stays in sync with the API. It provides a typed `ApiClient`, model
 classes, and per-tag API classes for sentiment, AI, keys, and more.
 
 <Note>
-  Until the package is published to PyPI, install directly from the repo
-  (see [Install from source](#install-from-source) below). PyPI release
-  is planned for `v0.2.0`.
+  The package is not yet on PyPI. Early-access builds are available on
+  request — email [contact@integramarkets.app](mailto:contact@integramarkets.app)
+  to receive a wheel or tarball you can `pip install` directly. PyPI
+  release is planned for `v0.2.0`.
 </Note>
 
 ## Requirements
 
 - Python 3.9 or newer
 - An API key — see [Authentication](/authentication)
-
-## Install from source
-
-```bash
-git clone https://github.com/Centori/integra-markets.git
-cd integra-markets/sdk/python
-pip install .
-```
 
 ## Quickstart
 
@@ -110,14 +103,3 @@ except ApiException as exc:
 | `verify_ssl` | `True` | Disable only for local testing against `localhost`. |
 | `connection_pool_maxsize` | `4` | Tune for high-concurrency servers. |
 
-## Regenerating the SDK
-
-When the API spec changes, regenerate the client:
-
-```bash
-cd integra-markets
-bash sdk-generator/generate.sh
-```
-
-This reads `openapi.json` from the repo root and rewrites `sdk/python/`.
-The script also regenerates the TypeScript SDK in the same pass.

@@ -8,8 +8,9 @@ OpenAPI spec using `typescript-fetch`. It works in Node 18+, modern
 browsers, and React Native.
 
 <Note>
-  Until the package is published to npm, install from a local checkout
-  (see [Install from source](#install-from-source) below). npm release is
+  The package is not yet on npm. Early-access builds are available on
+  request — email [contact@integramarkets.app](mailto:contact@integramarkets.app)
+  to receive a tarball you can `npm install` directly. npm release is
   planned for `v0.2.0`.
 </Note>
 
@@ -18,22 +19,6 @@ browsers, and React Native.
 - Node 18+ (uses the global `fetch`)
 - TypeScript 4.5+ (optional but recommended)
 - An API key — see [Authentication](/authentication)
-
-## Install from source
-
-```bash
-git clone https://github.com/Centori/integra-markets.git
-cd integra-markets/sdk/typescript
-npm install
-npm run build
-npm pack            # produces integra-markets-sdk-0.1.0.tgz
-```
-
-Then install the tarball in your project:
-
-```bash
-npm install /path/to/integra-markets-sdk-0.1.0.tgz
-```
 
 ## Quickstart
 
@@ -145,12 +130,3 @@ export const integra = new DefaultApi(
 | `fetchApi` | global `fetch` | Override for testing (mocks, retries). |
 | `middleware` | `[]` | Array of pre/post hooks for logging, tracing, etc. |
 
-## Regenerating the SDK
-
-```bash
-cd integra-markets
-bash sdk-generator/generate.sh
-```
-
-Reads `openapi.json` from the repo root, rewrites `sdk/typescript/` (and
-`sdk/python/`).
