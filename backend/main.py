@@ -40,6 +40,12 @@ except ImportError:
     news_available = False
 
 try:
+    from api.api_keys import router as api_keys_router
+    api_keys_available = True
+except ImportError:
+    api_keys_available = False
+
+try:
     from api.feedback import router as feedback_router
     feedback_available = True
 except ImportError:
@@ -107,6 +113,8 @@ if market_data_available:
     app.include_router(market_data_router)
 if news_available:
     app.include_router(news_router)
+if api_keys_available:
+    app.include_router(api_keys_router)
 if feedback_available:
     app.include_router(feedback_router)
 if metrics_available:
