@@ -25,6 +25,7 @@ module.exports = {
   ],
   moduleNameMapper: {
     '^@/(.*)$': '<rootDir>/app/$1',
+    '^react-native$': '<rootDir>/node_modules/react-native',
   },
   watchPathIgnorePatterns: [
     '<rootDir>/.worktrees/',
