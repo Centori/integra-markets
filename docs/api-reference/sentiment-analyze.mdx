@@ -1,0 +1,158 @@
+---
+title: "Analyze sentiment"
+api: "POST https://api.integramarkets.app/api/sentiment"
+description: "Classify a piece of text as bullish, bearish, or neutral with commodity-aware scoring."
+---
+
+Run sentiment analysis on a single piece of text — typically a news
+headline, story summary, or social post. Returns a directional
+classification with confidence, and (when matched) the commodity context.
+
+## Request
+
+### Headers
+
+<ParamField header="Authorization" type="string" required>
+  Bearer token. See [Authentication](/authentication).
+</ParamField>
+
+<ParamField header="Content-Type" type="string" required>
+  Must be `application/json`.
+</ParamField>
+
+### Body
+
+<ParamField body="text" type="string" required>
+  The text to analyze. Must be non-empty.
+</ParamField>
+
+<ParamField body="commodity" type="string">
+  Optional commodity context (e.g. `crude_oil`, `gold`, `wheat`). When
+  provided, the analyzer applies that commodity's keyword rules instead of
+  trying to detect the commodity itself.
+</ParamField>
+
+## Response
+
+<ResponseField name="sentiment" type="string">
+  One of `BULLISH`, `BEARISH`, `NEUTRAL`.
+</ResponseField>
+
+<ResponseField name="confidence" type="number">
+  Float between 0 and 1.
+</ResponseField>
+
+<ResponseField name="method" type="string">
+  Identifier of the analyzer used (currently `commodity_vader`).
+</ResponseField>
+
+<ResponseField name="commodity" type="string">
+  Detected (or supplied) commodity, e.g. `crude_oil`.
+</ResponseField>
+
+<ResponseField name="commodity_specific" type="boolean">
+  `true` if a commodity rule matched.
+</ResponseField>
+
+<ResponseField name="market_context" type="object">
+  Bullish/bearish keyword matches and rule fingerprints.
+</ResponseField>
+
+<ResponseField name="scores" type="object">
+  Underlying VADER scores: `compound`, `positive`, `negative`, `neutral`.
+</ResponseField>
+
+## Example
+
+<RequestExample>
+
+```bash cURL
+curl https://api.integramarkets.app/api/sentiment \
+  -H "Authorization: Bearer $INTEGRA_API_KEY" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "text": "Gold rallies on safe-haven demand as tensions escalate",
+    "commodity": "gold"
+  }'
+```
+
+```python Python
+import os
+import requests
+
+response = requests.post(
+    "https://api.integramarkets.app/api/sentiment",
+    headers={
+        "Authorization": f"Bearer {os.environ['INTEGRA_API_KEY']}",
+        "Content-Type": "application/json",
+    },
+    json={
+        "text": "Gold rallies on safe-haven demand as tensions escalate",
+        "commodity": "gold",
+    },
+    timeout=30,
+)
+response.raise_for_status()
+print(response.json())
+```
+
+```typescript TypeScript
+const response = await fetch("https://api.integramarkets.app/api/sentiment", {
+  method: "POST",
+  headers: {
+    Authorization: `Bearer ${process.env.INTEGRA_API_KEY}`,
+    "Content-Type": "application/json",
+  },
+  body: JSON.stringify({
+    text: "Gold rallies on safe-haven demand as tensions escalate",
+    commodity: "gold",
+  }),
+});
+
+if (!response.ok) throw new Error(`Request failed: ${response.status}`);
+console.log(await response.json());
+```
+
+</RequestExample>
+
+<ResponseExample>
+
+```json 200 OK
+{
+  "text": "Gold rallies on safe-haven demand as tensions escalate",
+  "sentiment": "BULLISH",
+  "confidence": 0.665,
+  "method": "commodity_vader",
+  "commodity": "gold",
+  "commodity_specific": true,
+  "market_context": {
+    "bullish_keywords": ["rallies", "safe-haven demand"],
+    "bearish_keywords": []
+  },
+  "scores": {
+    "compound": 0.524,
+    "positive": 0.382,
+    "negative": 0.000,
+    "neutral": 0.618
+  }
+}
+```
+
+```json 401 Unauthorized
+{
+  "detail": "Invalid or missing API key"
+}
+```
+
+```json 429 Too Many Requests
+{
+  "detail": "Rate limit exceeded. Try again in 12 seconds."
+}
+```
+
+</ResponseExample>
+
+## Notes
+
+- Single-text inputs only — for batch analysis, use [`POST /api/news/analysis`](/api-reference/sentiment-market) which accepts a feed of headlines.
+- The commodity rules are versioned. Check [`GET /api/lexicon/commodities`](/api-reference/sentiment-market) for the current rule set.

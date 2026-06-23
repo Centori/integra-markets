@@ -1,0 +1,153 @@
+---
+title: "Polymarket event sentiment"
+description: "Score market sentiment against recent Polymarket-relevant headlines."
+---
+
+Run sentiment on a Polymarket event or arbitrary topic. The endpoint
+collects recent headlines that match the topic and scores the aggregate
+directional signal — useful for "what does the news say about this
+market?" workflows.
+
+<api>POST https://api.integramarkets.app/api/prediction-market/polymarket/sentiment</api>
+
+## How it resolves credentials
+
+The endpoint figures out which Polymarket access to use in this order:
+
+1. **`connector_id`** — uses a saved [connector](/api-reference/prediction-market/connectors). Requires `user_id` to match the connector's owner.
+2. **`credentials`** — one-off inline credentials, not saved.
+3. **Platform default** — shared platform access, subject to shared rate limits.
+
+## Request
+
+<ParamField body="topic_text" type="string" required>
+  Market topic or question to score (e.g. *"Will the Fed cut rates in
+  March?"*). Used both as the search query and as scoring context.
+</ParamField>
+
+<ParamField body="user_id" type="string">
+  Owning user UUID. Required when resolving a saved `connector_id`.
+</ParamField>
+
+<ParamField body="connector_id" type="string">
+  ID of a saved Polymarket connector. The connector's credentials and
+  source URLs are used.
+</ParamField>
+
+<ParamField body="event_url" type="string">
+  Canonical Polymarket event URL. If both `event_url` and `event_slug`
+  are provided, `event_url` wins.
+</ParamField>
+
+<ParamField body="event_slug" type="string">
+  Canonical Polymarket event slug — alternative to `event_url`.
+</ParamField>
+
+<ParamField body="max_headlines" type="integer" default="20">
+  5 to 50. Maximum number of recent headlines to include in the
+  aggregate score.
+</ParamField>
+
+<ParamField body="refresh_if_empty" type="boolean" default="true">
+  When `true` and the headline cache is empty for this topic, fetch a
+  fresh batch before scoring. Set to `false` for low-latency reads that
+  may return stale or empty data.
+</ParamField>
+
+<ParamField body="credentials" type="object">
+  One-off BYO credentials, not saved. See the
+  [credentials shape](/api-reference/prediction-market/connectors#credentials)
+  for fields. Setting `credentials.persist_secret = false` is implicit
+  here — they're never stored.
+</ParamField>
+
+## Examples
+
+<CodeGroup>
+
+```bash cURL
+curl -X POST https://api.integramarkets.app/api/prediction-market/polymarket/sentiment \
+  -H "Authorization: Bearer $INTEGRA_API_KEY" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "topic_text": "Will the Fed cut rates in March?",
+    "user_id": "<supabase-user-uuid>",
+    "connector_id": "<connector-id>",
+    "max_headlines": 25
+  }'
+```
+
+```python Python
+import os
+import requests
+
+response = requests.post(
+    "https://api.integramarkets.app/api/prediction-market/polymarket/sentiment",
+    headers={
+        "Authorization": f"Bearer {os.environ['INTEGRA_API_KEY']}",
+        "Content-Type": "application/json",
+    },
+    json={
+        "topic_text": "Will the Fed cut rates in March?",
+        "user_id": "<supabase-user-uuid>",
+        "connector_id": "<connector-id>",
+        "max_headlines": 25,
+    },
+    timeout=30,
+)
+response.raise_for_status()
+print(response.json())
+```
+
+```typescript TypeScript
+const response = await fetch(
+  "https://api.integramarkets.app/api/prediction-market/polymarket/sentiment",
+  {
+    method: "POST",
+    headers: {
+      Authorization: `Bearer ${process.env.INTEGRA_API_KEY}`,
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify({
+      topic_text: "Will the Fed cut rates in March?",
+      user_id: "<supabase-user-uuid>",
+      connector_id: "<connector-id>",
+      max_headlines: 25,
+    }),
+  }
+);
+if (!response.ok) throw new Error(`HTTP ${response.status}`);
+console.log(await response.json());
+```
+
+</CodeGroup>
+
+## One-off credentials (no connector)
+
+Skip the connector entirely and pass `credentials` on each call. Useful
+for server-side flows where you already hold the secret and don't want
+to persist it.
+
+```bash
+curl -X POST https://api.integramarkets.app/api/prediction-market/polymarket/sentiment \
+  -H "Authorization: Bearer $INTEGRA_API_KEY" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "topic_text": "Will the Fed cut rates in March?",
+    "event_url": "https://polymarket.com/event/will-fed-cut-rates-march",
+    "credentials": {
+      "auth_type": "api_key",
+      "api_key": "<users-polymarket-token>"
+    }
+  }'
+```
+
+## Notes
+
+- The headline cache is per-topic, not per-event. The same `topic_text`
+  across different `event_url` values shares the cache.
+- `max_headlines` over 30 typically gives diminishing returns — older
+  headlines weight down by recency.
+- For an event with low news volume, `refresh_if_empty=true` will
+  block the request for ~1-3s while it fetches; set `false` for
+  background workers that can tolerate empty results.
