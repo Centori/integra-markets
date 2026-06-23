@@ -14,6 +14,7 @@ import AlertsScreen from './app/components/AlertsScreen';
 import ProfileScreen from './app/components/ProfileScreen';
 import IntegraLoadingPage from './app/components/IntegraLoadingPage';
 import ErrorBoundary from './app/components/ErrorBoundary';
+import { BookmarkProvider } from './app/providers/BookmarkProvider';
 import PendingDeletionBanner from './app/components/PendingDeletionBanner';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { registerForPushNotificationsAsync } from './app/services/notificationService';
@@ -86,7 +87,8 @@ const MainApp = () => {
 
   return (
     <ErrorBoundary>
-      <SafeAreaView style={styles.container}>
+      <BookmarkProvider>
+        <SafeAreaView style={styles.container}>
         <StatusBar barStyle="light-content" backgroundColor="#121212" />
 
         {pendingDeletionExpiresAt ? (
@@ -146,6 +148,7 @@ const MainApp = () => {
           </TouchableOpacity>
         </View>
       </SafeAreaView>
+      </BookmarkProvider>
     </ErrorBoundary>
   );
 };
