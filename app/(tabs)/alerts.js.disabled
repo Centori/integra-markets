@@ -14,7 +14,6 @@ import {
 import { MaterialIcons } from '@expo/vector-icons';
 import Toast from 'react-native-toast-message';
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import { router } from 'expo-router';
 import HollowCircularIcon from '../components/HollowCircularIcon';
 import * as Notifications from 'expo-notifications';
 

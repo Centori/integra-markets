@@ -88,6 +88,12 @@ except ImportError:
     news_feed_available = False
 
 try:
+    from api.kalshi import router as kalshi_router
+    kalshi_available = True
+except ImportError:
+    kalshi_available = False
+
+try:
     from jobs import scheduler as background_scheduler
     background_scheduler_available = True
 except ImportError:
@@ -173,6 +179,8 @@ if divergence_available:
     app.include_router(divergence_router)
 if news_feed_available:
     app.include_router(news_feed_router)
+if kalshi_available:
+    app.include_router(kalshi_router)
 
 # CORS — explicit allow-list of origins that may call the API from a
 # browser. allow_origins=["*"] + allow_credentials=True is invalid per
@@ -209,6 +217,11 @@ app.add_middleware(
 # SUPABASE_KEY for backwards compatibility with older deploys.
 supabase_url: str = os.getenv("SUPABASE_URL")
 supabase_key: str = os.getenv("SUPABASE_SERVICE_ROLE_KEY") or os.getenv("SUPABASE_KEY")
+
+# Kalshi configuration
+kalshi_api_key: str = os.getenv("KALSHI_API_KEY")
+kalshi_api_secret: str = os.getenv("KALSHI_API_SECRET")
+kalshi_base_url: str = os.getenv("KALSHI_BASE_URL", "https://trading-api.kalshi.com/trade-api/v2")
 
 # Gracefully handle missing Supabase credentials in production
 supabase: Optional[Client] = None

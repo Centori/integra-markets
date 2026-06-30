@@ -25,7 +25,7 @@ export const useSentimentAnalysis = () => {
 
     try {
       const endpoint = includePreprocessing ? 
-        '/comprehensive-analysis' : 
+        '/api/comprehensive-analysis' : 
         '/analyze-sentiment';
 
       const requestBody = includePreprocessing ? {
