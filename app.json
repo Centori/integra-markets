@@ -107,9 +107,9 @@
       "expo-apple-authentication"
     ],
     "extra": {
-      "supabaseUrl": "https://jcovjmuaysebdfbpbvdh.supabase.co",
+      "supabaseUrl": "https://zhdcpiopihqwcmicjpca.supabase.co",
       "supabaseAnonKey": "__SUPABASE_ANON_KEY__",
-      "apiUrl": "__API_URL__",
+      "apiUrl": "https://api.integramarkets.app",
       "groqApiKey": "__GROQ_API_KEY__",
       "huggingFaceToken": "__HUGGING_FACE_TOKEN__",
       "eas": {

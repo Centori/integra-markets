@@ -3,7 +3,7 @@
  */
 
 const API_BASE_URL =
-  process.env.EXPO_PUBLIC_API_URL || 'https://integra-markets-backend.fly.dev';
+  process.env.EXPO_PUBLIC_API_URL || 'https://api.integramarkets.app';
 const API_URL = `${API_BASE_URL.replace(/\/$/, '')}/api`;
 
 export const testConnection = async () => {

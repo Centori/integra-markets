@@ -5,7 +5,7 @@
 import { useState, useCallback } from 'react';
 
 const _API_ROOT =
-  process.env.EXPO_PUBLIC_API_URL || 'https://integra-markets-backend.fly.dev';
+  process.env.EXPO_PUBLIC_API_URL || 'https://api.integramarkets.app';
 const API_BASE_URL = `${_API_ROOT.replace(/\/$/, '')}/api`;
 
 export const useSentimentAnalysis = () => {

@@ -46,8 +46,13 @@ app.add_middleware(
 )
 
 # Initialize services
+# Prefer service_role for backend writes — archive tables have RLS on.
 supabase_url = os.getenv("SUPABASE_URL")
-supabase_key = os.getenv("SUPABASE_KEY") or os.getenv("SUPABASE_ANON_KEY")
+supabase_key = (
+    os.getenv("SUPABASE_SERVICE_ROLE_KEY")
+    or os.getenv("SUPABASE_KEY")
+    or os.getenv("SUPABASE_ANON_KEY")
+)
 alpha_vantage_key = os.getenv("ALPHA_VANTAGE_API_KEY")
 groq_api_key = os.getenv("GROQ_API_KEY")
 

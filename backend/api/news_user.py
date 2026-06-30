@@ -69,7 +69,21 @@ async def user_based_news(
         logger.exception("user_news_service failed")
         raise HTTPException(status_code=500, detail=str(exc))
 
-    await _log_predictions(user_id, result.get("articles", []))
+    # Attach per-article divergence (polymarket/kalshi vs. news sentiment).
+    # user_news_service returns articles under the "news" key; older callers
+    # used "articles". Enrich whichever is present.
+    try:
+        from services._supabase import get_supabase_client
+        from services.news_enricher import enrich_articles_with_divergence
+
+        supabase = get_supabase_client()
+        for key in ("news", "articles"):
+            if isinstance(result.get(key), list):
+                enrich_articles_with_divergence(supabase, result[key])
+    except Exception as exc:  # noqa: BLE001
+        logger.debug("news_enricher skipped: %s", exc)
+
+    await _log_predictions(user_id, result.get("articles", []) or result.get("news", []))
     return result
 
 

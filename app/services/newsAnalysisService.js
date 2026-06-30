@@ -6,7 +6,7 @@
 import { extractPolymarketSlug, getPreferredSourceUrl } from '../utils/polymarketLinks';
 
 const API_BASE_URL =
-  process.env.EXPO_PUBLIC_API_URL || 'https://integra-markets-backend.fly.dev';
+  process.env.EXPO_PUBLIC_API_URL || 'https://api.integramarkets.app';
 
 class NewsAnalysisService {
     constructor() {

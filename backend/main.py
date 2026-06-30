@@ -82,6 +82,12 @@ except ImportError:
     divergence_available = False
 
 try:
+    from api.news_feed import router as news_feed_router
+    news_feed_available = True
+except ImportError:
+    news_feed_available = False
+
+try:
     from jobs import scheduler as background_scheduler
     background_scheduler_available = True
 except ImportError:
@@ -165,6 +171,8 @@ if agent_ask_available:
     app.include_router(agent_ask_router)
 if divergence_available:
     app.include_router(divergence_router)
+if news_feed_available:
+    app.include_router(news_feed_router)
 
 # CORS — explicit allow-list of origins that may call the API from a
 # browser. allow_origins=["*"] + allow_credentials=True is invalid per
@@ -194,9 +202,13 @@ app.add_middleware(
     max_age=86400,
 )
 
-# Get Supabase URL and Key from environment variables
+# Get Supabase URL and Key from environment variables.
+# Prefer SUPABASE_SERVICE_ROLE_KEY for backend writes — the archive
+# tables (raw_documents, sentiment_scores, entity_mentions) have RLS
+# enabled and only the service_role can bypass it. Fall back to
+# SUPABASE_KEY for backwards compatibility with older deploys.
 supabase_url: str = os.getenv("SUPABASE_URL")
-supabase_key: str = os.getenv("SUPABASE_KEY")
+supabase_key: str = os.getenv("SUPABASE_SERVICE_ROLE_KEY") or os.getenv("SUPABASE_KEY")
 
 # Gracefully handle missing Supabase credentials in production
 supabase: Optional[Client] = None

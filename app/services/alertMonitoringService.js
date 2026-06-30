@@ -3,7 +3,7 @@ import { sendMarketAlert, sendNewsAlert } from './notificationService';
 import { addAlert } from './alertService';
 
 // API configuration
-const API_BASE_URL = 'http://localhost:8000';
+const API_BASE_URL = process.env.EXPO_PUBLIC_API_URL || 'https://api.integramarkets.app';
 const API_URL = `${API_BASE_URL}/api`;
 
 // Market data symbols mapping
