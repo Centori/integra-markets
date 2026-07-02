@@ -32,6 +32,9 @@
     },
     "production": {
       "autoIncrement": true,
+      "ios": {
+        "image": "latest"
+      },
       "env": {
         "EXPO_PUBLIC_API_URL": "https://api.integramarkets.app",
         "EXPO_PUBLIC_SUPABASE_URL": "https://zhdcpiopihqwcmicjpca.supabase.co"
@@ -39,6 +42,11 @@
     }
   },
   "submit": {
-    "production": {}
+    "production": {
+      "ios": {
+        "ascAppId": "6749469306",
+        "appleTeamId": "2ABHLWV763"
+      }
+    }
   }
 }

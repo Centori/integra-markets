@@ -1,0 +1,27 @@
+diff --git a/node_modules/react-native/third-party-podspecs/fmt.podspec b/node_modules/react-native/third-party-podspecs/fmt.podspec
+index 121be50..4f4f4f8 100644
+--- a/node_modules/react-native/third-party-podspecs/fmt.podspec
++++ b/node_modules/react-native/third-party-podspecs/fmt.podspec
+@@ -8,14 +8,20 @@ fmt_git_url = fmt_config[:git]
+ 
+ Pod::Spec.new do |spec|
+   spec.name = "fmt"
+-  spec.version = "11.0.2"
++  # Downgraded from 11.0.2 to 9.1.0. Reason: fmt 11's basic_format_string
++  # constructor is `consteval` — Xcode 26 enforces this strictly and rejects
++  # RN 0.76's fmt call sites. fmt 9 has a `constexpr` (permissive)
++  # constructor that both Xcode 16 and Xcode 26 accept. API surface used by
++  # RN's C++ code (fmt::format, fmt::formatted_size, etc.) is stable across
++  # 9.x → 11.x. Remove/revert once RN 0.77+ ships with an fmt fix.
++  spec.version = "9.1.0"
+   spec.license = { :type => "MIT" }
+   spec.homepage = "https://github.com/fmtlib/fmt"
+   spec.summary = "{fmt} is an open-source formatting library for C++. It can be used as a safe and fast alternative to (s)printf and iostreams."
+   spec.authors = "The fmt contributors"
+   spec.source = {
+     :git => fmt_git_url,
+-    :tag => "11.0.2"
++    :tag => "9.1.0"
+   }
+   spec.pod_target_xcconfig = {
+     "CLANG_CXX_LANGUAGE_STANDARD" => rct_cxx_language_standard(),

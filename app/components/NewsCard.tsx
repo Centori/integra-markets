@@ -5,6 +5,7 @@ import { SingleStar } from './CustomStarIcon';
 import PolymarketIcon from './PolymarketIcon';
 import { useBookmarks } from '../providers/BookmarkProvider';
 import { getPreferredSourceUrl } from '../utils/polymarketLinks';
+import { cleanSummaryText } from '../utils/cleanSummary';
 
 interface NewsItem {
   id?: number;
@@ -174,22 +175,18 @@ export default function NewsCard({ item, onAIClick }: NewsCardProps) {
   };
   
   const handleTwitterShare = async (title: string, url: string) => {
-    const tweetText = encodeURIComponent(`${title}${url ? ` ${url}` : ''}`);
-    const twitterUrl = `https://twitter.com/intent/tweet?text=${tweetText}`;
-    
+    // Twitter renders an inline preview card when the URL is on its own line
+    // and points at a page with OpenGraph tags (which all news sources have).
+    // Keep the title short — Twitter truncates around 280 chars including URL.
+    const trimmedTitle = title.length > 200 ? `${title.slice(0, 197)}…` : title;
+    const tweetBody = url ? `${trimmedTitle}\n\n${url}` : trimmedTitle;
+    const intentUrl = `https://x.com/intent/post?text=${encodeURIComponent(tweetBody)}`;
+
     try {
-      // Try Twitter app first, then fall back to web
-      const twitterAppUrl = `twitter://post?message=${tweetText}`;
-      const canOpenApp = await Linking.canOpenURL(twitterAppUrl);
-      
-      if (canOpenApp) {
-        await Linking.openURL(twitterAppUrl);
-      } else {
-        await Linking.openURL(twitterUrl);
-      }
+      await Linking.openURL(intentUrl);
     } catch (error) {
       console.error('Twitter share error:', error);
-      Alert.alert('Error', 'Unable to share on Twitter.');
+      Alert.alert('Error', 'Unable to open X to share this article.');
     }
   };
   
@@ -291,11 +288,15 @@ export default function NewsCard({ item, onAIClick }: NewsCardProps) {
       <Text style={styles.title}>{item.title}</Text>
 
       {/* Description */}
-      {(item.summary || item.content) && (
-        <Text style={styles.description} numberOfLines={3}>
-          {item.summary || item.content}
-        </Text>
-      )}
+      {(() => {
+        const desc = cleanSummaryText(item.summary) || cleanSummaryText(item.content);
+        if (!desc) return null;
+        return (
+          <Text style={styles.description} numberOfLines={3}>
+            {desc}
+          </Text>
+        );
+      })()}
 
       {/* Divergence footer — only renders if upstream enriched this article
           with a divergence reading (sentiment vs. prediction-market gap). */}

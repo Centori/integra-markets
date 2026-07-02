@@ -6,7 +6,7 @@ import IntegraIcon from './IntegraIcon';
 import AIAnalysisOverlay from './AIAnalysisOverlay';
 import { getPreferredSourceUrl } from '../utils/polymarketLinks';
 
-const TodayDashboard = ({ agentActive }) => {
+const TodayDashboard = ({ agentActive, pendingArticle, onPendingArticleConsumed }) => {
   const [selectedFilter, setSelectedFilter] = useState('All');
   const [newsData, setNewsData] = useState([]);
   const [isLoading, setIsLoading] = useState(true);
@@ -26,6 +26,25 @@ const [marketData, setMarketData] = useState(null);
   useEffect(() => {
     loadDashboardData();
   }, []);
+
+  // Notification-driven deep link: once news has loaded, if MainApp passed a
+  // pendingArticle (from a notification tap), find it in the feed and pop
+  // the analysis overlay. If we can't find a match (article aged out, etc.),
+  // just stay on Today silently — better than an error screen.
+  useEffect(() => {
+    if (!pendingArticle || isLoading || newsData.length === 0) return;
+    const match = newsData.find((n) => {
+      if (pendingArticle.id && String(n.id) === String(pendingArticle.id)) return true;
+      if (pendingArticle.url && (n.sourceUrl === pendingArticle.url || n.eventUrl === pendingArticle.url)) return true;
+      if (pendingArticle.title && n.headline === pendingArticle.title) return true;
+      return false;
+    });
+    if (match) {
+      setSelectedNews(match);
+      setAiOverlayVisible(true);
+    }
+    if (onPendingArticleConsumed) onPendingArticleConsumed();
+  }, [pendingArticle, isLoading, newsData]);
 
   const loadDashboardData = async () => {
     setIsLoading(true);

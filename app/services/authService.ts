@@ -1,6 +1,26 @@
 import { Platform } from 'react-native';
 import * as AppleAuthentication from 'expo-apple-authentication';
+import {
+  GoogleSignin,
+  statusCodes as GoogleStatusCodes,
+} from '@react-native-google-signin/google-signin';
 import { supabase } from '@/lib/supabase';
+
+// iOS client ID derived from the iosUrlScheme registered in app.json
+// (com.googleusercontent.apps.1039046627332-nk0jejccajfd9u63p5kas0l5ps53nlsq).
+const GOOGLE_IOS_CLIENT_ID =
+  '1039046627332-nk0jejccajfd9u63p5kas0l5ps53nlsq.apps.googleusercontent.com';
+
+let _googleSigninConfigured = false;
+function ensureGoogleSigninConfigured() {
+  if (_googleSigninConfigured) return;
+  GoogleSignin.configure({
+    iosClientId: GOOGLE_IOS_CLIENT_ID,
+    // webClientId will be needed for Android — when adding that, set
+    // EXPO_PUBLIC_GOOGLE_WEB_CLIENT_ID and read it here.
+  });
+  _googleSigninConfigured = true;
+}
 
 export type AuthOutcome = { success: boolean; error?: string };
 
@@ -98,27 +118,59 @@ export class AuthService {
   }
 
   /**
-   * Sign in with Google via Supabase OAuth.
+   * Sign in with Google.
    *
-   * Uses Supabase's redirect-based OAuth (configured in the Supabase dashboard
-   * with Google as a provider). The redirect URL is the deep-link scheme
-   * registered for the app — `integra://auth/callback` — which routes back
-   * into AuthLoadingScreen with the session payload.
+   * On iOS we use the native Google Sign-In SDK — pops the iOS account picker
+   * sheet, returns an idToken without ever opening a browser, then exchanges
+   * it for a Supabase session via signInWithIdToken. Result: the user never
+   * sees the Supabase project URL (zhdcpiopihqwcmicjpca.supabase.co) — only
+   * Google's native UI.
+   *
+   * On web we fall back to Supabase's redirect-based OAuth (no native SDK
+   * available there). The redirect URL is `integra://auth/callback` for the
+   * mobile deep-link, or the current origin's /auth/callback on web.
    */
   async signInWithGoogle(): Promise<AuthOutcome> {
-    try {
-      const redirectTo =
-        Platform.OS === 'web'
-          ? `${window.location.origin}/auth/callback`
-          : 'integra://auth/callback';
+    if (Platform.OS === 'web') {
+      try {
+        const { error } = await supabase.auth.signInWithOAuth({
+          provider: 'google',
+          options: {
+            redirectTo: `${window.location.origin}/auth/callback`,
+            skipBrowserRedirect: false,
+          },
+        });
+        if (error) throw error;
+        return { success: true };
+      } catch (error: any) {
+        console.error('Error signing in with Google (web):', error);
+        return { success: false, error: error?.message ?? 'google_sign_in_failed' };
+      }
+    }
 
-      const { error } = await supabase.auth.signInWithOAuth({
+    try {
+      ensureGoogleSigninConfigured();
+      await GoogleSignin.hasPlayServices({ showPlayServicesUpdateDialog: true });
+      const result: any = await GoogleSignin.signIn();
+      // v15 wraps the user payload under `data`; older versions return it flat.
+      const idToken: string | undefined =
+        result?.data?.idToken ?? result?.idToken;
+      if (!idToken) {
+        return { success: false, error: 'missing_identity_token' };
+      }
+      const { error } = await supabase.auth.signInWithIdToken({
         provider: 'google',
-        options: { redirectTo, skipBrowserRedirect: false },
+        token: idToken,
       });
       if (error) throw error;
       return { success: true };
     } catch (error: any) {
+      if (
+        error?.code === GoogleStatusCodes?.SIGN_IN_CANCELLED ||
+        error?.code === 'SIGN_IN_CANCELLED'
+      ) {
+        return { success: false, error: 'cancelled' };
+      }
       console.error('Error signing in with Google:', error);
       return { success: false, error: error?.message ?? 'google_sign_in_failed' };
     }

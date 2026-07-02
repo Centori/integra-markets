@@ -95,6 +95,28 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
   `Dockerfile.test`, `fly.toml`, `fly.web.toml`, `railway.toml`,
   `vercel.json`). Cloud Run is primary for backend; check before
   modifying any of these.
+- **iOS build requires `useFrameworks: "static"` in `expo-build-properties`** —
+  `@react-native-google-signin/google-signin@15+` pulls in `AppCheckCore`
+  which needs modular headers. Removing the plugin block or dropping the
+  `static` value will cause `pod install` to fail on EAS Build with:
+  > The Swift pod `AppCheckCore` depends upon `GoogleUtilities` and
+  > `RecaptchaInterop`, which do not define modules.
+  Fix landed 2026-07-01 (build `e6090704-5e31-41ae-bab7-b0c89f606008`).
+- **iOS build requires `patches/react-native+0.76.9.patch`** — RN 0.76 pulls
+  fmt v11.0.2, whose `basic_format_string` constructor is `consteval`. Xcode 26
+  rejects this at compile time. The patch downgrades fmt to v9.1.0 in
+  `third-party-podspecs/fmt.podspec` (permissive `constexpr` constructor).
+  Requires `patch-package` in devDeps + `"postinstall": "patch-package"` in
+  package.json scripts. Delete/skip either and every Xcode 26 build will fail
+  with `call to consteval function 'fmt::basic_format_string<...>'`.
+  First working Xcode 26 build: `96779f72-0d89-47aa-ae84-20a4936a2206`
+  (build 62, 2026-07-02). Revert once RN 0.77+ / Expo SDK 53 is adopted.
+- **Never use plain `npm install` for packages with native code** — always
+  `npx expo install <pkg>` so the version matches the SDK. Native packages
+  installed with wrong versions cause silent CocoaPods failures on EAS.
+  Known offenders installed too-new during 2026-07-01 session:
+  `@react-native-community/netinfo` (needs 11.4.1 for SDK 52, not latest),
+  `expo-clipboard` (needs ~7.0.1, not 8.x).
 
 ## Working with Claude
 

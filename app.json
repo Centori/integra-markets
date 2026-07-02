@@ -7,7 +7,16 @@
     "icon": "./assets/icon.png",
     "userInterfaceStyle": "light",
     "description": "Professional financial markets analysis and news aggregation platform with AI-powered sentiment analysis for commodities trading.",
-    "keywords": ["finance", "markets", "trading", "commodities", "news", "analysis", "AI", "sentiment"],
+    "keywords": [
+      "finance",
+      "markets",
+      "trading",
+      "commodities",
+      "news",
+      "analysis",
+      "AI",
+      "sentiment"
+    ],
     "category": "finance",
     "privacy": "https://integramarkets.com/privacy",
     "splash": {
@@ -46,9 +55,12 @@
         },
         "NSUserNotificationsUsageDescription": "This app sends notifications for market alerts and breaking news.",
         "NSKeychainAccessGroups": [
+          "$(AppIdentifierPrefix)com.centori.integramarkets",
           "$(AppIdentifierPrefix)com.centori.integramarkets"
         ],
         "UIBackgroundModes": [
+          "fetch",
+          "remote-notification",
           "fetch",
           "remote-notification"
         ],
@@ -79,6 +91,10 @@
         "android.permission.CAMERA",
         "android.permission.READ_EXTERNAL_STORAGE",
         "android.permission.WRITE_EXTERNAL_STORAGE",
+        "android.permission.USE_FINGERPRINT",
+        "android.permission.CAMERA",
+        "android.permission.READ_EXTERNAL_STORAGE",
+        "android.permission.WRITE_EXTERNAL_STORAGE",
         "android.permission.USE_FINGERPRINT"
       ],
       "runtimeVersion": "1.0.1"
@@ -105,7 +121,15 @@
           "iosUrlScheme": "com.googleusercontent.apps.1039046627332-nk0jejccajfd9u63p5kas0l5ps53nlsq"
         }
       ],
-      "expo-apple-authentication"
+      "expo-apple-authentication",
+      [
+        "expo-build-properties",
+        {
+          "ios": {
+            "useFrameworks": "static"
+          }
+        }
+      ]
     ],
     "extra": {
       "supabaseUrl": "https://zhdcpiopihqwcmicjpca.supabase.co",
@@ -122,6 +146,9 @@
       }
     },
     "newArchEnabled": false,
-    "owner": "anilkhamsa"
+    "owner": "anilkhamsa",
+    "updates": {
+      "url": "https://u.expo.dev/5163460b-7d45-4c4c-b10d-c5effb08a3c3"
+    }
   }
 }

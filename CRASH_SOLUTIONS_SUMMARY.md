@@ -121,3 +121,122 @@ The most effective approach was **comprehensive error handling** rather than fix
 ---
 
 **Next Steps**: Apply Build 20's proven solutions to resolve current Build 26+ crashes.
+
+## 🆕 2026-07-01 — TestFlight Rebuild Blockers Resolved
+
+Context: cutover from browser-based Google OAuth to native Google Sign-In
+required a new TestFlight build (native code change). First two EAS Build
+attempts failed at the "Install pods" phase. Root causes + fixes below.
+
+### Fix 1 — AppCheckCore modular headers (primary blocker)
+
+**Error seen in build logs:**
+```
+[!] The following Swift pods cannot yet be integrated as static libraries:
+The Swift pod `AppCheckCore` depends upon `GoogleUtilities` and
+`RecaptchaInterop`, which do not define modules. To opt into those targets
+generating module maps... you may set `use_modular_headers!` globally in
+your Podfile, or specify `:modular_headers => true` for particular
+dependencies.
+pod install exited with non-zero code: 1
+```
+
+**Cause:** `@react-native-google-signin/google-signin@15.0.0` transitively
+depends on Firebase's `AppCheckCore` (Swift pod). AppCheckCore in turn
+depends on `GoogleUtilities` / `RecaptchaInterop` (Obj-C pods without
+module maps). Managed Expo builds don't expose the Podfile directly for
+manual editing.
+
+**Fix:** Add `expo-build-properties` plugin with static frameworks:
+
+```json
+// app.json
+"plugins": [
+  ...,
+  [
+    "expo-build-properties",
+    { "ios": { "useFrameworks": "static" } }
+  ]
+]
+```
+
+Install via `npx expo install expo-build-properties`.
+
+### Fix 2 — Native package versions must match Expo SDK
+
+**Cause:** Adding `@react-native-community/netinfo` and `expo-clipboard`
+via plain `npm install` pulled `latest` versions that target Expo SDK 53.
+This project is SDK 52. Version mismatch → CocoaPods can't resolve.
+
+**Fix:** Always use `npx expo install <pkg>` for packages with native
+code. It picks the SDK-compatible version automatically.
+
+Correct SDK 52 versions:
+- `@react-native-community/netinfo`: **11.4.1** (not latest `^13.x`)
+- `expo-clipboard`: **~7.0.1** (not latest `8.x`)
+
+### Working build reference
+
+- Build ID: `e6090704-5e31-41ae-bab7-b0c89f606008` (Xcode 16 — passed pod install but not usable per Apple's April 2026 rule)
+- Working Xcode-26 build: `96779f72-0d89-47aa-ae84-20a4936a2206` (build 62, shipped 2026-07-02)
+- IPA: available on EAS artifacts
+- Runtime version: 1.0.1 (baked-in OTA URL: `https://u.expo.dev/5163460b-...`)
+- iOS build number: 62
+
+### Fix 3 — fmt/consteval on Xcode 26 (biggest sinkhole)
+
+**Error seen in Xcode compile phase:**
+```
+call to consteval function 'fmt::basic_format_string<...>::basic_format_string<FMT_COMPILE_STRING, 0>' is not a constant expression
+```
+
+**Cause:** RN 0.76 depends on `{fmt}` v11.0.2 via
+`node_modules/react-native/third-party-podspecs/fmt.podspec`. In fmt v11+, the
+`basic_format_string` constructor is declared `consteval` (strict compile-time
+evaluation). Xcode 26's LLVM enforces this strictly, so any implicit fmt format
+call with runtime args (which RN's C++ code does throughout Fabric/folly/logger)
+fails to compile.
+
+**What did NOT work (learned the hard way, avoid these):**
+- Setting `useFrameworks: "static"` — needed for AppCheckCore but doesn't touch fmt.
+- Adding preprocessor define `FMT_USE_CONSTEVAL=0` via `pod_target_xcconfig` /
+  `user_target_xcconfig` — didn't propagate to the RN compilation units that
+  #include fmt headers.
+- Adding a custom Podfile `post_install` hook via Expo config plugin —
+  duplicated the block that Expo already generates, breaking pod install.
+- Switching Hermes → JSC — fmt is used by non-Hermes RN modules (folly/Fabric),
+  so the error persists.
+
+**What DID work:** downgrade the fmt version RN pulls in from 11.0.2 to 9.1.0.
+fmt 9.x uses `constexpr` (permissive) for the same constructor. API surface RN
+uses (`fmt::format`, `fmt::formatted_size`, etc.) is stable across 9.x → 11.x.
+Applied via `patch-package`:
+
+```
+patches/react-native+0.76.9.patch  (modifies fmt.podspec spec.version to "9.1.0")
+"scripts": { "postinstall": "patch-package" }
+```
+
+Reinstall `patch-package` if it goes missing: `npm i -D patch-package postinstall-postinstall`.
+
+### Fix 4 — Local disk hygiene (blocks EAS uploads)
+
+EAS Build clones the local repo to a temp dir before uploading. If disk is
+<200MB free, `git clone --depth 1 file://...` fails with exit 128
+("No space left on device") **before** anything reaches EAS servers.
+
+Free up ≥1 GB before running `eas build`:
+```
+xcrun simctl delete unavailable
+rm -rf ~/.expo "$TMPDIR"/eas-cli-nodejs-* "$TMPDIR"/metro-*
+npm cache clean --force
+brew cleanup --prune=all
+```
+
+### Checklist before running `eas build --platform ios` in the future
+
+- [ ] Any new packages with native code added via `npx expo install`, not `npm install`
+- [ ] `expo-build-properties` plugin present in `app.json` with `useFrameworks: "static"`
+- [ ] `ios/` directory contains only `IntegraMarkets.xcworkspace/contents.xcworkspacedata` (nothing else — everything else regenerated by EAS prebuild)
+- [ ] `eas.json` submit profile has `ascAppId` (`"6749469306"`) and `appleTeamId` (`"2ABHLWV763"`) — required for `--auto-submit`
+- [ ] Runtime version in `app.json` unchanged (bumping it splits the install base — OTAs won't reach older devices)

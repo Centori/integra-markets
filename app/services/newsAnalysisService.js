@@ -4,6 +4,7 @@
  */
 
 import { extractPolymarketSlug, getPreferredSourceUrl } from '../utils/polymarketLinks';
+import { cleanSummaryText } from '../utils/cleanSummary';
 
 const API_BASE_URL =
   process.env.EXPO_PUBLIC_API_URL || 'https://api.integramarkets.app';
@@ -184,16 +185,16 @@ class NewsAnalysisService {
      * Generate enhanced summary
      */
     generateSummary(article, sentiment) {
-        let summary = article.summary || article.title;
-        
+        let summary = cleanSummaryText(article.summary) || article.title;
+
         // Add sentiment context if available
         if (sentiment && sentiment.sentiment) {
             const sentimentText = sentiment.sentiment.toLowerCase();
             const confidence = Math.round((sentiment.confidence || 0.5) * 100);
-            
+
             summary += ` Market sentiment appears ${sentimentText} with ${confidence}% confidence based on the language analysis.`;
         }
-        
+
         return summary;
     }
     
