@@ -5,8 +5,14 @@ import { dashboardApi, sentimentApi, marketDataApi } from '../services/api';
 import IntegraIcon from './IntegraIcon';
 import AIAnalysisOverlay from './AIAnalysisOverlay';
 import { getPreferredSourceUrl } from '../utils/polymarketLinks';
+import { useEntitlement } from '../hooks/useEntitlement';
+import { canAccess } from '../services/entitlementGate';
+import { usePaywall } from '../paywall/PaywallProvider';
+import { Feather } from '@expo/vector-icons';
 
 const TodayDashboard = ({ agentActive, pendingArticle, onPendingArticleConsumed }) => {
+  const { tier } = useEntitlement();
+  const paywall = usePaywall();
   const [selectedFilter, setSelectedFilter] = useState('All');
   const [newsData, setNewsData] = useState([]);
   const [isLoading, setIsLoading] = useState(true);
@@ -508,6 +514,9 @@ const renderNewsCard = (item) => {
 
   const renderFilterButton = (filter) => {
     const isSelected = selectedFilter === filter;
+    // Divergence filter is Basic+Markets-only. Show a lock icon for lower tiers
+    // and route to the paywall on tap.
+    const isDivergenceLocked = filter === 'Divergence' && !canAccess('divergence_filter', tier);
     return (
       <TouchableOpacity
         key={filter}
@@ -517,9 +526,19 @@ const renderNewsCard = (item) => {
           isSelected && filter === 'Bullish' && { backgroundColor: '#4ECCA3' },
           isSelected && filter === 'Bearish' && { backgroundColor: '#F05454' },
           isSelected && filter === 'Neutral' && { backgroundColor: '#FFD700' },
+          isDivergenceLocked && { opacity: 0.55 },
         ]}
-        onPress={() => setSelectedFilter(filter)}
+        onPress={() => {
+          if (isDivergenceLocked) {
+            paywall.open({ highlightTier: 'basic_markets' });
+            return;
+          }
+          setSelectedFilter(filter);
+        }}
       >
+        {isDivergenceLocked && (
+          <Feather name="lock" size={10} color="#A0A0A0" style={{ marginRight: 4 }} />
+        )}
         <Text style={[
           styles.filterButtonText,
           isSelected && styles.filterButtonTextActive,

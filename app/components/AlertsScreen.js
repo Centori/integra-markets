@@ -15,6 +15,9 @@ import { MaterialIcons } from '@expo/vector-icons';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import HollowCircularIcon from './HollowCircularIcon';
 import alertMonitoringService from '../services/alertMonitoringService';
+import { useEntitlement } from '../hooks/useEntitlement';
+import { canAccess } from '../services/entitlementGate';
+import { usePaywall } from '../paywall/PaywallProvider';
 import {
   getCurrentAlerts,
   markAlertAsRead,
@@ -41,6 +44,8 @@ const colors = {
 };
 
 const AlertsScreen = ({ onNavigateToAlertPreferences, onNavigateToBookmarks }) => {
+  const { tier } = useEntitlement();
+  const paywall = usePaywall();
   const [alertPreferences, setAlertPreferences] = useState({
     commodities: [],
     regions: [],
@@ -255,6 +260,11 @@ const AlertsScreen = ({ onNavigateToAlertPreferences, onNavigateToBookmarks }) =
         setNewsAlerts(value);
         break;
       case 'divergence':
+        // Gate: divergence alerts are basic_markets-only.
+        if (value && !canAccess('divergence_alerts', tier)) {
+          paywall.open({ highlightTier: 'basic_markets' });
+          return;
+        }
         setDivergenceAlerts(value);
         persistDivergencePrefs({ enabled: value, threshold: divergenceThreshold });
         break;

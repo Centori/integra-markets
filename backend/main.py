@@ -88,6 +88,12 @@ except ImportError:
     news_feed_available = False
 
 try:
+    from api.subscriptions import router as subscriptions_router
+    subscriptions_available = True
+except ImportError:
+    subscriptions_available = False
+
+try:
     from api.kalshi import router as kalshi_router
     kalshi_available = True
 except ImportError:
@@ -181,6 +187,8 @@ if news_feed_available:
     app.include_router(news_feed_router)
 if kalshi_available:
     app.include_router(kalshi_router)
+if subscriptions_available:
+    app.include_router(subscriptions_router)
 
 # CORS — explicit allow-list of origins that may call the API from a
 # browser. allow_origins=["*"] + allow_credentials=True is invalid per

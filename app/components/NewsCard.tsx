@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useState } from 'react';
 import { View, Text, StyleSheet, TouchableOpacity, Linking, Alert, Share, Platform, ActionSheetIOS, Clipboard } from 'react-native';
 import { Feather } from '@expo/vector-icons';
 import { SingleStar } from './CustomStarIcon';
@@ -6,6 +6,9 @@ import PolymarketIcon from './PolymarketIcon';
 import { useBookmarks } from '../providers/BookmarkProvider';
 import { getPreferredSourceUrl } from '../utils/polymarketLinks';
 import { cleanSummaryText } from '../utils/cleanSummary';
+import { useTierLimit } from '../hooks/useTierLimit';
+import UpgradePrompt from '../paywall/UpgradePrompt';
+import { usePaywall } from '../paywall/PaywallProvider';
 
 interface NewsItem {
   id?: number;
@@ -43,6 +46,11 @@ export default function NewsCard({ item, onAIClick }: NewsCardProps) {
   const isPolymarket = item.source?.toLowerCase() === 'polymarket';
   const preferredSourceUrl = getPreferredSourceUrl(item);
 
+  // Tier-based bookmark quota. `canAdd` is false when the user hits their limit.
+  const bookmarkLimit = useTierLimit('bookmarks', newsBookmarks.length);
+  const [showBookmarkUpgrade, setShowBookmarkUpgrade] = useState(false);
+  const paywall = usePaywall();
+
   const handleBookmarkToggle = async () => {
     try {
       if (isCurrentlyBookmarked) {
@@ -51,20 +59,24 @@ export default function NewsCard({ item, onAIClick }: NewsCardProps) {
         if (bookmark) {
           await removeBookmark(bookmark.id);
         }
-      } else {
-        // Add new news bookmark with enhanced fields
-        await addNewsBookmark({
-          title: item.title,
-          summary: item.summary || item.content || '',
-          source: item.source || 'Unknown',
-          sourceUrl: preferredSourceUrl || undefined,
-          sentiment: (item.sentiment?.toUpperCase() as "BULLISH" | "BEARISH" | "NEUTRAL") || 'NEUTRAL',
-          sentimentScore: parseFloat(item.sentimentScore || '0.5'),
-          commodities: Array.isArray(item.commodities) ? item.commodities : undefined,
-          marketImpact: item.marketImpact,
-          tags: [item.source || 'news', ...(item.commodities || [])]
-        });
+        return;
       }
+      // Adding — check tier limit first
+      if (!bookmarkLimit.canAdd) {
+        setShowBookmarkUpgrade(true);
+        return;
+      }
+      await addNewsBookmark({
+        title: item.title,
+        summary: item.summary || item.content || '',
+        source: item.source || 'Unknown',
+        sourceUrl: preferredSourceUrl || undefined,
+        sentiment: (item.sentiment?.toUpperCase() as "BULLISH" | "BEARISH" | "NEUTRAL") || 'NEUTRAL',
+        sentimentScore: parseFloat(item.sentimentScore || '0.5'),
+        commodities: Array.isArray(item.commodities) ? item.commodities : undefined,
+        marketImpact: item.marketImpact,
+        tags: [item.source || 'news', ...(item.commodities || [])]
+      });
     } catch (error) {
       console.error('Bookmark error:', error);
       // Error alert is handled by the provider
@@ -332,6 +344,12 @@ export default function NewsCard({ item, onAIClick }: NewsCardProps) {
           <Feather name="share-2" size={16} color="#666666" />
         </TouchableOpacity>
       </View>
+      <UpgradePrompt
+        visible={showBookmarkUpgrade}
+        onClose={() => setShowBookmarkUpgrade(false)}
+        reason="bookmarks"
+        onSeePlans={(highlightTier) => paywall.open({ highlightTier })}
+      />
     </View>
   );
 }

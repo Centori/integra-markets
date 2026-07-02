@@ -15,6 +15,9 @@ import * as ImagePicker from 'expo-image-picker';
 import { Image } from 'react-native';
 import { useBookmarks } from '../providers/BookmarkProvider';
 import { userService } from '../services/userService';
+import { useEntitlement } from '../hooks/useEntitlement';
+import { tierLabel } from '../services/entitlementGate';
+import { usePaywall } from '../paywall/PaywallProvider';
 import DeleteAccountModal from './DeleteAccountModal';
 
 // Use the same color palette as the main app
@@ -58,6 +61,8 @@ const getRoleLabel = (role) => {
 };
 
 export default function ProfileScreen({ userProfile, alertPreferences, apiKeys, onBack, onNavigateToSettings, onLogout, onNavigateToBookmarks, onAccountDeletionScheduled }) {
+  const { tier } = useEntitlement();
+  const paywall = usePaywall();
   const [selectedProvider, setSelectedProvider] = useState(null);
   const [showAPIKeySetup, setShowAPIKeySetup] = useState(false);
   const [showAlertPreferences, setShowAlertPreferences] = useState(false);
@@ -562,6 +567,15 @@ export default function ProfileScreen({ userProfile, alertPreferences, apiKeys, 
           </View>
 
           <View style={styles.settingsList}>
+            <TouchableOpacity style={styles.settingItem} onPress={() => paywall.open()}>
+              <Text style={styles.settingText}>Subscription</Text>
+              <View style={{ flexDirection: 'row', alignItems: 'center' }}>
+                <Text style={{ color: colors.textSecondary, marginRight: 6, fontSize: 13 }}>
+                  {tierLabel(tier)}
+                </Text>
+                <MaterialIcons name="chevron-right" color={colors.textSecondary} size={16} />
+              </View>
+            </TouchableOpacity>
             <TouchableOpacity style={styles.settingItem} onPress={() => navigateToScreen('NotificationsSettings')}>
               <Text style={styles.settingText}>Notifications</Text>
               <MaterialIcons name="chevron-right" color={colors.textSecondary} size={16} />

@@ -17,6 +17,8 @@ import PredictionMarketsScreen from './app/screens/PredictionMarketsScreen';
 import IntegraLoadingPage from './app/components/IntegraLoadingPage';
 import ErrorBoundary from './app/components/ErrorBoundary';
 import { BookmarkProvider } from './app/providers/BookmarkProvider';
+import { PaywallProvider } from './app/paywall/PaywallProvider';
+import { bootstrapEntitlements } from './app/hooks/useEntitlement';
 import PendingDeletionBanner from './app/components/PendingDeletionBanner';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import {
@@ -107,6 +109,9 @@ const MainApp = () => {
   useEffect(() => {
     checkFirstLaunch();
     refreshPendingDeletion();
+    // Fire-and-forget: initialize RevenueCat + fetch current tier. Falls back
+    // to free_trial silently if the native module isn't linked.
+    bootstrapEntitlements().catch((err) => console.warn('entitlements bootstrap failed:', err));
 
     let splashDelay = 2000;
 
@@ -171,6 +176,7 @@ const MainApp = () => {
   return (
     <ErrorBoundary>
       <BookmarkProvider>
+        <PaywallProvider>
         <SafeAreaView style={styles.container}>
         <StatusBar barStyle="light-content" backgroundColor="#121212" />
 
@@ -231,6 +237,7 @@ const MainApp = () => {
           </TouchableOpacity>
         </View>
       </SafeAreaView>
+        </PaywallProvider>
       </BookmarkProvider>
     </ErrorBoundary>
   );
