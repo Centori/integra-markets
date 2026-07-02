@@ -94,6 +94,12 @@ except ImportError:
     subscriptions_available = False
 
 try:
+    from api.stripe import router as stripe_router
+    stripe_available = True
+except ImportError:
+    stripe_available = False
+
+try:
     from api.kalshi import router as kalshi_router
     kalshi_available = True
 except ImportError:
@@ -189,6 +195,8 @@ if kalshi_available:
     app.include_router(kalshi_router)
 if subscriptions_available:
     app.include_router(subscriptions_router)
+if stripe_available:
+    app.include_router(stripe_router)
 
 # CORS — explicit allow-list of origins that may call the API from a
 # browser. allow_origins=["*"] + allow_credentials=True is invalid per

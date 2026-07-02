@@ -42,4 +42,25 @@ export function revokeKey(userId: string, keyId: string) {
   );
 }
 
-export type { KeyRow, CreateKeyResponse };
+// ---- Subscription tier ---------------------------------------------------
+
+type EntitlementResponse = {
+  tier: "free_trial" | "basic" | "basic_markets" | "api" | "expired";
+  limits: Record<string, unknown>;
+};
+
+export function fetchEntitlement(jwt: string) {
+  return call<EntitlementResponse>("/api/subscriptions/entitlement", {
+    headers: { Authorization: `Bearer ${jwt}` },
+  });
+}
+
+export function createStripeCheckout(jwt: string, tier: "api" = "api") {
+  return call<{ url: string; session_id: string }>("/api/stripe/checkout", {
+    method: "POST",
+    headers: { Authorization: `Bearer ${jwt}` },
+    body: JSON.stringify({ tier }),
+  });
+}
+
+export type { KeyRow, CreateKeyResponse, EntitlementResponse };
