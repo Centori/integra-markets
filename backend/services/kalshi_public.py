@@ -115,7 +115,10 @@ def _fetch_status(
 
 
 def fetch_active_markets(*, limit: int = DEFAULT_LIMIT) -> List[Dict[str, Any]]:
-    return _fetch_status("active", limit=limit)
+    # Kalshi's status enum is `unopened|open|closed|settled` — NOT `active`.
+    # Passing `active` returns HTTP 400. `open` is what represents currently-
+    # tradable markets (equivalent to Polymarket's `active=true`).
+    return _fetch_status("open", limit=limit)
 
 
 def fetch_settled_markets(*, limit: int = DEFAULT_LIMIT) -> List[Dict[str, Any]]:

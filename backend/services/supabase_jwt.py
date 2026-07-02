@@ -90,3 +90,28 @@ async def verify_supabase_jwt(
         "claims": claims,
         "auth_type": "supabase_jwt",
     }
+
+
+async def optional_supabase_jwt(
+    request: Request,
+    authorization: Optional[str] = Header(default=None),
+) -> Optional[Dict[str, Any]]:
+    """Soft-auth variant of verify_supabase_jwt.
+
+    Returns the same claims dict when a valid JWT is present, or ``None``
+    when the header is missing / empty. **Does not** raise on missing auth
+    — the endpoint decides whether to reject or treat as anonymous.
+
+    Used for endpoints that are usable-without-auth (e.g. /api/news/feed —
+    Build 64 mobile calls this without a token; new builds will send one
+    for tier enforcement).
+    """
+    if not authorization:
+        return None
+    try:
+        return await verify_supabase_jwt(request=request, authorization=authorization)
+    except HTTPException:
+        # Malformed / expired token → treat as anonymous rather than 401.
+        # This keeps the endpoint working for stale/broken tokens on old
+        # builds; tier enforcement will apply the strictest limits.
+        return None

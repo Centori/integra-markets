@@ -38,8 +38,12 @@ _WEBHOOK_AUTH_TOKEN = os.getenv("REVENUECAT_WEBHOOK_AUTHORIZATION", "")
 @router.get("/entitlement")
 async def get_entitlement(auth: Dict[str, Any] = Depends(verify_supabase_jwt)) -> dict:
     from services._supabase import get_supabase_client
+    from services.trial_init import ensure_trial_started
     supabase = get_supabase_client()
     user_id = auth["user_id"]
+    # First launch (or first-ever entitlement fetch) → ensure a trial exists.
+    # Idempotent — existing users' rows are untouched.
+    ensure_trial_started(supabase, user_id)
     tier = get_effective_tier(supabase, user_id)
     lim = limits_for(tier)
     # Return only what the client cares about (numbers, not internals).
