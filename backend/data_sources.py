@@ -787,6 +787,61 @@ class NewsDataSources:
             logger.error(f"Error fetching Energy.gov news: {e}")
             return []
 
+    # Data-driven RSS additions. Adding a new commodity feed = one line here,
+    # not another 40-line method. Each entry is (source_name, url, category).
+    _EXTRA_RSS_FEEDS: List[tuple] = [
+        ("Rigzone",                 "https://www.rigzone.com/news/rss/rigzone_latest.aspx", "oil_gas_operations"),
+        ("Hellenic Shipping News",  "https://www.hellenicshippingnews.com/feed/",            "shipping"),
+        ("CNBC Energy",             "https://www.cnbc.com/id/19836768/device/rss/rss.html",  "energy"),
+        ("Mining.com",              "https://www.mining.com/feed/",                          "mining"),
+        ("USDA",                    "https://www.usda.gov/rss/latest-releases.xml",          "agriculture"),
+    ]
+
+    async def _fetch_generic_rss(self, source_name: str, url: str, category: str) -> List[Dict]:
+        """Generic RSS fetcher used for the _EXTRA_RSS_FEEDS list.
+
+        Mirrors the shape of the hand-rolled fetchers so downstream dedup +
+        sentiment scoring works identically. Failures per feed are isolated —
+        one dead feed can't take down the whole batch.
+        """
+        try:
+            try:
+                content = await self._get_text_with_retry(url)
+            except Exception as e:
+                status = check_anti_scraping_status(e)
+                source_tracker.update_status(
+                    source_name,
+                    success=False,
+                    error=str(e),
+                    anti_scraping=status["has_anti_scraping"],
+                    recommendations=status["recommendations"],
+                )
+                if not status["has_anti_scraping"]:
+                    logger.error(f"Error fetching {source_name}: {e}")
+                return []
+
+            feed = feedparser.parse(content)
+            articles: List[Dict] = []
+            for entry in feed.entries[:15]:
+                try:
+                    published = self._parse_date(getattr(entry, "published", "") or getattr(entry, "updated", ""))
+                except Exception:
+                    published = datetime.now(timezone.utc)
+                articles.append({
+                    "source": source_name,
+                    "title": entry.title,
+                    "summary": getattr(entry, "summary", ""),
+                    "url": entry.link,
+                    "published": published,
+                    "category": category,
+                })
+            logger.info(f"Fetched {len(articles)} {source_name} articles")
+            source_tracker.update_status(source_name, success=True)
+            return articles
+        except Exception as e:
+            logger.error(f"Error fetching {source_name}: {e}")
+            return []
+
     async def fetch_all_sources(self) -> List[Dict]:
         """Fetch news from all sources concurrently"""
         tasks = [
@@ -804,6 +859,9 @@ class NewsDataSources:
             self.fetch_metal_bulletin_news(),
             self.fetch_energy_gov_news(),
         ]
+        # Fold in the data-driven feeds
+        for source_name, url, category in self._EXTRA_RSS_FEEDS:
+            tasks.append(self._fetch_generic_rss(source_name, url, category))
         
         results = await asyncio.gather(*tasks, return_exceptions=True)
         

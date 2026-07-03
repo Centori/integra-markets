@@ -26,6 +26,7 @@ logger = logging.getLogger("backfill.run_all")
 # the smaller sources still get a shot on the next run).
 _SOURCES = [
     "gdelt",
+    "wayback",         # historical commodity headlines via Internet Archive
     "worldbank_pink",
     "imf_pcp",
     "cftc_cot",
