@@ -155,7 +155,7 @@ async def revenuecat_webhook(
 
 class LinkWebTierRequest(BaseModel):
     stripe_customer_id: str
-    tier: str = Field(pattern="^(api|basic|basic_markets)$")
+    tier: str = Field(pattern="^(api|api_basic|api_history|basic|basic_markets)$")
 
 
 @router.post("/link-web-tier")

@@ -7,7 +7,10 @@ dashboard at dashboard.integramarkets.app/api-tier.
 Env vars (all in Railway):
     STRIPE_SECRET_KEY               starts with `sk_live_` or `sk_test_`
     STRIPE_WEBHOOK_SECRET           starts with `whsec_`
-    STRIPE_API_TIER_PRICE_ID        starts with `price_` (from Stripe → Products)
+    STRIPE_API_BASIC_PRICE_ID       starts with `price_`  ($99/mo, 90-day rolling)
+    STRIPE_API_HISTORY_PRICE_ID     starts with `price_`  ($249/mo, full archive)
+    STRIPE_API_TIER_PRICE_ID        DEPRECATED — falls back for api_basic if the
+                                     newer var isn't set. Remove after cutover.
     STRIPE_SUCCESS_URL              default: https://dashboard.integramarkets.app/api-tier?success=1
     STRIPE_CANCEL_URL               default: https://dashboard.integramarkets.app/api-tier?canceled=1
 """
@@ -41,7 +44,33 @@ def _stripe():
 # ---------------------------------------------------------------------------
 
 class CheckoutRequest(BaseModel):
-    tier: str = "api"  # future: allow basic/basic_markets via web checkout too
+    # Accepts new SKU names (api_basic, api_history) and the legacy "api" alias.
+    # The alias maps to api_basic — same $99/mo product.
+    tier: str = "api_basic"
+
+
+_TIER_TO_PRICE_ENV = {
+    "api_basic": "STRIPE_API_BASIC_PRICE_ID",
+    "api": "STRIPE_API_BASIC_PRICE_ID",  # legacy alias
+    "api_history": "STRIPE_API_HISTORY_PRICE_ID",
+}
+
+
+def _resolve_price_id(tier: str) -> Optional[str]:
+    """Look up the Stripe Price ID for a tier. Falls back to the deprecated
+    STRIPE_API_TIER_PRICE_ID for api_basic when the newer var isn't set — this
+    is the migration path off the pre-split single-price setup.
+    """
+    env_var = _TIER_TO_PRICE_ENV.get(tier)
+    if env_var is None:
+        return None
+    price_id = os.environ.get(env_var)
+    if price_id:
+        return price_id
+    # Legacy fallback: pre-split deployments only have STRIPE_API_TIER_PRICE_ID.
+    if tier in ("api_basic", "api"):
+        return os.environ.get("STRIPE_API_TIER_PRICE_ID")
+    return None
 
 
 @router.post("/checkout")
@@ -50,9 +79,16 @@ async def create_checkout(
     auth: Dict[str, Any] = Depends(verify_supabase_jwt),
 ) -> dict:
     """Returns a Stripe-hosted checkout URL the dashboard should redirect to."""
-    price_id = os.environ.get("STRIPE_API_TIER_PRICE_ID")
+    if payload.tier not in _TIER_TO_PRICE_ENV:
+        raise HTTPException(status_code=400, detail=f"unknown tier '{payload.tier}'")
+
+    price_id = _resolve_price_id(payload.tier)
     if not price_id:
-        raise HTTPException(status_code=503, detail="STRIPE_API_TIER_PRICE_ID not configured")
+        env_var = _TIER_TO_PRICE_ENV[payload.tier]
+        raise HTTPException(
+            status_code=503,
+            detail=f"{env_var} not configured (set the Stripe Price ID in Railway)",
+        )
 
     success_url = os.environ.get(
         "STRIPE_SUCCESS_URL", "https://dashboard.integramarkets.app/api-tier?success=1"
@@ -124,20 +160,25 @@ async def stripe_webhook(
 
     # Only handle events that matter for tier state. Ignore everything else.
     if event_type == "checkout.session.completed":
-        user_id = data.get("client_reference_id") or (data.get("metadata") or {}).get("supabase_user_id")
+        metadata = data.get("metadata") or {}
+        user_id = data.get("client_reference_id") or metadata.get("supabase_user_id")
         if not user_id:
             logger.warning("stripe webhook: checkout.session.completed missing user_id")
             return {"ok": True, "skipped": "no user_id"}
+        # Metadata.tier came from _create_checkout_ above. Normalize the legacy
+        # "api" alias so we always write api_basic / api_history to the DB.
+        raw_tier = metadata.get("tier", "api_basic")
+        purchased_tier = "api_basic" if raw_tier == "api" else raw_tier
         row = {
             "user_id": user_id,
-            "tier": "api",
+            "tier": purchased_tier,
             "source": "stripe",
             "stripe_customer_id": data.get("customer"),
             "first_purchase_at": _now_iso(),
             "last_synced_at": _now_iso(),
         }
         supabase.table("user_subscriptions").upsert(row, on_conflict="user_id").execute()
-        return {"ok": True, "tier": "api", "event": event_type}
+        return {"ok": True, "tier": purchased_tier, "event": event_type}
 
     if event_type in ("customer.subscription.updated", "customer.subscription.deleted"):
         customer_id = data.get("customer")
@@ -152,11 +193,13 @@ async def stripe_webhook(
             except Exception:  # noqa: BLE001
                 pass
 
-        # Look up the user by stripe_customer_id.
+        # Look up the user by stripe_customer_id. Preserve their current tier
+        # so an api_history subscriber isn't downgraded to api_basic on routine
+        # subscription-updated events.
         try:
             rows = (
                 supabase.table("user_subscriptions")
-                .select("user_id")
+                .select("user_id, tier")
                 .eq("stripe_customer_id", customer_id)
                 .execute()
                 .data
@@ -169,8 +212,15 @@ async def stripe_webhook(
         if not rows:
             return {"ok": True, "skipped": f"no user for customer {customer_id}"}
         user_id = rows[0]["user_id"]
+        current_tier = rows[0].get("tier") or "api_basic"
+        # Normalize legacy alias so we never re-write "api" to the DB.
+        if current_tier == "api":
+            current_tier = "api_basic"
 
-        new_tier = "expired" if event_type == "customer.subscription.deleted" or status in ("canceled", "unpaid", "incomplete_expired") else "api"
+        is_expired = event_type == "customer.subscription.deleted" or status in (
+            "canceled", "unpaid", "incomplete_expired",
+        )
+        new_tier = "expired" if is_expired else current_tier
 
         supabase.table("user_subscriptions").upsert(
             {
