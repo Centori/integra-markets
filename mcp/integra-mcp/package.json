@@ -1,0 +1,44 @@
+{
+  "name": "@integra/mcp",
+  "version": "0.1.0",
+  "description": "Integra Markets MCP server — commodity sentiment, prediction-market divergence, and narrative intelligence for Claude Desktop and Claude Code.",
+  "type": "module",
+  "bin": {
+    "integra-mcp": "dist/index.js"
+  },
+  "main": "dist/index.js",
+  "files": ["dist", "README.md"],
+  "scripts": {
+    "build": "tsc",
+    "dev": "tsc --watch",
+    "start": "node dist/index.js",
+    "prepublishOnly": "npm run build"
+  },
+  "dependencies": {
+    "@modelcontextprotocol/sdk": "^1.0.4",
+    "zod": "^3.23.8"
+  },
+  "devDependencies": {
+    "@types/node": "^22.10.0",
+    "typescript": "^5.7.2"
+  },
+  "engines": {
+    "node": ">=18"
+  },
+  "keywords": [
+    "mcp",
+    "claude",
+    "integra",
+    "commodities",
+    "sentiment",
+    "prediction-markets"
+  ],
+  "license": "UNLICENSED",
+  "author": "Integra Markets",
+  "homepage": "https://integramarkets.app",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/Centori/integra-markets.git",
+    "directory": "mcp/integra-mcp"
+  }
+}

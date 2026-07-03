@@ -67,6 +67,36 @@ export default async function ApiTierPage({
 
       <ApiTierPanel currentTier={currentTier} jwt={jwt} />
 
+      <div className="rounded-lg border border-accent-primary bg-bg-secondary p-6">
+        <div className="flex items-baseline justify-between gap-4">
+          <div>
+            <h2 className="text-lg font-semibold">Also works with Claude — no code required</h2>
+            <p className="mt-2 text-sm text-text-secondary">
+              Install the Integra MCP connector once and query commodity sentiment, prediction-market
+              divergences, and historical analogs directly from Claude Desktop or Claude Code.
+            </p>
+          </div>
+        </div>
+        <div className="mt-4 grid gap-3 text-sm text-text-secondary sm:grid-cols-2">
+          <div>
+            <div className="text-text-primary">You ask:</div>
+            <p className="mt-1 italic">
+              &ldquo;Give me a market brief for Brent.&rdquo;
+            </p>
+          </div>
+          <div>
+            <div className="text-text-primary">Claude returns:</div>
+            <p className="mt-1">Sentiment score, top narratives, biggest AI-vs-market divergences, and price context — pulled live from Integra.</p>
+          </div>
+        </div>
+        <a
+          href="/mcp"
+          className="mt-4 inline-block text-sm text-accent-primary hover:underline"
+        >
+          See MCP setup docs →
+        </a>
+      </div>
+
       <div className="rounded-lg border border-divider bg-bg-secondary p-6">
         <h2 className="text-lg font-semibold">What&apos;s included</h2>
         <ul className="mt-4 space-y-2 text-sm text-text-secondary">

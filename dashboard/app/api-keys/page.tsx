@@ -3,6 +3,7 @@ import { redirect } from "next/navigation";
 import { serverClient } from "@/lib/supabase";
 import { listKeysAction } from "./actions";
 import { KeysPanel } from "./KeysPanel";
+import { ConnectClaude } from "./ConnectClaude";
 import type { KeyRow } from "@/lib/api";
 
 export const dynamic = "force-dynamic";
@@ -84,6 +85,7 @@ export default async function ApiKeysPage() {
         </div>
       ) : null}
       <KeysPanel initialKeys={keys} userEmail={data.user.email ?? ""} />
+      <ConnectClaude />
     </div>
   );
 }
