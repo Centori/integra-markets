@@ -1,7 +1,7 @@
 "use server";
 
 import { revalidatePath } from "next/cache";
-import { serverClient } from "@/lib/supabase";
+import { serverClient } from "@/lib/supabase-server";
 import * as api from "@/lib/api";
 
 async function requireUserId(): Promise<string> {

@@ -1,26 +1,9 @@
-import { createServerClient } from "@supabase/ssr";
-import { createBrowserClient } from "@supabase/ssr";
-import { cookies } from "next/headers";
+// Kept for backwards-compatibility with earlier imports. New code should
+// pick the right file directly:
+//   - server components / route handlers / server actions → supabase-server
+//   - client components ("use client" or top of client-side pages) → supabase-browser
+//
+// The re-exports here are careful NOT to import server-only code into the
+// browser bundle: serverClient is deliberately not re-exported.
 
-const url = process.env.NEXT_PUBLIC_SUPABASE_URL!;
-const anonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!;
-
-export function browserClient() {
-  return createBrowserClient(url, anonKey);
-}
-
-export function serverClient() {
-  const store = cookies();
-  return createServerClient(url, anonKey, {
-    cookies: {
-      getAll() {
-        return store.getAll();
-      },
-      setAll(items) {
-        items.forEach(({ name, value, options }) => {
-          store.set(name, value, options);
-        });
-      },
-    },
-  });
-}
+export { browserClient } from "./supabase-browser";

@@ -3,7 +3,7 @@
 // the Basic / Basic+Markets consumer tiers.
 
 import { redirect } from "next/navigation";
-import { serverClient } from "@/lib/supabase";
+import { serverClient } from "@/lib/supabase-server";
 import ApiTierPanel from "./ApiTierPanel";
 
 export const dynamic = "force-dynamic";
