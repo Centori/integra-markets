@@ -1,4 +1,7 @@
 {
+  "framework": null,
+  "installCommand": "echo skip",
+  "buildCommand": "echo skip",
   "outputDirectory": "dist",
   "rewrites": [
     { "source": "/login",            "destination": "https://integra-dashboard-ten.vercel.app/login" },
