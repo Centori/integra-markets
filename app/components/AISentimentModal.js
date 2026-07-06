@@ -9,7 +9,7 @@ import {
   Animated,
   TextInput,
 } from 'react-native';
-import * as Clipboard from 'expo-clipboard';
+// expo-clipboard import removed — was unused. Re-add via lazy require() if needed.
 // Import local components
 import AILoadingText from './AILoadingText';
 import useSentimentAnalysis from '../services/useSentimentAnalysis';

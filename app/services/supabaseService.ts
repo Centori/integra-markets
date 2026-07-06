@@ -1,5 +1,19 @@
 import { supabase, supabaseUrl, supabaseAnonKey } from '../utils/supabaseConfig';
-import NetInfo from '@react-native-community/netinfo';
+
+// Lazy-load NetInfo so a failed native module init can't crash the app at
+// launch. Falls back to "assume connected" if the module isn't linked.
+let _netInfo: { fetch: () => Promise<{ isConnected: boolean | null }> } | null = null;
+function getNetInfo() {
+  if (_netInfo !== null) return _netInfo;
+  try {
+    _netInfo = require('@react-native-community/netinfo').default;
+  } catch {
+    _netInfo = {
+      fetch: async () => ({ isConnected: true }),
+    };
+  }
+  return _netInfo;
+}
 
 export interface SupabaseStatus {
   isConfigured: boolean;
@@ -13,7 +27,7 @@ class SupabaseService {
    * Check network connectivity
    */
   private async checkNetwork(): Promise<boolean> {
-    const netInfo = await NetInfo.fetch();
+    const netInfo = await getNetInfo().fetch();
     return netInfo.isConnected ?? false;
   }
 

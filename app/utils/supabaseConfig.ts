@@ -1,7 +1,15 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { createClient } from '@supabase/supabase-js';
 import { AppState } from 'react-native';
-import 'react-native-url-polyfill/auto';
+
+// url-polyfill is guarded — a failed native URL polyfill install has been
+// implicated in early-launch native crashes on iOS 26.x. iOS 26 has proper
+// URL/URLSearchParams globals, so the polyfill is a no-op there anyway.
+try {
+  require('react-native-url-polyfill/auto');
+} catch {
+  // no-op — modern iOS ships URL globally
+}
 
 if (!process.env.EXPO_PUBLIC_SUPABASE_URL) {
   console.error('Missing SUPABASE_URL in environment variables');
