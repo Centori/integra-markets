@@ -6,45 +6,6 @@ const nextConfig = {
   images: {
     unoptimized: true,
   },
-  async rewrites() {
-    return {
-      beforeFiles: [
-        // Proxy dashboard routes to the dashboard project
-        {
-          source: '/login',
-          destination: 'https://integra-dashboard-ten.vercel.app/login',
-        },
-        {
-          source: '/login/:path*',
-          destination: 'https://integra-dashboard-ten.vercel.app/login/:path*',
-        },
-        {
-          source: '/api-tier',
-          destination: 'https://integra-dashboard-ten.vercel.app/api-tier',
-        },
-        {
-          source: '/api-tier/:path*',
-          destination: 'https://integra-dashboard-ten.vercel.app/api-tier/:path*',
-        },
-        {
-          source: '/api-keys',
-          destination: 'https://integra-dashboard-ten.vercel.app/api-keys',
-        },
-        {
-          source: '/api-keys/:path*',
-          destination: 'https://integra-dashboard-ten.vercel.app/api-keys/:path*',
-        },
-        {
-          source: '/mcp',
-          destination: 'https://integra-dashboard-ten.vercel.app/mcp',
-        },
-        {
-          source: '/mcp/:path*',
-          destination: 'https://integra-dashboard-ten.vercel.app/mcp/:path*',
-        },
-      ],
-    }
-  },
 }
 
 export default nextConfig
