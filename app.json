@@ -102,8 +102,7 @@
     "web": {
       "favicon": "./assets/favicon.png",
       "bundler": "metro",
-      "output": "single",
-      "baseUrl": "/integra-markets"
+      "output": "single"
     },
     "plugins": [
       "./expo-plugins/disable-privacy-aggregation.cjs",
