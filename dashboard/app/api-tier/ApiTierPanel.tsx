@@ -6,14 +6,21 @@ import { createStripeCheckout } from "@/lib/api";
 type Props = {
   currentTier: string;
   jwt: string;
+  loggedIn: boolean;
 };
 
-export default function ApiTierPanel({ currentTier, jwt }: Props) {
+export default function ApiTierPanel({ currentTier, jwt, loggedIn }: Props) {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const isActive = currentTier === "api";
 
   const handleSubscribe = async () => {
+    // Pricing is public; checkout needs an account. Round-trip through login
+    // and come straight back here.
+    if (!loggedIn) {
+      window.location.href = "/login?redirect=/api-tier";
+      return;
+    }
     setError(null);
     setLoading(true);
     try {
@@ -56,12 +63,16 @@ export default function ApiTierPanel({ currentTier, jwt }: Props) {
           ? "You already have API access"
           : loading
           ? "Redirecting to Stripe…"
-          : "Subscribe — $99/mo"}
+          : loggedIn
+          ? "Subscribe — $99/mo"
+          : "Sign in to subscribe — $99/mo"}
       </button>
 
       {!isActive ? (
         <p className="mt-3 text-center text-xs text-text-secondary">
-          You&apos;ll be taken to Stripe&apos;s secure checkout. Cancel any time.
+          {loggedIn
+            ? "You'll be taken to Stripe's secure checkout. Cancel any time."
+            : "Free account first, then Stripe's secure checkout. Cancel any time."}
         </p>
       ) : null}
     </div>

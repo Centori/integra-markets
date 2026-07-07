@@ -1,9 +1,10 @@
-// Web-only API tier landing page. Sells the "$99/mo programmatic access"
-// SKU via Stripe Checkout. Mobile users never see this — Apple IAP handles
-// the Basic / Basic+Markets consumer tiers.
+// Public API pricing page — visible WITHOUT login, like any conventional
+// paid product: see the price first, sign in only to buy. Sells the "$99/mo
+// programmatic access" SKU via Stripe Checkout. Mobile users never see this —
+// Apple IAP handles the Basic / Basic+Markets consumer tiers.
 
-import { redirect } from "next/navigation";
 import { serverClient } from "@/lib/supabase-server";
+import { fetchTier } from "@/lib/entitlement";
 import ApiTierPanel from "./ApiTierPanel";
 
 export const dynamic = "force-dynamic";
@@ -17,27 +18,15 @@ export default async function ApiTierPage({
   const {
     data: { user },
   } = await supabase.auth.getUser();
-  if (!user) redirect("/login?redirect=/api-tier");
 
-  // Server-side entitlement fetch so the button state is correct on first render.
-  const session = await supabase.auth.getSession();
-  const jwt = session.data.session?.access_token ?? "";
-
-  let currentTier: string = "free_trial";
-  try {
-    const res = await fetch(
-      `${process.env.NEXT_PUBLIC_INTEGRA_API_URL ?? "https://api.integramarkets.app"}/api/subscriptions/entitlement`,
-      {
-        headers: { Authorization: `Bearer ${jwt}` },
-        cache: "no-store",
-      }
-    );
-    if (res.ok) {
-      const data = (await res.json()) as { tier?: string };
-      currentTier = data.tier ?? "free_trial";
-    }
-  } catch {
-    // silent — falls back to free_trial UX
+  // Entitlement only matters for the button state; logged-out visitors just
+  // see the public pricing with a "Sign in to subscribe" CTA.
+  let jwt = "";
+  let currentTier = "free_trial";
+  if (user) {
+    const session = await supabase.auth.getSession();
+    jwt = session.data.session?.access_token ?? "";
+    currentTier = await fetchTier(jwt);
   }
 
   return (
@@ -53,8 +42,8 @@ export default async function ApiTierPage({
       {searchParams.success ? (
         <div className="rounded-lg border border-accent-positive bg-bg-secondary p-4 text-sm">
           Payment received — your API access is active. Head over to{" "}
-          <a href="/api-keys" className="text-accent-primary underline">
-            API keys
+          <a href="/account/api" className="text-accent-primary underline">
+            API &amp; integrations
           </a>{" "}
           to create your first key.
         </div>
@@ -65,7 +54,7 @@ export default async function ApiTierPage({
         </div>
       ) : null}
 
-      <ApiTierPanel currentTier={currentTier} jwt={jwt} />
+      <ApiTierPanel currentTier={currentTier} jwt={jwt} loggedIn={Boolean(user)} />
 
       <div className="rounded-lg border border-accent-primary bg-bg-secondary p-6">
         <div className="flex items-baseline justify-between gap-4">

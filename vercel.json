@@ -12,6 +12,8 @@
     { "source": "/api-keys/:path*",  "destination": "https://integra-dashboard-ten.vercel.app/api-keys/:path*" },
     { "source": "/mcp",              "destination": "https://integra-dashboard-ten.vercel.app/mcp" },
     { "source": "/mcp/:path*",       "destination": "https://integra-dashboard-ten.vercel.app/mcp/:path*" },
+    { "source": "/account",          "destination": "https://integra-dashboard-ten.vercel.app/account" },
+    { "source": "/account/:path*",   "destination": "https://integra-dashboard-ten.vercel.app/account/:path*" },
     { "source": "/auth/:path*",      "destination": "https://integra-dashboard-ten.vercel.app/auth/:path*" },
     { "source": "/_next/:path*",     "destination": "https://integra-dashboard-ten.vercel.app/_next/:path*" },
     { "source": "/(.*)",             "destination": "/index.html" }

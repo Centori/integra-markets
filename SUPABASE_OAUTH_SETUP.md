@@ -1,192 +1,80 @@
-# Supabase OAuth Setup with Your Google Credentials
+# Supabase OAuth Setup — Web + Mobile
 
-## 🔑 **Your Google OAuth Credentials**
+> ⚠️ **Security note (2026-07-07):** an earlier version of this file had the
+> Google OAuth **client secret committed in plaintext**, and every URL pointed
+> at the retired Supabase project `jcovjmuaysebdfbpbvdh`. The secret must be
+> treated as compromised — **rotate it in Google Cloud Console** (Credentials →
+> Web client → "Reset secret") and enter the new value ONLY in the Supabase
+> dashboard. Never commit secrets to this repo.
 
-### **Client IDs:**
-- **iOS Client ID**: `1039046627332-nk0jejccajfd9u63p5kas0l5ps53nlsq.apps.googleusercontent.com`
-- **Web Client ID**: `1039046627332-sb9etffag0j3a8ti34hevhrt2qp44qb5.apps.googleusercontent.com`
+## Current project
 
-### **Client Secret:**
-- **Client Secret**: `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`
+- **Supabase project**: `zhdcpiopihqwcmicjpca`
+  (https://supabase.com/dashboard/project/zhdcpiopihqwcmicjpca)
+- **Production domain**: `https://www.integramarkets.app`
+- **Web auth callback**: `https://www.integramarkets.app/auth/callback`
+  (Next.js route, proxied from the `integra-web` Vercel project to
+  `integra-dashboard` via `vercel.json` rewrites)
 
-## 🌐 **Step 1: Configure Supabase Dashboard**
+## Google (enabled ✅)
 
-### **Access Your Supabase Project:**
-1. Go to: https://supabase.com/dashboard/project/jcovjmuaysebdfbpbvdh
-2. Navigate to **Authentication** → **Providers**
+Client IDs (public, safe to reference):
 
-### **Enable Google OAuth Provider:**
-1. Find **Google** in the providers list
-2. Toggle it **ON**
-3. Enter your credentials:
-   ```
-   Client ID: 1039046627332-sb9etffag0j3a8ti34hevhrt2qp44qb5.apps.googleusercontent.com
-   Client Secret: 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
-   ```
-4. Click **Save**
+- **iOS**: `1039046627332-nk0jejccajfd9u63p5kas0l5ps53nlsq.apps.googleusercontent.com`
+  — used natively via `@react-native-google-signin` + `signInWithIdToken`.
+- **Web**: `1039046627332-sb9etffag0j3a8ti34hevhrt2qp44qb5.apps.googleusercontent.com`
+  — used by Supabase's hosted OAuth flow (`signInWithOAuth`).
 
-### **Configure Redirect URLs:**
-1. Go to **Authentication** → **URL Configuration**
-2. Add these **Site URLs**:
-   ```
-   https://integramarkets.app
-   https://integramarkets.app/app
-   http://localhost:8081
-   ```
-3. Add these **Redirect URLs**:
-   ```
-   https://integramarkets.app/app
-   https://integramarkets.app/app/auth/callback
-   https://jcovjmuaysebdfbpbvdh.supabase.co/auth/v1/callback
-   http://localhost:8081
-   http://localhost:8081/auth/callback
-   ```
+### Supabase dashboard (Authentication → Providers → Google)
 
-## 🔧 **Step 2: Update Google Cloud Console**
+1. Toggle **ON** (already on for this project).
+2. Client ID = the web client ID above; Client Secret = the **rotated** secret.
 
-### **Add Authorized Redirect URIs:**
-1. Go to: https://console.cloud.google.com/apis/credentials
-2. Click on your **Web Client ID**: `1039046627332-sb9etffag0j3a8ti34hevhrt2qp44qb5.apps.googleusercontent.com`
-3. Add these **Authorized redirect URIs**:
-   ```
-   https://jcovjmuaysebdfbpbvdh.supabase.co/auth/v1/callback
-   https://integramarkets.app/app
-   https://integramarkets.app/app/auth/callback
-   http://localhost:8081
-   http://localhost:8081/auth/callback
-   ```
-4. Click **Save**
+### Supabase dashboard (Authentication → URL Configuration)
 
-### **Add Authorized JavaScript Origins:**
-1. In the same credential configuration, add:
-   ```
-   https://integramarkets.app
-   https://jcovjmuaysebdfbpbvdh.supabase.co
-   http://localhost:8081
-   ```
+- **Site URL**: `https://www.integramarkets.app`
+- **Redirect URLs** (add all):
+  ```
+  https://www.integramarkets.app/**
+  http://localhost:3000/**
+  http://localhost:8081/**
+  ```
 
-## 🚀 **Step 3: Deploy Environment Variables**
+### Google Cloud Console (web client)
 
-### **For Vercel Deployment:**
-1. Go to your Vercel dashboard
-2. Select your project
-3. Go to **Settings** → **Environment Variables**
-4. Add these variables:
-   ```
-   EXPO_PUBLIC_SUPABASE_URL=https://jcovjmuaysebdfbpbvdh.supabase.co
-   EXPO_PUBLIC_SUPABASE_ANON_KEY=eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Impjb3ZqbXVheXNlYmRmYnBidmRoIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NTI0OTA3NTEsImV4cCI6MjA2ODA2Njc1MX0.vnIaHcLbQRBz1Q1HgFOT5-KZqghQDKBu-uCanVU2AGQ
-   GOOGLE_WEB_CLIENT_ID=1039046627332-sb9etffag0j3a8ti34hevhrt2qp44qb5.apps.googleusercontent.com
-   ```
+- **Authorized redirect URIs**:
+  ```
+  https://zhdcpiopihqwcmicjpca.supabase.co/auth/v1/callback
+  ```
+- **Authorized JavaScript origins**:
+  ```
+  https://www.integramarkets.app
+  https://zhdcpiopihqwcmicjpca.supabase.co
+  ```
 
-## 🔗 **Step 4: V0 Landing Page Integration**
+## Apple
 
-### **Update Your Landing Page Buttons:**
+- **iOS (native)**: works today — `expo-apple-authentication` +
+  `signInWithIdToken`, App ID `com.centori.integramarkets` with the
+  Sign in with Apple capability.
+- **Web**: requires a separate **Services ID** in the Apple Developer portal
+  (Identifiers → Services IDs → e.g. `com.centori.integramarkets.web`) with
+  Sign in with Apple enabled, return URL
+  `https://zhdcpiopihqwcmicjpca.supabase.co/auth/v1/callback`, plus a `.p8`
+  key to generate the client secret. Enter both in Supabase
+  (Authentication → Providers → Apple), then set
+  `NEXT_PUBLIC_ENABLE_APPLE_AUTH=1` on the `integra-dashboard` Vercel project —
+  the login page's Apple button is already wired and appears when that flag
+  is set. As of 2026-07-07 the Apple provider is **disabled** in Supabase.
 
-```html
-<!-- Login Button -->
-<a href="https://integramarkets.app/app?auth=login" class="login-btn">
-  Log In
-</a>
+## Environment variables
 
-<!-- Sign Up Button -->
-<a href="https://integramarkets.app/app?auth=signup" class="signup-btn">
-  Sign Up
-</a>
+| Where | Vars |
+| --- | --- |
+| `eas.json` (mobile builds) | `EXPO_PUBLIC_SUPABASE_URL`, `EXPO_PUBLIC_SUPABASE_ANON_KEY`, `EXPO_PUBLIC_API_URL` |
+| Vercel `integra-dashboard` | `NEXT_PUBLIC_SUPABASE_URL`, `NEXT_PUBLIC_SUPABASE_ANON_KEY`, `NEXT_PUBLIC_INTEGRA_API_URL`, (optional) `NEXT_PUBLIC_ENABLE_APPLE_AUTH` |
+| Local `.env` (web export) | same `EXPO_PUBLIC_*` trio |
 
-<!-- Google OAuth Button -->
-<a href="https://integramarkets.app/app?auth=login&provider=google" class="google-btn">
-  <svg><!-- Google icon --></svg>
-  Continue with Google
-</a>
-```
-
-### **Or Use JavaScript:**
-```javascript
-function redirectToAuth(mode) {
-  window.location.href = `https://integramarkets.app/app?auth=${mode}`;
-}
-
-function redirectToGoogleAuth() {
-  window.location.href = 'https://integramarkets.app/app?auth=login&provider=google';
-}
-```
-
-## 🧪 **Step 5: Test the Integration**
-
-### **Local Testing:**
-1. Start your development server:
-   ```bash
-   npm run web
-   ```
-
-2. Test these URLs:
-   - `http://localhost:8081?auth=login`
-   - `http://localhost:8081?auth=signup`
-   - `http://localhost:8081?auth=login&provider=google`
-
-### **Production Testing:**
-1. Deploy to Vercel:
-   ```bash
-   npm run build:web:prod
-   ```
-
-2. Test these URLs:
-   - `https://integramarkets.app/app?auth=login`
-   - `https://integramarkets.app/app?auth=signup`
-   - `https://integramarkets.app/app?auth=login&provider=google`
-
-## 🔄 **Expected User Flow**
-
-### **From Your V0 Landing Page:**
-1. User clicks "Continue with Google" 
-2. Redirected to: `https://integramarkets.app/app?auth=login&provider=google`
-3. App detects parameters and shows auth modal immediately
-4. User clicks Google sign-in button
-5. Redirected to Google OAuth consent screen
-6. User approves permissions
-7. Google redirects back to: `https://integramarkets.app/app#access_token=...`
-8. App handles OAuth callback automatically
-9. User is signed in and sees the dashboard
-
-## 🔍 **Troubleshooting**
-
-### **Common Issues:**
-
-**❌ "OAuth Error: redirect_uri_mismatch"**
-- **Solution**: Verify redirect URIs in Google Cloud Console match exactly
-
-**❌ "Invalid client: no application name"** 
-- **Solution**: Set application name in Google Cloud Console OAuth consent screen
-
-**❌ "Access blocked: This app's request is invalid"**
-- **Solution**: Ensure OAuth consent screen is configured properly
-
-**❌ Supabase OAuth not working**
-- **Solution**: Double-check client ID and secret in Supabase dashboard
-
-### **Debug Steps:**
-1. Check browser console for errors
-2. Verify environment variables are loaded
-3. Check network tab for failed requests
-4. Test with different browsers/incognito mode
-
-## ✅ **Verification Checklist**
-
-- [ ] ✅ Google OAuth credentials added to `.env`
-- [ ] ✅ Supabase Google provider enabled with correct credentials
-- [ ] ✅ Redirect URLs configured in both Supabase and Google Cloud
-- [ ] ✅ Environment variables deployed to Vercel
-- [ ] ✅ V0 landing page buttons updated
-- [ ] ✅ Local testing successful
-- [ ] ✅ Production deployment complete
-- [ ] ✅ End-to-end OAuth flow tested
-
-## 🎯 **Your Integration URLs**
-
-**For your V0 landing page buttons:**
-
-- **Login**: `https://integramarkets.app/app?auth=login`
-- **Sign Up**: `https://integramarkets.app/app?auth=signup` 
-- **Google OAuth**: `https://integramarkets.app/app?auth=login&provider=google`
-
-You're all set! 🚀 Your deep linking integration with Google OAuth is now ready to deploy.
+The anon key is public by design (RLS enforces access). The service_role key
+and all OAuth client secrets are server-side only — dashboard-entered, never
+committed.

@@ -7,7 +7,7 @@
 // dashboard where Supabase auth + Google + Apple sign-in already work).
 
 import React from 'react';
-import { View, Text, ScrollView, StyleSheet, useWindowDimensions } from 'react-native';
+import { View, Text, Image, ScrollView, StyleSheet, useWindowDimensions } from 'react-native';
 
 const COLORS = {
   bg: '#000',
@@ -32,12 +32,10 @@ function Anchor({ href, children, style }) {
 }
 
 function BrandMark() {
+  // The real app icon (assets/icon.png) — same mark as iOS, no CSS mock.
   return (
     <View style={styles.brand}>
-      <View style={styles.brandMark}>
-        <View style={styles.brandDot} />
-        <View style={styles.brandLine} />
-      </View>
+      <Image source={require('./assets/icon.png')} style={styles.brandIcon} />
       <Text style={styles.brandText}>Integra Markets</Text>
     </View>
   );
@@ -76,8 +74,8 @@ export default function MainAppWeb() {
           Integra ingests news, prediction markets, and positioning data across oil, gas, metals, and grains — then surfaces where the AI disagrees with the crowd. Available on iOS, dashboard, and REST API.
         </Text>
         <View style={[styles.ctaRow, isWide && styles.ctaRowWide]}>
-          <Anchor href="/login" style={styles.ctaPrimary}>Log in</Anchor>
-          <Anchor href="/api-tier" style={styles.ctaSecondary}>Get API access</Anchor>
+          <Anchor href="/login" style={styles.ctaPrimary}>Sign up / Log in</Anchor>
+          <Anchor href="/api-tier" style={styles.ctaSecondary}>See pricing</Anchor>
           <Anchor href="/mcp" style={styles.ctaSecondary}>Connect via Claude</Anchor>
         </View>
       </View>
@@ -124,17 +122,7 @@ const styles = StyleSheet.create({
   header: { paddingBottom: 24, borderBottomWidth: 1, borderBottomColor: COLORS.border, marginBottom: 64 },
   headerRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
   brand: { flexDirection: 'row', alignItems: 'center', gap: 12 },
-  brandMark: {
-    width: 32,
-    height: 32,
-    borderRadius: 6,
-    borderWidth: 2,
-    borderColor: COLORS.accent,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  brandDot: { width: 4, height: 4, backgroundColor: COLORS.accent, borderRadius: 1, marginBottom: 2 },
-  brandLine: { width: 4, height: 14, backgroundColor: COLORS.accent, borderRadius: 1 },
+  brandIcon: { width: 32, height: 32, borderRadius: 6 },
   brandText: { color: COLORS.text, fontSize: 20, fontWeight: '700', letterSpacing: -0.5 },
 
   nav: { flexDirection: 'row', gap: 24, marginTop: 12 },
