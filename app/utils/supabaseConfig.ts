@@ -11,32 +11,65 @@ try {
   // no-op — modern iOS ships URL globally
 }
 
-if (!process.env.EXPO_PUBLIC_SUPABASE_URL) {
-  console.error('Missing SUPABASE_URL in environment variables');
+// Root cause of Build 63/64 launch crashes: when EXPO_PUBLIC_SUPABASE_ANON_KEY
+// is undefined in production, calling createClient(url, undefined) throws
+// synchronously at module load, before React mounts. The Expo error recovery
+// queue then aborts (SIGABRT in expo.controller.errorRecoveryQueue). We now
+// defer client construction and provide a stub if config is missing so a
+// misconfigured env var can never crash launch again.
+
+const _url = process.env.EXPO_PUBLIC_SUPABASE_URL;
+const _key = process.env.EXPO_PUBLIC_SUPABASE_ANON_KEY;
+
+if (!_url || !_key) {
+  console.error(
+    '[integra] Missing Supabase config',
+    { url: !!_url, key: !!_key },
+    '— auth will not work until env vars are supplied at build time.',
+  );
 }
 
-if (!process.env.EXPO_PUBLIC_SUPABASE_ANON_KEY) {
-  console.error('Missing SUPABASE_ANON_KEY in environment variables');
+export const supabaseUrl = _url ?? '';
+export const supabaseAnonKey = _key ?? '';
+
+function makeStubClient(): ReturnType<typeof createClient> {
+  // A tiny stand-in that mirrors the shape the app touches on startup so
+  // nothing throws before React mounts. All calls resolve to a "not
+  // authenticated" state.
+  const notConfigured = { data: null, error: { message: 'Supabase not configured' } as any };
+  const auth = {
+    getUser: async () => notConfigured,
+    getSession: async () => ({ data: { session: null }, error: null }),
+    onAuthStateChange: () => ({ data: { subscription: { unsubscribe() {} } } }),
+    signOut: async () => ({ error: null }),
+    startAutoRefresh: () => {},
+    stopAutoRefresh: () => {},
+  };
+  return { auth } as unknown as ReturnType<typeof createClient>;
 }
 
-export const supabaseUrl = process.env.EXPO_PUBLIC_SUPABASE_URL!;
-export const supabaseAnonKey = process.env.EXPO_PUBLIC_SUPABASE_ANON_KEY!;
+const supabase = (_url && _key)
+  ? createClient(_url, _key, {
+      auth: {
+        storage: AsyncStorage,
+        autoRefreshToken: true,
+        persistSession: true,
+        detectSessionInUrl: false,
+      },
+    })
+  : makeStubClient();
 
-const supabase = createClient(supabaseUrl, supabaseAnonKey, {
-  auth: {
-    storage: AsyncStorage,
-    autoRefreshToken: true,
-    persistSession: true,
-    detectSessionInUrl: false,
-  },
-});
-
-// Set up app state change listener to handle auth state
+// Set up app state change listener to handle auth state. Wrapped in guard
+// so a stub client never triggers auth methods.
 AppState.addEventListener('change', (state) => {
-  if (state === 'active') {
-    supabase.auth.startAutoRefresh();
-  } else {
-    supabase.auth.stopAutoRefresh();
+  try {
+    if (state === 'active') {
+      supabase.auth.startAutoRefresh();
+    } else {
+      supabase.auth.stopAutoRefresh();
+    }
+  } catch (err) {
+    console.warn('[integra] supabase auth refresh threw:', err);
   }
 });
 
