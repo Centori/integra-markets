@@ -82,7 +82,23 @@ if (global.ErrorUtils) {
             console.warn('[iOS 18.6 Patch] Suppressed initialization error:', errorMessage);
             return;
         }
-        
+
+        // CRASH DIAGNOSTIC MODE (2026-07-14): fatal JS errors have been
+        // killing release builds ~2s after mount with no visible message
+        // (expo-updates error recovery aborts -> SIGABRT). Instead of dying
+        // silently, surface the REAL error on screen so it can be reported,
+        // and do NOT forward fatals to the native handler (which would
+        // RCTFatal/abort). Non-fatal errors still pass through.
+        if (isFatal) {
+            const details = `${error?.name || 'Error'}: ${errorMessage}\n\n${(error?.stack || '').slice(0, 900)}`;
+            console.error('[FATAL CAPTURED]', details);
+            try {
+                const { Alert } = require('react-native');
+                Alert.alert('Startup error captured', details.slice(0, 1200));
+            } catch (_) { /* Alert unavailable this early — logged above */ }
+            return; // swallow: keep the app alive to display the alert
+        }
+
         // Pass all other errors to the original handler
         if (originalHandler) {
             originalHandler(error, isFatal);
