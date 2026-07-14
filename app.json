@@ -75,7 +75,7 @@
           "UNAuthorizationOptionProvidesAppNotificationSettings": true
         }
       },
-      "runtimeVersion": "1.0.1",
+      "runtimeVersion": "1.0.3",
       "jsEngine": "hermes",
       "appleTeamId": "2ABHLWV763",
       "usesAppleSignIn": true
@@ -97,7 +97,7 @@
         "android.permission.WRITE_EXTERNAL_STORAGE",
         "android.permission.USE_FINGERPRINT"
       ],
-      "runtimeVersion": "1.0.1"
+      "runtimeVersion": "1.0.3"
     },
     "web": {
       "favicon": "./assets/favicon.png",
