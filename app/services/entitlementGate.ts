@@ -92,10 +92,14 @@ const FEATURE_ACCESS: Record<Feature, Tier[]> = {
   sentiment_analysis: ['free_trial', 'basic', 'basic_markets'],
   ai_analysis_overlay: ['free_trial', 'basic', 'basic_markets'],
   push_alerts: ['basic', 'basic_markets'],
-  divergence_alerts: ['basic_markets'],
-  polymarket_kalshi_view: ['basic_markets'],
-  divergence_filter: ['basic_markets'],
-  sentiment_poll_vote: ['basic', 'basic_markets'],
+  // 'free_trial' added 2026-07-14 so trial users (currently everyone —
+  // react-native-purchases isn't linked yet, so all users resolve to
+  // free_trial) can see and evaluate the Markets features. Remove
+  // 'free_trial' from these three lines before charging for basic_markets.
+  divergence_alerts: ['free_trial', 'basic_markets'],
+  polymarket_kalshi_view: ['free_trial', 'basic_markets'],
+  divergence_filter: ['free_trial', 'basic_markets'],
+  sentiment_poll_vote: ['free_trial', 'basic', 'basic_markets'],
   export_csv: ['basic_markets'],
 };
 
