@@ -22,14 +22,37 @@ if (!process.env.EXPO_PUBLIC_SUPABASE_ANON_KEY) {
 export const supabaseUrl = process.env.EXPO_PUBLIC_SUPABASE_URL!;
 export const supabaseAnonKey = process.env.EXPO_PUBLIC_SUPABASE_ANON_KEY!;
 
-const supabase = createClient(supabaseUrl, supabaseAnonKey, {
-  auth: {
-    storage: AsyncStorage,
-    autoRefreshToken: true,
-    persistSession: true,
-    detectSessionInUrl: false,
-  },
-});
+// NEVER let a missing env var crash the app at module load. createClient
+// throws "supabaseKey is required." if the key is undefined — this was the
+// root cause of the perennial startup SIGABRT (builds 62-64/71: eas.json
+// shipped the URL but not the anon key, so every embedded bundle fataled).
+// Auth degrades gracefully instead; the app still opens and shows news.
+function makeStubClient(): any {
+  const fail = async () => ({ data: null, error: new Error('Supabase not configured') });
+  return {
+    auth: {
+      getSession: async () => ({ data: { session: null }, error: null }),
+      getUser: async () => ({ data: { user: null }, error: null }),
+      signOut: fail, signInWithIdToken: fail, signInWithOAuth: fail,
+      signInWithPassword: fail, signUp: fail,
+      onAuthStateChange: () => ({ data: { subscription: { unsubscribe: () => {} } } }),
+      startAutoRefresh: () => {}, stopAutoRefresh: () => {},
+    },
+    from: () => new Proxy({}, { get: () => () => ({ then: (r: any) => r({ data: null, error: new Error('Supabase not configured') }) }) }),
+    functions: { invoke: fail },
+  };
+}
+
+const supabase = (supabaseUrl && supabaseAnonKey)
+  ? createClient(supabaseUrl, supabaseAnonKey, {
+      auth: {
+        storage: AsyncStorage,
+        autoRefreshToken: true,
+        persistSession: true,
+        detectSessionInUrl: false,
+      },
+    })
+  : makeStubClient();
 
 // Set up app state change listener to handle auth state
 AppState.addEventListener('change', (state) => {
