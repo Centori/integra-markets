@@ -391,6 +391,51 @@ def analyze_sentiment(request: SentimentRequest):
     except Exception as exc:
         raise HTTPException(status_code=500, detail=f"Analysis failed: {exc}")
 
+# ---------------------------------------------------------------------------
+# Legacy compatibility bridge (2026-07-14).
+#
+# The mobile app (builds 62-72) calls legacy endpoints that live only in
+# main_simple_nlp.py (/api/sentiment/market, /api/sentiment/movers,
+# /api/lexicon/*, /api/weather/alerts, /api/dashboard/sentiment-engine,
+# /api/comprehensive-analysis, ...). After the PR 5-16 reorganization,
+# main.py became the deployed entrypoint (routers: notifications,
+# subscriptions, stripe, divergence, ...) but dropped those legacy routes,
+# 404ing the Today dashboard. Neither entrypoint alone serves the app —
+# this bridge makes main:app serve both surfaces.
+# ---------------------------------------------------------------------------
+try:
+    import main_simple_nlp as _legacy
+
+    _existing_paths = {r.path for r in app.routes if hasattr(r, "path")}
+    for _r in _legacy.app.routes:
+        # Skip root/health and anything main.py already defines — main.py's
+        # routes are registered first and take precedence anyway.
+        if getattr(_r, "path", None) and _r.path not in _existing_paths and _r.path not in ("/", "/health"):
+            app.router.routes.append(_r)
+
+    _legacy_lifespan_ctx = None
+
+    @app.on_event("startup")
+    async def _init_legacy_services():
+        """Run main_simple_nlp's lifespan init (VADER + finance lexicons,
+        summarizer, Groq) so the bridged routes have their services."""
+        global _legacy_lifespan_ctx
+        try:
+            _legacy_lifespan_ctx = _legacy.lifespan(_legacy.app)
+            await _legacy_lifespan_ctx.__aenter__()
+        except Exception as exc:  # never block boot on legacy init
+            print(f"legacy services init failed: {exc}")
+
+    @app.on_event("shutdown")
+    async def _shutdown_legacy_services():
+        if _legacy_lifespan_ctx is not None:
+            try:
+                await _legacy_lifespan_ctx.__aexit__(None, None, None)
+            except Exception:
+                pass
+except Exception as _exc:  # pragma: no cover — legacy module import failure
+    print(f"legacy compatibility bridge unavailable: {_exc}")
+
 if __name__ == "__main__":
     import uvicorn
     uvicorn.run(app, host="0.0.0.0", port=8000)
