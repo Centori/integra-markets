@@ -818,8 +818,14 @@ const AIAnalysisOverlay: React.FC<AIAnalysisOverlayProps> = ({ newsData: newsDat
     if (!newsData) return null;
 
     const copyToClipboard = (text: string, sectionName: string) => {
-        Clipboard.setString(text);
-        Alert.alert('Copied!', `${sectionName} copied to clipboard`);
+        // `Clipboard` from react-native is undefined on RN 0.76 (removed from core).
+        // Guard so tapping copy can never crash; no-op if unavailable.
+        if (Clipboard && typeof Clipboard.setString === 'function') {
+            Clipboard.setString(text);
+            Alert.alert('Copied!', `${sectionName} copied to clipboard`);
+        } else {
+            Alert.alert('Copy unavailable', 'Clipboard is not available in this build.');
+        }
     };
 
     const formatAnalysisForCopy = () => {

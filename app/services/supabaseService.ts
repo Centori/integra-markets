@@ -3,14 +3,19 @@ import { supabase, supabaseUrl, supabaseAnonKey } from '../utils/supabaseConfig'
 // Lazy-load NetInfo so a failed native module init can't crash the app at
 // launch. Falls back to "assume connected" if the module isn't linked.
 let _netInfo: { fetch: () => Promise<{ isConnected: boolean | null }> } | null = null;
+const NETINFO_STUB = { fetch: async () => ({ isConnected: true }) };
 function getNetInfo() {
   if (_netInfo !== null) return _netInfo;
   try {
-    _netInfo = require('@react-native-community/netinfo').default;
+    const mod = require('@react-native-community/netinfo');
+    const candidate = mod?.default ?? mod;
+    // Only use the module if it actually exposes fetch(); otherwise the native
+    // side isn't linked and `.default` may be undefined — fall back to the stub
+    // instead of letting a later `.fetch()` crash the app.
+    _netInfo =
+      candidate && typeof candidate.fetch === 'function' ? candidate : NETINFO_STUB;
   } catch {
-    _netInfo = {
-      fetch: async () => ({ isConnected: true }),
-    };
+    _netInfo = NETINFO_STUB;
   }
   return _netInfo;
 }
