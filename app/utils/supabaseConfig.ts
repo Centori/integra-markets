@@ -29,6 +29,16 @@ export const supabaseAnonKey = process.env.EXPO_PUBLIC_SUPABASE_ANON_KEY!;
 // Auth degrades gracefully instead; the app still opens and shows news.
 function makeStubClient(): any {
   const fail = async () => ({ data: null, error: new Error('Supabase not configured') });
+  // Query builders chain arbitrarily (.select().eq().single()...) and are
+  // awaited at any depth, so the stub must be both chainable and thenable.
+  const chain = (): any =>
+    new Proxy(() => chain(), {
+      get: (_t, prop) =>
+        prop === 'then'
+          ? (resolve: any) => resolve({ data: null, error: new Error('Supabase not configured') })
+          : () => chain(),
+      apply: () => chain(),
+    });
   return {
     auth: {
       getSession: async () => ({ data: { session: null }, error: null }),
@@ -38,7 +48,9 @@ function makeStubClient(): any {
       onAuthStateChange: () => ({ data: { subscription: { unsubscribe: () => {} } } }),
       startAutoRefresh: () => {}, stopAutoRefresh: () => {},
     },
-    from: () => new Proxy({}, { get: () => () => ({ then: (r: any) => r({ data: null, error: new Error('Supabase not configured') }) }) }),
+    from: () => chain(),
+    rpc: fail,
+    storage: { from: () => ({ list: fail, remove: fail, upload: fail, getPublicUrl: () => ({ data: { publicUrl: '' } }) }) },
     functions: { invoke: fail },
   };
 }

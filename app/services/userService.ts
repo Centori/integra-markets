@@ -29,7 +29,7 @@ class UserService {
 
       // Then get the profile data from Supabase
       const { data: profile, error: profileError } = await supabase
-        .from('user_profiles')
+        .from('profiles')
         .select('*')
         .eq('id', user.id)
         .single();
@@ -46,11 +46,11 @@ class UserService {
         username: profile?.username || user.email!.split('@')[0],
         fullName: profile?.full_name || '',
         role: profile?.role,
-        institution: profile?.institution,
+        institution: profile?.company,
         bio: profile?.bio,
         marketFocus: profile?.market_focus,
-        experience: profile?.experience,
-        profilePhoto: profile?.profile_photo_url
+        experience: profile?.experience_level,
+        profilePhoto: profile?.avatar_url
       };
     } catch (error) {
       console.error('Error in getCurrentUser:', error);
@@ -65,11 +65,28 @@ class UserService {
         throw new Error('Authentication required');
       }
 
+      // Translate UserProfile fields to live `profiles` column names —
+      // camelCase keys spread straight into the upsert would 400 on PostgREST.
+      const columnMap: Record<string, string> = {
+        username: 'username',
+        fullName: 'full_name',
+        role: 'role',
+        institution: 'company',
+        bio: 'bio',
+        marketFocus: 'market_focus',
+        experience: 'experience_level',
+        profilePhoto: 'avatar_url',
+      };
+      const row: Record<string, unknown> = {};
+      for (const [key, value] of Object.entries(profileData)) {
+        if (columnMap[key] && value !== undefined) row[columnMap[key]] = value;
+      }
+
       const { error } = await supabase
-        .from('user_profiles')
+        .from('profiles')
         .upsert({
           id: user.id,
-          ...profileData,
+          ...row,
           updated_at: new Date().toISOString()
         });
 

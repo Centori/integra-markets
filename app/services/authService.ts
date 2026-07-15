@@ -311,7 +311,7 @@ export const authService = new AuthService();
 /**
  * Apple returns the user's full name ONLY on the very first sign-in. If we
  * don't persist it then, it's lost forever. This helper updates
- * public.user_profiles.full_name when Apple provides it; otherwise no-op.
+ * public.profiles.full_name when Apple provides it; otherwise no-op.
  */
 async function persistAppleNameIfFirstSignIn(
   credential: AppleAuthentication.AppleAuthenticationCredential,
@@ -324,7 +324,7 @@ async function persistAppleNameIfFirstSignIn(
   if (!fullName) return;
 
   const { error } = await supabase
-    .from('user_profiles')
+    .from('profiles')
     .update({ full_name: fullName })
     .eq('id', userId);
 
