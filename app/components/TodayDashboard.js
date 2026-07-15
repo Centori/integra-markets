@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { View, Text, ScrollView, StyleSheet, SafeAreaView, TouchableOpacity, ActivityIndicator, RefreshControl, Modal, Share, Alert } from 'react-native';
+import { View, Text, ScrollView, StyleSheet, SafeAreaView, TouchableOpacity, ActivityIndicator, RefreshControl, Modal, Share, Alert, Image } from 'react-native';
 import { Ionicons, MaterialIcons, MaterialCommunityIcons } from '@expo/vector-icons';
 import { dashboardApi, sentimentApi, marketDataApi } from '../services/api';
 import IntegraIcon from './IntegraIcon';
@@ -667,11 +667,11 @@ const renderNewsCard = (item) => {
         >
           {filteredNews.map(renderNewsCard)}
           <View style={styles.endMessage}>
-            <IntegraIcon 
-              size={48} 
-              animated={false} 
-              variant="default"
-              style={{ marginBottom: 12, opacity: 0.5 }}
+            {/* Branded gradient mark (build-64 identity), not the flat square */}
+            <Image
+              source={require('../../assets/logoNew.png')}
+              style={{ width: 48, height: 48, marginBottom: 12 }}
+              resizeMode="contain"
             />
             <Text style={styles.endMessageText}>You're all caught up!</Text>
             <TouchableOpacity onPress={onRefresh} style={styles.refreshButton}>
