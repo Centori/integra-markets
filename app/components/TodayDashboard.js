@@ -3,6 +3,7 @@ import { View, Text, ScrollView, StyleSheet, SafeAreaView, TouchableOpacity, Act
 import { Ionicons, MaterialIcons, MaterialCommunityIcons } from '@expo/vector-icons';
 import { dashboardApi, sentimentApi, marketDataApi } from '../services/api';
 import IntegraIcon from './IntegraIcon';
+import BrandedLoading from './BrandedLoading';
 import AIAnalysisOverlay from './AIAnalysisOverlay';
 import { getPreferredSourceUrl } from '../utils/polymarketLinks';
 import { useEntitlement } from '../hooks/useEntitlement';
@@ -295,8 +296,7 @@ const [marketData, setMarketData] = useState(null);
           </View>
           {sentimentLoading ? (
             <View style={styles.loadingContainer}>
-              <ActivityIndicator size="large" color="#4ECCA3" />
-              <Text style={styles.loadingText}>Analyzing sentiment...</Text>
+              <BrandedLoading message="Analyzing sentiment..." />
             </View>
           ) : sentimentAnalysis ? (
             <ScrollView style={styles.analysisContainer}>
@@ -605,17 +605,8 @@ const renderNewsCard = (item) => {
   ];
 
   const renderLoadingScreen = () => (
-    <View style={styles.loadingContainer}>
-      <IntegraIcon 
-        size={120} 
-        animated={true} 
-        variant="default"
-        style={{ marginBottom: 20 }}
-      />
-      <ActivityIndicator size="large" color="#4ECCA3" />
-      <Text style={styles.loadingText}>Loading latest news...</Text>
-      <Text style={styles.loadingSubtext}>Powered by Integra AI</Text>
-    </View>
+    // Branded build-64 loader (gradient logo + 0-100% bar), not a generic circle
+    <BrandedLoading message="Loading latest news..." />
   );
 
   const renderHeader = () => (
