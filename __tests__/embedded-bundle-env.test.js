@@ -27,6 +27,10 @@ describe('embedded bundle env (startup crash prevention)', () => {
     expect(env.EXPO_PUBLIC_SUPABASE_ANON_KEY.length).toBeGreaterThan(100);
   });
 
+  test('eas.json production profile has an update channel (without it, devices can NEVER receive OTA updates)', () => {
+    expect(easJson.build.production.channel).toBe('production');
+  });
+
   test('supabaseConfig guards createClient behind a stub fallback', () => {
     const src = fs.readFileSync(path.join(root, 'app/utils/supabaseConfig.ts'), 'utf8');
     expect(src).toMatch(/makeStubClient/);
