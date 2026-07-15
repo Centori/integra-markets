@@ -5,18 +5,13 @@ import { supabase, supabaseUrl, supabaseAnonKey } from '../utils/supabaseConfig'
 let _netInfo: { fetch: () => Promise<{ isConnected: boolean | null }> } | null = null;
 const NETINFO_STUB = { fetch: async () => ({ isConnected: true }) };
 function getNetInfo() {
-  if (_netInfo !== null) return _netInfo;
-  try {
-    const mod = require('@react-native-community/netinfo');
-    const candidate = mod?.default ?? mod;
-    // Only use the module if it actually exposes fetch(); otherwise the native
-    // side isn't linked and `.default` may be undefined — fall back to the stub
-    // instead of letting a later `.fetch()` crash the app.
-    _netInfo =
-      candidate && typeof candidate.fetch === 'function' ? candidate : NETINFO_STUB;
-  } catch {
-    _netInfo = NETINFO_STUB;
-  }
+  // netinfo is NOT installed (deferred out of the binary in Build 64).
+  // DO NOT lazy-require it: Metro's guardedLoadModule reports an outermost
+  // runtime require failure via ErrorUtils.reportFatalError — it never
+  // reaches a local try/catch — which crashed the app on news-card taps.
+  // Always use the assume-connected stub until the package is reinstated
+  // with `npx expo install @react-native-community/netinfo` + a new build.
+  if (_netInfo === null) _netInfo = NETINFO_STUB;
   return _netInfo;
 }
 

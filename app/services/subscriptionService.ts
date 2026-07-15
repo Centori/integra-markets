@@ -26,15 +26,16 @@ const ENTITLEMENT_IDS = {
 let _initialized = false;
 let _cachedTier: Tier = 'free_trial';
 
-// Lazy-load the SDK so the import doesn't crash on devices that don't have
-// the native module yet (e.g., during OTA testing on Build 62 pre-native).
+// react-native-purchases is NOT installed (not in package.json / the binary).
+// DO NOT lazy-require it: Metro's guardedLoadModule routes an outermost
+// runtime require failure to ErrorUtils.reportFatalError — it NEVER reaches
+// a local try/catch — which SIGABRT'd every build since 65 at startup
+// (proven via on-device stack: unknownModuleError -> guardedLoadModule ->
+// metroRequire -> loadPurchases). Short-circuit to the free_trial fallback.
+// When RevenueCat is really added: `npx expo install react-native-purchases`,
+// new native build, THEN restore the require here.
 function loadPurchases(): typeof import('react-native-purchases') | null {
-  try {
-    // eslint-disable-next-line @typescript-eslint/no-require-imports
-    return require('react-native-purchases');
-  } catch (_err) {
-    return null;
-  }
+  return null;
 }
 
 export async function initSubscriptions(userId?: string): Promise<void> {
