@@ -1467,10 +1467,11 @@ const styles = StyleSheet.create({
     pollOption: {
         flex: 1,
         borderRadius: 8,
-        paddingVertical: 14,
+        // Web-matched compact height
+        paddingVertical: 9,
         borderWidth: 1,
         alignItems: 'center',
-        gap: 6,
+        gap: 4,
         backgroundColor: '#121212',
     },
     pollOptionText: {
@@ -1538,14 +1539,15 @@ const styles = StyleSheet.create({
     // siblings with identical geometry and only color differs.
     pollOptionSmall: {
         flex: 1,
-        height: 70,
-        borderRadius: 16,
+        // Match the web poll buttons: compact ~40px control, not a 70px slab
+        height: 40,
+        borderRadius: 10,
         justifyContent: 'center',
         alignItems: 'center',
-        borderWidth: 1.5,
+        borderWidth: 1,
     },
     pollOptionTextSmall: {
-        fontSize: 18,
+        fontSize: 14,
         fontWeight: '600',
     },
     pollBullishSmall: {
