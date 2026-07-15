@@ -12,6 +12,7 @@ import {
 } from 'react-native';
 import { MaterialIcons } from '@expo/vector-icons';
 import PredictionMarketCard from './PredictionMarketCard';
+import BrandedLoading from './BrandedLoading';
 import kalshiService from '../services/kalshiService';
 
 // Color palette consistent with the app
@@ -288,10 +289,7 @@ const PredictionMarketList = ({
     return (
       <View style={styles.container}>
         {renderSearchBar()}
-        <View style={styles.loadingState}>
-          <ActivityIndicator size="large" color={colors.accentData} />
-          <Text style={styles.loadingText}>Loading prediction markets...</Text>
-        </View>
+        <BrandedLoading message="Loading prediction markets..." />
       </View>
     );
   }
