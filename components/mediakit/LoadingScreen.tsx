@@ -1,11 +1,10 @@
 import React, { useEffect, useRef } from 'react';
-import { 
-  View, 
-  StyleSheet, 
-  Animated, 
-  ActivityIndicator,
+import {
+  View,
+  StyleSheet,
+  Animated,
   Text,
-  Dimensions 
+  Dimensions
 } from 'react-native';
 import { Colors } from '../../constants/colors';
 import { Typography } from '../../constants/typography';
@@ -104,11 +103,14 @@ export const LoadingScreen: React.FC<LoadingScreenProps> = ({
             <Text style={styles.progressText}>{Math.round(progress)}%</Text>
           </View>
         ) : (
-          <ActivityIndicator 
-            size="large" 
-            color={Colors.accent} 
-            style={styles.activityIndicator}
-          />
+          <Animated.View
+            style={[
+              styles.activityIndicator,
+              { opacity: fadeAnim, transform: [{ scale: pulseAnim }] },
+            ]}
+          >
+            <Logo variant="icon" size="medium" />
+          </Animated.View>
         )}
         
         <Animated.Text 
