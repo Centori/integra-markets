@@ -434,19 +434,29 @@ export const dashboardApi = {
       
       const marketData = await response.json();
       
-      // Also fetch news analysis (using POST as required by the backend)
-      const newsResponse = await fetch(`${API_URL}/news/analysis`, {
+      // Fetch the analyzed news feed. NOTE: /news/analysis is a single-text
+      // analyzer on the current backend (422 on empty body) — the feed lives
+      // at POST /news/feed. Fall back to GET /news/latest (unanalyzed) so a
+      // degraded feed still beats an empty one.
+      let newsData = [];
+      const newsResponse = await fetch(`${API_URL}/news/feed`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
         },
         body: JSON.stringify({})
       });
-      let newsData = [];
       if (newsResponse.ok) {
         const rawNews = await newsResponse.json();
         // Handle both array and object responses
         newsData = Array.isArray(rawNews) ? rawNews : (rawNews.articles || []);
+      }
+      if (newsData.length === 0) {
+        const latestResponse = await fetch(`${API_URL}/news/latest`);
+        if (latestResponse.ok) {
+          const rawLatest = await latestResponse.json();
+          newsData = Array.isArray(rawLatest) ? rawLatest : (rawLatest.articles || []);
+        }
       }
       
       return {
