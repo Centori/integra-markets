@@ -91,6 +91,17 @@ async def get_news_feed(
     # Apply tier-clamped article ceiling (not just whatever the client asked for).
     articles = articles[:clamped_max]
 
+    # Backfill card images via og:image for articles lacking one. Concurrent,
+    # tight per-request timeout, fully isolated so it can never break the feed;
+    # articles still without an image render the brand-mark fallback client-side.
+    if any(not a.get("image_url") for a in articles):
+        try:
+            from data_sources import NewsDataSources
+            async with NewsDataSources() as _img_src:
+                await _img_src.enrich_images(articles)
+        except Exception as exc:  # noqa: BLE001
+            logger.debug("og:image enrichment skipped in /feed: %s", exc)
+
     try:
         from services.news_enricher import enrich_articles_with_divergence
         enrich_articles_with_divergence(supabase, articles)
