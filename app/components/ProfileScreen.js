@@ -350,7 +350,7 @@ export default function ProfileScreen({ userProfile, alertPreferences, apiKeys, 
                 </TouchableOpacity>
                 <TouchableOpacity 
                   style={styles.profileStat}
-                  onPress={() => setShowAlertPreferences(true)}
+                  onPress={() => navigateToScreen('AlertPreferences')}
                   activeOpacity={0.7}
                 >
                   <Text style={styles.profileStatValue}>
@@ -372,7 +372,7 @@ export default function ProfileScreen({ userProfile, alertPreferences, apiKeys, 
             </View>
             <TouchableOpacity
               style={styles.editButton}
-              onPress={() => setShowAlertPreferences(true)}
+              onPress={() => navigateToScreen('AlertPreferences')}
             >
               <Text style={styles.editButtonText}>Edit</Text>
             </TouchableOpacity>

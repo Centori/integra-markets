@@ -139,6 +139,8 @@ const App = () => {
   const [notifEnabled, setNotifEnabled] = useState(true);
   const [bannerDismissed, setBannerDismissed] = useState(false);
   const [showNotifHelp, setShowNotifHelp] = useState(false);
+  const [showEditProfileFromProfile, setShowEditProfileFromProfile] = useState(false);
+  const [showEditAlertsFromProfile, setShowEditAlertsFromProfile] = useState(false);
   const [alertPreferences, setAlertPreferences] = useState(null);
   const [refreshing, setRefreshing] = useState(false);
   const [loadingMore, setLoadingMore] = useState(false);
@@ -1304,6 +1306,8 @@ const App = () => {
             else if (screen === 'PrivacyPolicy') setShowPrivacyPolicy(true);
             else if (screen === 'TermsOfService') setShowTermsOfService(true);
             else if (screen === 'About') setShowAbout(true);
+            else if (screen === 'EditProfile') setShowEditProfileFromProfile(true);
+            else if (screen === 'AlertPreferences' || screen === 'CommodityPreferences') setShowEditAlertsFromProfile(true);
             else if (screen === 'EditMarketFocus') {
               Alert.alert(
                 'Edit Market Focus',
@@ -1356,6 +1360,28 @@ const App = () => {
           visible={showAbout}
           onClose={() => setShowAbout(false)}
         />
+        {showEditProfileFromProfile && (
+          <EditProfileModal
+            visible={true}
+            initialProfile={userData}
+            onSave={(data) => {
+              setUserData(prev => ({ ...prev, ...(data || {}) }));
+              setShowEditProfileFromProfile(false);
+            }}
+            onClose={() => setShowEditProfileFromProfile(false)}
+          />
+        )}
+        {showEditAlertsFromProfile && (
+          <EditAlertsModal
+            visible={true}
+            initialPreferences={alertPreferences}
+            onSave={(data) => {
+              setAlertPreferences(data || alertPreferences);
+              setShowEditAlertsFromProfile(false);
+            }}
+            onClose={() => setShowEditAlertsFromProfile(false)}
+          />
+        )}
         {showAIAnalysis && selectedArticle && (
           <AIAnalysisOverlay
             isVisible={showAIAnalysis}
