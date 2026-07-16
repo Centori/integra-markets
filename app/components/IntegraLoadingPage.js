@@ -64,21 +64,21 @@ const IntegraLoadingPage = ({ onLoadingComplete }) => {
 
     React.useEffect(() => {
         const timer = setInterval(() => {
-            setProgress((prev) => {
-                if (prev >= 100) {
-                    clearInterval(timer);
-                    // Call onLoadingComplete when progress reaches 100%
-                    setTimeout(() => {
-                        onLoadingComplete?.();
-                    }, 300); // Small delay for smooth transition
-                    return 100;
-                }
-                return prev + 2;
-            });
+            // Updater stays pure — completion side effect lives in the
+            // effect below (React may invoke updaters twice).
+            setProgress((prev) => (prev >= 100 ? 100 : prev + 2));
         }, 30);
 
         return () => clearInterval(timer);
-    }, [onLoadingComplete]);
+    }, []);
+
+    React.useEffect(() => {
+        if (progress >= 100) {
+            // Small delay for smooth transition
+            const t = setTimeout(() => onLoadingComplete?.(), 300);
+            return () => clearTimeout(t);
+        }
+    }, [progress, onLoadingComplete]);
 
     React.useEffect(() => {
         Animated.timing(progressAnim, {

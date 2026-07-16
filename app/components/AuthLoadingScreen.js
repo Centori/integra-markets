@@ -98,18 +98,20 @@ const AuthLoadingScreen = ({ onAuthComplete, onSkip }) => {
     useEffect(() => {
         if (currentScreen === 'loading') {
             const timer = setInterval(() => {
-                setProgress((prev) => {
-                    if (prev >= 100) {
-                        clearInterval(timer);
-                        setTimeout(() => setCurrentScreen('auth'), 500);
-                        return 100;
-                    }
-                    return prev + 1;
-                });
+                // Updater stays pure — completion side effect lives in the
+                // effect below (React may invoke updaters twice).
+                setProgress((prev) => (prev >= 100 ? 100 : prev + 1));
             }, 30); // Faster loading
             return () => clearInterval(timer);
         }
     }, [currentScreen]);
+
+    useEffect(() => {
+        if (currentScreen === 'loading' && progress >= 100) {
+            const t = setTimeout(() => setCurrentScreen('auth'), 500);
+            return () => clearTimeout(t);
+        }
+    }, [currentScreen, progress]);
 
     useEffect(() => {
         Animated.timing(progressAnim, {
