@@ -55,8 +55,14 @@ class UserNewsService:
             "investing": "https://www.investing.com/commodities/"
         }
         
-        # RSS feeds for commodities news
+        # RSS feeds for commodities news. Direct-source feeds (yahoo, oilprice)
+        # are listed first: their article URLs resolve to real pages with
+        # og:image, so the card image enrichment can pull a picture. Google
+        # News entries are opaque redirect stubs (no og:image) and fall back
+        # to the brand mark client-side.
         self.rss_feeds = {
+            "yahoo_commodities": "https://finance.yahoo.com/rss/commodities",
+            "oilprice": "https://oilprice.com/rss/main",
             "reuters_commodities": "https://news.google.com/rss/search?q=commodity+prices+oil+gold+wheat&hl=en-US&gl=US&ceid=US:en",
             "marketwatch": "https://feeds.marketwatch.com/marketwatch/marketpulse/",
             "investing": "https://www.investing.com/rss/commodities.rss"
@@ -193,13 +199,29 @@ class UserNewsService:
                     relevant = any(comm.lower() in title.lower() for comm in commodities)
                     
                     if relevant or not commodities:  # Include if relevant or no specific commodities
+                        # RSS-native image (zero extra HTTP) — yahoo/oilprice
+                        # carry media:content/thumbnail; og:image enrichment
+                        # backfills the rest downstream in /api/news/feed.
+                        image_url = ""
+                        try:
+                            for media in (entry.get('media_content') or []):
+                                if media.get('url'):
+                                    image_url = media['url']; break
+                            if not image_url:
+                                for thumb in (entry.get('media_thumbnail') or []):
+                                    if thumb.get('url'):
+                                        image_url = thumb['url']; break
+                        except Exception:
+                            pass
+
                         # Initialize news item
                         news_item = {
                             "title": title,
                             "source": feed_name,
                             "url": url,
                             "published": entry.get('published', datetime.now().isoformat()),
-                            "relevance_score": 0.9 if relevant else 0.5
+                            "relevance_score": 0.9 if relevant else 0.5,
+                            "image_url": image_url
                         }
                         
                         # Use article summarizer to get real content and summary
