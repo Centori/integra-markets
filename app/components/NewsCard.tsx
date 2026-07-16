@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
-import { View, Text, StyleSheet, TouchableOpacity, Linking, Alert, Share, Platform, ActionSheetIOS, Clipboard } from 'react-native';
-import { Feather } from '@expo/vector-icons';
+import { View, Text, StyleSheet, TouchableOpacity, Linking, Alert, Share, Platform, ActionSheetIOS, Clipboard, Image } from 'react-native';
+import { Feather, MaterialIcons } from '@expo/vector-icons';
+import * as Haptics from 'expo-haptics';
 import { SingleStar } from './CustomStarIcon';
 import PolymarketIcon from './PolymarketIcon';
 import { useBookmarks } from '../providers/BookmarkProvider';
@@ -22,6 +23,8 @@ interface NewsItem {
   polymarketUrl?: string;
   sentiment?: string;
   sentimentScore?: string;
+  sentiment_score?: number | string;
+  image_url?: string;
   timeAgo?: string;
   commodities?: string[];
   marketImpact?: string;
@@ -50,6 +53,26 @@ export default function NewsCard({ item, onAIClick }: NewsCardProps) {
   const bookmarkLimit = useTierLimit('bookmarks', newsBookmarks.length);
   const [showBookmarkUpgrade, setShowBookmarkUpgrade] = useState(false);
   const paywall = usePaywall();
+
+  // Tap anywhere on the card opens Integra Analysis (build-64 behavior).
+  const handlePress = () => {
+    try {
+      Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+    } catch (e) {
+      // Haptics not available (simulator) — non-fatal
+    }
+    onAIClick(item);
+  };
+
+  // Long press: heavier haptic, same destination.
+  const handleLongPress = () => {
+    try {
+      Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Heavy);
+    } catch (e) {
+      // Haptics not available (simulator) — non-fatal
+    }
+    onAIClick(item);
+  };
 
   const handleBookmarkToggle = async () => {
     try {
@@ -257,102 +280,119 @@ export default function NewsCard({ item, onAIClick }: NewsCardProps) {
   };
 
   return (
-    <View style={styles.card}>
-      {/* Header with sentiment and action buttons */}
-      <View style={styles.header}>
-        <View style={styles.headerLeft}>
-          {item.sentiment && (
-            <View style={styles.sentimentBadge}>
-              <View style={styles.sentimentIconContainer}>
-                {renderSentimentIcon(item.sentiment)}
-              </View>
-              <Text style={[styles.sentimentLabel, { color: getSentimentColor(item.sentiment) }]}>
-                {item.sentiment.toUpperCase()}
-              </Text>
-              <Text style={[styles.sentimentScore, { color: getSentimentColor(item.sentiment) }]}>
-                {item.sentimentScore || '0.50'}
-              </Text>
-            </View>
-          )}
-          {isPolymarket && (
-            <View style={styles.polymarketBadge}>
-              <PolymarketIcon size={18} rounded={false} style={undefined} />
-              <Text style={styles.polymarketText}>Polymarket</Text>
-            </View>
-          )}
-        </View>
-        <View style={styles.actionButtons}>
-          <TouchableOpacity onPress={handleBookmarkToggle} style={styles.bookmarkButton}>
-            <Feather 
-              name={isCurrentlyBookmarked ? "bookmark" : "bookmark"} 
-              size={18} 
-              color={isCurrentlyBookmarked ? "#FFD700" : "#666666"} 
-              fill={isCurrentlyBookmarked ? "#FFD700" : "none"}
-            />
-          </TouchableOpacity>
+    <TouchableOpacity
+      style={styles.card}
+      onPress={handlePress}
+      onLongPress={handleLongPress}
+      delayLongPress={400}
+      activeOpacity={0.85}
+    >
+      {/* Image section — always renders; falls back to the brand mark when the
+          article has no image (build-64 behavior). Sentiment pill overlays the
+          bottom-left, showing label + score, exactly as build 64. */}
+      <View style={[styles.imageContainer, !item.image_url && styles.imageContainerFallback]}>
+        <Image
+          source={item.image_url ? { uri: item.image_url } : require('../../assets/NewLogoInt.png.png')}
+          style={[styles.cardImage, !item.image_url && styles.cardImageFallback]}
+          resizeMode={item.image_url ? 'cover' : 'contain'}
+        />
+        {item.sentiment && (
+          <View style={styles.imageSentimentBadge}>
+            {renderSentimentIcon(item.sentiment)}
+            <Text style={[styles.imageSentimentText, { color: getSentimentColor(item.sentiment) }]}>
+              {item.sentiment.toUpperCase()} {formatScore(item.sentiment_score ?? item.sentimentScore)}
+            </Text>
+          </View>
+        )}
+        {isPolymarket && (
+          <View style={styles.polymarketBadge}>
+            <PolymarketIcon size={16} rounded={false} style={undefined} />
+            <Text style={styles.polymarketText}>Polymarket</Text>
+          </View>
+        )}
+      </View>
+
+      {/* Content */}
+      <View style={styles.contentSection}>
+        {/* Title row with the AI (analysis) button on the right */}
+        <View style={styles.titleRow}>
+          <Text style={styles.title} numberOfLines={2}>{item.title}</Text>
           <TouchableOpacity onPress={() => onAIClick(item)} style={styles.starButton}>
-            <SingleStar size={35} color="#4a9eff" />
+            <SingleStar size={28} color="#4a9eff" />
           </TouchableOpacity>
         </View>
-      </View>
 
-      {/* Main title */}
-      <Text style={styles.title}>{item.title}</Text>
+        {/* Description */}
+        {(() => {
+          const desc = cleanSummaryText(item.summary) || cleanSummaryText(item.content);
+          if (!desc) return null;
+          return (
+            <Text style={styles.description} numberOfLines={item.image_url ? 3 : 4}>
+              {desc}
+            </Text>
+          );
+        })()}
 
-      {/* Description */}
-      {(() => {
-        const desc = cleanSummaryText(item.summary) || cleanSummaryText(item.content);
-        if (!desc) return null;
-        return (
-          <Text style={styles.description} numberOfLines={3}>
-            {desc}
-          </Text>
-        );
-      })()}
+        {/* Divergence footer — only when upstream enriched this article with a
+            divergence reading (sentiment vs. prediction-market gap). */}
+        {item.divergenceStatus === 'DIVERGENCE' && item.divergenceProvider && typeof item.divergenceDelta === 'number' && (
+          <View style={styles.divergenceFooter}>
+            <Feather name="alert-triangle" size={12} color="#fbbf24" />
+            <Text style={styles.divergenceText}>
+              {item.divergenceProvider === 'polymarket' ? 'Polymarket' : 'Kalshi'}
+              {' '}
+              {item.divergenceDelta > 0 ? 'underpricing' : 'overpricing'}
+              {' '}
+              by {Math.round(Math.abs(item.divergenceDelta) * 100)}pt
+            </Text>
+          </View>
+        )}
 
-      {/* Divergence footer — only renders if upstream enriched this article
-          with a divergence reading (sentiment vs. prediction-market gap). */}
-      {item.divergenceStatus === 'DIVERGENCE' && item.divergenceProvider && typeof item.divergenceDelta === 'number' && (
-        <View style={styles.divergenceFooter}>
-          <Feather name="alert-triangle" size={12} color="#fbbf24" />
-          <Text style={styles.divergenceText}>
-            {item.divergenceProvider === 'polymarket' ? 'Polymarket' : 'Kalshi'}
-            {' '}
-            {item.divergenceDelta > 0 ? 'underpricing' : 'overpricing'}
-            {' '}
-            by {Math.round(Math.abs(item.divergenceDelta) * 100)}pt
-          </Text>
-        </View>
-      )}
-
-      {/* Footer with source and share */}
-      <View style={styles.footer}>
-        <View style={styles.sourceContainer}>
-          {item.source && (
-            <TouchableOpacity onPress={handleSourcePress} style={styles.sourceButton}>
-              <Text style={[styles.sourceText, preferredSourceUrl ? styles.sourceTextLink : null]}>
-                {item.source}
-              </Text>
-              {preferredSourceUrl && (
-                <Feather name="external-link" size={14} color="#4a9eff" style={styles.linkIcon} />
-              )}
+        {/* Footer: source + time on the left, bookmark + share on the right */}
+        <View style={styles.footer}>
+          <View style={styles.sourceContainer}>
+            {item.source && (
+              <TouchableOpacity onPress={handleSourcePress} style={styles.sourceButton}>
+                <Text style={[styles.sourceText, preferredSourceUrl ? styles.sourceTextLink : null]}>
+                  {item.source}
+                </Text>
+                {preferredSourceUrl && (
+                  <Feather name="external-link" size={14} color="#4a9eff" style={styles.linkIcon} />
+                )}
+              </TouchableOpacity>
+            )}
+            <Text style={styles.timeAgo}>{item.timeAgo || item.date || '4 hours ago'}</Text>
+          </View>
+          <View style={styles.footerActions}>
+            <TouchableOpacity onPress={handleBookmarkToggle} style={styles.bookmarkButton}>
+              <Feather
+                name="bookmark"
+                size={18}
+                color={isCurrentlyBookmarked ? '#FFD700' : '#666666'}
+              />
             </TouchableOpacity>
-          )}
-          <Text style={styles.timeAgo}>{item.timeAgo || item.date || '4 hours ago'}</Text>
+            <TouchableOpacity onPress={handleShare} style={styles.shareButton}>
+              <Feather name="share-2" size={16} color="#666666" />
+            </TouchableOpacity>
+          </View>
         </View>
-        <TouchableOpacity onPress={handleShare} style={styles.shareButton}>
-          <Feather name="share-2" size={16} color="#666666" />
-        </TouchableOpacity>
       </View>
+
       <UpgradePrompt
         visible={showBookmarkUpgrade}
         onClose={() => setShowBookmarkUpgrade(false)}
         reason="bookmarks"
         onSeePlans={(highlightTier) => paywall.open({ highlightTier })}
       />
-    </View>
+    </TouchableOpacity>
   );
 }
+
+const formatScore = (score: string | number | undefined): string => {
+  if (score === undefined || score === null) return '0.50';
+  const num = typeof score === 'string' ? parseFloat(score) : score;
+  return isNaN(num) ? '0.50' : num.toFixed(2);
+};
 
 const getSentimentColor = (sentiment: string): string => {
   switch (sentiment?.toUpperCase()) {
@@ -367,33 +407,69 @@ const styles = StyleSheet.create({
   card: {
     backgroundColor: '#1C1C1E',
     borderRadius: 16,
-    padding: 16,
     marginBottom: 16,
+    overflow: 'hidden',
     // Border removed - background contrast is sufficient
     shadowColor: 'rgba(0, 0, 0, 0.2)',
     shadowRadius: 4,
   },
-  header: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    marginBottom: 10,
+  imageContainer: {
+    position: 'relative',
+    width: '100%',
+    height: 180,
   },
-  headerLeft: {
+  imageContainerFallback: {
+    justifyContent: 'center',
+    alignItems: 'center',
+    backgroundColor: '#121212',
+  },
+  cardImage: {
+    width: '100%',
+    height: '100%',
+  },
+  cardImageFallback: {
+    opacity: 0.8,
+    width: '55%',
+    height: '55%',
+  },
+  imageSentimentBadge: {
+    position: 'absolute',
+    bottom: 12,
+    left: 12,
     flexDirection: 'row',
     alignItems: 'center',
-    flexWrap: 'wrap',
-    flex: 1,
-    marginRight: 8,
+    backgroundColor: 'rgba(0, 0, 0, 0.9)',
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderRadius: 20,
+    gap: 6,
   },
-  sentimentBadge: {
+  imageSentimentText: {
+    fontSize: 12,
+    fontWeight: '700',
+  },
+  contentSection: {
+    padding: 16,
+  },
+  titleRow: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    marginBottom: 8,
+  },
+  footerActions: {
     flexDirection: 'row',
     alignItems: 'center',
   },
   polymarketBadge: {
+    position: 'absolute',
+    top: 12,
+    left: 12,
     flexDirection: 'row',
     alignItems: 'center',
-    marginLeft: 10,
+    backgroundColor: 'rgba(0, 0, 0, 0.9)',
+    paddingHorizontal: 10,
+    paddingVertical: 5,
+    borderRadius: 16,
   },
   polymarketText: {
     color: '#8FA7FF',
@@ -453,12 +529,12 @@ const styles = StyleSheet.create({
     color: '#888888',
   },
   title: {
+    flex: 1,
     fontSize: 16,
     fontWeight: '600',
     color: '#ffffff',
-    marginTop: 6,
-    marginBottom: 8,
-    lineHeight: 26,
+    marginRight: 8,
+    lineHeight: 24,
   },
   description: {
     fontSize: 14,

@@ -243,6 +243,7 @@ class NewsDataSources:
                         'title': entry.title,
                         'summary': getattr(entry, 'summary', ''),
                         'url': entry.link,
+                        'image_url': self._extract_image(entry),
                         'published': self._parse_date(getattr(entry, 'published', '')),
                         'category': 'commodities'
                     })
@@ -293,6 +294,7 @@ class NewsDataSources:
                     'title': entry.title,
                     'summary': getattr(entry, 'summary', ''),
                     'url': entry.link,
+                    'image_url': self._extract_image(entry),
                     'published': self._parse_date(entry.published),
                     'category': 'energy'
                 })
@@ -333,6 +335,7 @@ class NewsDataSources:
                         'title': entry.title,
                         'summary': getattr(entry, 'summary', ''),
                         'url': entry.link,
+                        'image_url': self._extract_image(entry),
                         'published': self._parse_date(entry.published),
                         'category': 'commodities'
                     })
@@ -366,6 +369,7 @@ class NewsDataSources:
                     'title': entry.title,
                     'summary': getattr(entry, 'summary', ''),
                     'url': entry.link,
+                    'image_url': self._extract_image(entry),
                     'published': self._parse_date(entry.published),
                     'category': 'energy_data'
                 })
@@ -399,6 +403,7 @@ class NewsDataSources:
                     'title': entry.title,
                     'summary': getattr(entry, 'summary', ''),
                     'url': entry.link,
+                    'image_url': self._extract_image(entry),
                     'published': self._parse_date(entry.published),
                     'category': 'energy_policy'
                 })
@@ -447,6 +452,7 @@ class NewsDataSources:
                         'title': entry.title,
                         'summary': getattr(entry, 'summary', ''),
                         'url': entry.link,
+                        'image_url': self._extract_image(entry),
                         'published': self._parse_date(entry.published),
                         'category': 'markets'
                     })
@@ -487,6 +493,7 @@ class NewsDataSources:
                                     'title': entry.title,
                                     'summary': getattr(entry, 'summary', ''),
                                     'url': entry.link,
+                                    'image_url': self._extract_image(entry),
                                     'published': self._parse_date(entry.published),
                                     'category': category
                                 })
@@ -513,6 +520,66 @@ class NewsDataSources:
             logger.error(f"Error fetching Trading Economics news: {e}")
             source_tracker.update_status('Trading Economics', success=False, error=str(e))
             return []
+    async def _fetch_og_image(self, url: str) -> str:
+        """Fetch a single page's og:image. Tight timeout, fully isolated —
+        any failure returns '' so the caller keeps the brand-mark fallback.
+        Skips Google News redirect stubs (they serve no article meta tags)."""
+        if not url or 'news.google.com' in url:
+            return ''
+        try:
+            timeout = ClientTimeout(total=4)
+            async with self.session.get(url, ssl=False, timeout=timeout) as resp:
+                if resp.status != 200:
+                    return ''
+                html = await resp.text()
+            match = (re.search(r'<meta[^>]+property=["\']og:image["\'][^>]+content=["\']([^"\']+)', html)
+                     or re.search(r'<meta[^>]+content=["\']([^"\']+)["\'][^>]+property=["\']og:image', html))
+            return match.group(1) if match else ''
+        except Exception:
+            return ''
+
+    async def enrich_images(self, articles: List[Dict], cap: int = 20) -> None:
+        """Concurrently backfill image_url for articles that lack one, via
+        og:image. Mutates in place. Bounded to `cap` articles and wrapped so
+        it can never delay or break the feed beyond the per-request timeout."""
+        try:
+            targets = [a for a in articles if not a.get('image_url')][:cap]
+            if not targets:
+                return
+            results = await asyncio.gather(
+                *(self._fetch_og_image(a.get('url', '')) for a in targets),
+                return_exceptions=True,
+            )
+            for article, img in zip(targets, results):
+                if isinstance(img, str) and img:
+                    article['image_url'] = img
+        except Exception as e:
+            logger.warning(f"og:image enrichment skipped: {e}")
+
+    @staticmethod
+    def _extract_image(entry) -> str:
+        """Best-effort image URL from a feedparser entry, zero extra HTTP.
+        Checks media:content, media:thumbnail, enclosures, then an <img> in the
+        summary HTML. Returns '' when the feed carries no image (the mobile app
+        then renders the brand-mark fallback)."""
+        try:
+            for media in (getattr(entry, 'media_content', None) or []):
+                if media.get('url'):
+                    return media['url']
+            for thumb in (getattr(entry, 'media_thumbnail', None) or []):
+                if thumb.get('url'):
+                    return thumb['url']
+            for enc in (getattr(entry, 'enclosures', None) or []):
+                if enc.get('type', '').startswith('image') and enc.get('href'):
+                    return enc['href']
+            summary = getattr(entry, 'summary', '') or ''
+            match = re.search(r'<img[^>]+src=["\']([^"\']+)["\']', summary)
+            if match:
+                return match.group(1)
+        except Exception:
+            pass
+        return ''
+
     def _parse_date(self, date_string: str) -> datetime:
         """Parse various date formats to datetime object"""
         try:
@@ -560,6 +627,7 @@ class NewsDataSources:
                             'title': entry.title,
                             'summary': getattr(entry, 'summary', ''),
                             'url': entry.link,
+                            'image_url': self._extract_image(entry),
                             'published': self._parse_date(entry.published),
                             'category': 'commodities'
                         })
@@ -589,6 +657,7 @@ class NewsDataSources:
                             'title': entry.title,
                             'summary': getattr(entry, 'summary', ''),
                             'url': entry.link,
+                            'image_url': self._extract_image(entry),
                             'published': self._parse_date(entry.published),
                             'category': 'mining'
                         })
@@ -632,6 +701,7 @@ class NewsDataSources:
                     'title': entry.title,
                     'summary': getattr(entry, 'summary', ''),
                     'url': entry.link,
+                    'image_url': self._extract_image(entry),
                     'published': self._parse_date(entry.published),
                     'category': 'natural_gas'
                 })
@@ -673,6 +743,7 @@ class NewsDataSources:
                             'title': entry.title,
                             'summary': getattr(entry, 'summary', ''),
                             'url': entry.link,
+                            'image_url': self._extract_image(entry),
                             'published': self._parse_date(entry.published),
                             'category': category
                         })
@@ -720,6 +791,7 @@ class NewsDataSources:
                     'title': entry.title,
                     'summary': getattr(entry, 'summary', ''),
                     'url': entry.link,
+                    'image_url': self._extract_image(entry),
                     'published': self._parse_date(entry.published),
                     'category': 'metals'
                 })
@@ -775,6 +847,7 @@ class NewsDataSources:
                         'title': entry.title,
                         'summary': getattr(entry, 'summary', ''),
                         'url': entry.link,
+                        'image_url': self._extract_image(entry),
                         'published': self._parse_date(entry.published),
                         'category': 'energy_policy'
                     })

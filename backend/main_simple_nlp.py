@@ -1360,7 +1360,18 @@ async def get_news_feed(request: NewsRequest):
         
         # Limit to requested number of articles
         articles = all_articles[:request.max_articles]
-        
+
+        # Backfill card images via og:image for articles that lack one (RSS
+        # rarely carries images). Concurrent + tight per-request timeout, in a
+        # short-lived session; fully isolated so it can never break the feed.
+        # Articles still without an image render the brand-mark fallback client-side.
+        if NEWS_SOURCES_AVAILABLE and any(not a.get('image_url') for a in articles):
+            try:
+                async with NewsDataSources() as _img_src:
+                    await _img_src.enrich_images(articles)
+            except Exception as _img_err:
+                logger.warning(f"Image enrichment skipped: {_img_err}")
+
         # Enhance articles with full content and NLTK summaries if requested
         if request.enhanced_content and NEWS_SOURCES_AVAILABLE:
             try:
@@ -1420,6 +1431,7 @@ async def get_news_feed(request: NewsRequest):
                     'tickers': extract_commodity_tickers(text_for_analysis),
                     'keywords': extract_keywords(text_for_analysis),
                     'commodity': inferred_commodity,
+                    'image_url': article.get('image_url', ''),
                     # Include enhanced content fields if available
                     'enhanced': article.get('enhanced', False),
                     'word_count': article.get('word_count'),
@@ -1444,7 +1456,8 @@ async def get_news_feed(request: NewsRequest):
                     'sentiment_score': 0.5,
                     'categories': [article.get('category', 'general')],
                     'tickers': [],
-                    'keywords': []
+                    'keywords': [],
+                    'image_url': article.get('image_url', '')
                 }
                 enhanced_articles.append(enhanced_article)
         

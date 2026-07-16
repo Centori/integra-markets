@@ -63,6 +63,8 @@ const AIAnalysisOverlay: React.FC<AIAnalysisOverlayProps> = ({ newsData: newsDat
         title: newsData.title || newsData.headline || ''
     } : null;
     const [userVote, setUserVote] = useState<'BULLISH' | 'BEARISH' | 'NEUTRAL' | null>(null);
+    // After voting, results can be collapsed with the X and reopened.
+    const [pollCollapsed, setPollCollapsed] = useState(false);
     const { addNewsBookmark, removeBookmark, isBookmarked, bookmarks } = useBookmarks();
     const [analysis, setAnalysis] = useState<{
         summary: string;
@@ -807,11 +809,13 @@ const AIAnalysisOverlay: React.FC<AIAnalysisOverlayProps> = ({ newsData: newsDat
     useEffect(() => {
         if (!isVisible) {
             setUserVote(null);
+            setPollCollapsed(false);
             setExpandedSummary(null); // reset expanded summary when overlay closes
             return;
         }
         // When a new article is opened, reset vote and expanded summary
         setUserVote(null);
+        setPollCollapsed(false);
         setExpandedSummary(null);
     }, [isVisible, newsData?.title]);
 
@@ -1052,17 +1056,38 @@ const AIAnalysisOverlay: React.FC<AIAnalysisOverlayProps> = ({ newsData: newsDat
                             }]}>
                                 <View style={styles.pollHeader}>
                                     <Text style={styles.pollTitle}>Sentiment Poll</Text>
-                                    <TouchableOpacity onPress={() => {
-                                        setTourMode('single');
-                                        setTourStep(5); // Jump to poll step
-                                        setShowTour(true);
-                                    }}>
-                                        <MaterialIcons name="info-outline" size={18} color="#A0A0A0" />
-                                    </TouchableOpacity>
+                                    <View style={styles.pollHeaderActions}>
+                                        <TouchableOpacity onPress={() => {
+                                            setTourMode('single');
+                                            setTourStep(5); // Jump to poll step
+                                            setShowTour(true);
+                                        }}>
+                                            <MaterialIcons name="info-outline" size={18} color="#A0A0A0" />
+                                        </TouchableOpacity>
+                                        {/* After voting: X collapses the results, reopens them again */}
+                                        {userVote && (
+                                            <TouchableOpacity
+                                                onPress={() => setPollCollapsed(c => !c)}
+                                                style={styles.pollCloseButton}
+                                                hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+                                            >
+                                                <MaterialIcons
+                                                    name={pollCollapsed ? 'bar-chart' : 'close'}
+                                                    size={18}
+                                                    color="#A0A0A0"
+                                                />
+                                            </TouchableOpacity>
+                                        )}
+                                    </View>
                                 </View>
                                 <Text style={styles.pollQuestion}>How do you feel about this story?</Text>
 
-                                {!userVote ? (
+                                {userVote && pollCollapsed ? (
+                                    <TouchableOpacity style={styles.pollReopenRow} onPress={() => setPollCollapsed(false)}>
+                                        <Text style={styles.pollReopenText}>Results hidden · tap to view</Text>
+                                        <MaterialIcons name="chevron-right" size={18} color="#4ECCA3" />
+                                    </TouchableOpacity>
+                                ) : !userVote ? (
                                     <View style={styles.pollOptions}>
                                         <TouchableOpacity
                                             style={[styles.pollOptionSmall, styles.pollBullishSmall]}
@@ -1444,6 +1469,26 @@ const styles = StyleSheet.create({
         alignItems: 'center',
         justifyContent: 'space-between',
         marginBottom: 12,
+    },
+    pollHeaderActions: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        gap: 12,
+    },
+    pollCloseButton: {
+        padding: 2,
+    },
+    pollReopenRow: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        justifyContent: 'center',
+        gap: 4,
+        paddingVertical: 12,
+    },
+    pollReopenText: {
+        color: '#4ECCA3',
+        fontSize: 13,
+        fontWeight: '600',
     },
     pollTitle: {
         fontSize: 16,
