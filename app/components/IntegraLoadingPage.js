@@ -100,19 +100,37 @@ const IntegraLoadingPage = ({ onLoadingComplete }) => {
             {/* Shiny Text Below */}
             <View style={styles.textContainer}>
                 <View style={styles.brandTextRow}>
-                    <ShinyText 
-                        text="integra" 
-                        speed={3} 
+                    <ShinyText
+                        text="integra"
+                        speed={3}
                         style={styles.brandTextMain}
                         disabled={progress >= 100}
                     />
-                    <ShinyText 
-                        text="Markets" 
-                        speed={3} 
+                    <ShinyText
+                        text="Markets"
+                        speed={3}
                         style={styles.brandTextSub}
                         disabled={progress >= 100}
                     />
                 </View>
+            </View>
+
+            {/* Progress bar — progress was always tracked here but never shown */}
+            <View style={styles.progressContainer}>
+                <View style={styles.progressBar}>
+                    <Animated.View
+                        style={[
+                            styles.progressFill,
+                            {
+                                width: progressAnim.interpolate({
+                                    inputRange: [0, 100],
+                                    outputRange: ['0%', '100%'],
+                                }),
+                            },
+                        ]}
+                    />
+                </View>
+                <Text style={styles.progressText}>{Math.round(progress)}%</Text>
             </View>
         </View>
     );
@@ -156,6 +174,29 @@ const styles = StyleSheet.create({
     },
     shinyTextDisabled: {
         color: colors.shinyGreen,
+    },
+    progressContainer: {
+        width: screenWidth * 0.6,
+        marginTop: 32,
+        alignItems: 'center',
+    },
+    progressBar: {
+        width: '100%',
+        height: 4,
+        backgroundColor: '#333333',
+        borderRadius: 2,
+        overflow: 'hidden',
+        marginBottom: 8,
+    },
+    progressFill: {
+        height: '100%',
+        backgroundColor: colors.accentPositive,
+        borderRadius: 2,
+    },
+    progressText: {
+        fontSize: 13,
+        color: colors.textSecondary,
+        fontWeight: '500',
     },
 });
 
