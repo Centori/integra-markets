@@ -1,6 +1,7 @@
-import React, { createContext, useContext, useState, useEffect } from 'react';
+import React, { createContext, useContext, useState, useEffect, useRef } from 'react';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { Alert } from 'react-native';
+import { supabase } from '../utils/supabaseConfig';
 
 // Base bookmark interface
 export interface BaseBookmark {
@@ -53,9 +54,42 @@ const BookmarkContext = createContext<BookmarkContextType | undefined>(undefined
 const STORAGE_KEY = 'integra_bookmarks_v2'; // Updated version for new format
 const MAX_BOOKMARKS = 100; // Maximum number of bookmarks to store
 
+// Cross-platform bookmark identity: the web app keys `bookmarks` rows by this
+// exact slug of the title, so mobile must derive it identically for a
+// bookmark saved on either surface to be the same row.
+const slugForTitle = (title: string) =>
+  title.replace(/\s+/g, '-').toLowerCase().slice(0, 50);
+
+const sessionUserId = async (): Promise<string | null> => {
+  try {
+    const { data: { session } } = await supabase.auth.getSession();
+    return session?.user?.id ?? null;
+  } catch {
+    return null;
+  }
+};
+
+// Shape a local news bookmark into the web app's `bookmarks` row contract.
+const toRemoteRow = (userId: string, b: NewsBookmark) => ({
+  user_id: userId,
+  article_id: slugForTitle(b.title),
+  title: b.title,
+  url: b.sourceUrl ?? null,
+  source: b.source ?? null,
+  sentiment: b.sentiment ?? null,
+  sentiment_score: b.sentimentScore ?? null,
+  image_url: null,
+  published_at: null,
+});
+
 export const BookmarkProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const [bookmarks, setBookmarks] = useState<Bookmark[]>([]);
   const [isLoading, setIsLoading] = useState(true);
+  const bookmarksRef = useRef<Bookmark[]>([]);
+
+  useEffect(() => {
+    bookmarksRef.current = bookmarks;
+  }, [bookmarks]);
 
   // Computed properties for filtered bookmarks
   const newsBookmarks = bookmarks.filter((b): b is NewsBookmark => b.type === 'news');
@@ -63,6 +97,11 @@ export const BookmarkProvider: React.FC<{ children: React.ReactNode }> = ({ chil
 
   useEffect(() => {
     loadBookmarks();
+    // Re-sync whenever a session appears (sign-in, session restore)
+    const { data } = supabase.auth.onAuthStateChange((event: string) => {
+      if (event === 'SIGNED_IN') syncWithRemote();
+    });
+    return () => data?.subscription?.unsubscribe?.();
   }, []);
 
   const loadBookmarks = async () => {
@@ -74,14 +113,63 @@ export const BookmarkProvider: React.FC<{ children: React.ReactNode }> = ({ chil
           createdAt: new Date(bookmark.createdAt)
         }));
         setBookmarks(parsedBookmarks);
+        syncWithRemote(parsedBookmarks);
       } else {
         // Check for old format bookmarks and migrate
         await migrateOldBookmarks();
+        syncWithRemote();
       }
     } catch (error) {
       console.error('Failed to load bookmarks:', error);
     } finally {
       setIsLoading(false);
+    }
+  };
+
+  // Two-way merge with the web app's `bookmarks` table. Local storage stays
+  // the source of truth for instant UX and guest mode; remote is additive.
+  const syncWithRemote = async (current?: Bookmark[]) => {
+    const userId = await sessionUserId();
+    if (!userId) return;
+    try {
+      const { data: remoteRows, error } = await supabase
+        .from('bookmarks')
+        .select('article_id, title, url, source, sentiment, sentiment_score')
+        .eq('user_id', userId);
+      if (error || !remoteRows) return;
+
+      const local = current ?? bookmarksRef.current;
+      const localNews = local.filter((b): b is NewsBookmark => b.type === 'news');
+      const localSlugs = new Set(localNews.map((b) => slugForTitle(b.title)));
+      const remoteSlugs = new Set(remoteRows.map((r: any) => r.article_id));
+
+      // Push local-only bookmarks up (first sign-in uploads guest bookmarks)
+      const toPush = localNews.filter((b) => !remoteSlugs.has(slugForTitle(b.title)));
+      if (toPush.length > 0) {
+        await supabase.from('bookmarks').insert(toPush.map((b) => toRemoteRow(userId, b)));
+      }
+
+      // Pull remote-only bookmarks down (saved on web, missing here)
+      const pulled: NewsBookmark[] = remoteRows
+        .filter((r: any) => r.title && !localSlugs.has(r.article_id))
+        .map((r: any) => ({
+          type: 'news' as const,
+          id: `news_remote_${r.article_id}`,
+          title: r.title,
+          summary: '',
+          source: r.source ?? '',
+          sourceUrl: r.url ?? undefined,
+          sentiment: r.sentiment ?? undefined,
+          sentimentScore: r.sentiment_score ?? undefined,
+          createdAt: new Date(),
+        }));
+      if (pulled.length > 0) {
+        const merged = [...pulled, ...local];
+        setBookmarks(merged);
+        await saveBookmarks(merged);
+      }
+    } catch (error) {
+      console.error('Bookmark sync failed:', error);
     }
   };
 
@@ -135,6 +223,13 @@ export const BookmarkProvider: React.FC<{ children: React.ReactNode }> = ({ chil
     const updatedBookmarks = [newBookmark, ...bookmarks];
     setBookmarks(updatedBookmarks);
     await saveBookmarks(updatedBookmarks);
+
+    // Write-through to the shared web `bookmarks` table (fire-and-forget)
+    const userId = await sessionUserId();
+    if (userId) {
+      const { error } = await supabase.from('bookmarks').insert(toRemoteRow(userId, newBookmark));
+      if (error) console.error('Remote bookmark insert failed:', error.message);
+    }
   };
 
   const addChatBookmark = async (bookmarkData: Omit<ChatBookmark, 'id' | 'createdAt' | 'type'>) => {
@@ -151,9 +246,22 @@ export const BookmarkProvider: React.FC<{ children: React.ReactNode }> = ({ chil
   };
 
   const removeBookmark = async (id: string) => {
+    const removed = bookmarks.find(bookmark => bookmark.id === id);
     const updatedBookmarks = bookmarks.filter(bookmark => bookmark.id !== id);
     setBookmarks(updatedBookmarks);
     await saveBookmarks(updatedBookmarks);
+
+    if (removed?.type === 'news') {
+      const userId = await sessionUserId();
+      if (userId) {
+        const { error } = await supabase
+          .from('bookmarks')
+          .delete()
+          .eq('user_id', userId)
+          .eq('article_id', slugForTitle(removed.title));
+        if (error) console.error('Remote bookmark delete failed:', error.message);
+      }
+    }
   };
 
   const isBookmarked = (identifier: string, type?: 'news' | 'chat') => {
