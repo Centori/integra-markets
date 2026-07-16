@@ -27,7 +27,7 @@
     ],
     "ios": {
       "bundleIdentifier": "com.centori.integramarkets",
-      "buildNumber": "54",
+      "buildNumber": "80",
       "deploymentTarget": "13.0",
       "supportsTablet": true,
       "requireFullScreen": false,
@@ -140,11 +140,11 @@
       "kalshiBaseUrl": "https://trading-api.kalshi.com/trade-api/v2",
       "router": {},
       "eas": {
-        "projectId": "5163460b-7d45-4c4c-b10d-c5effb08a3c3"
+        "projectId": "e9868cd6-adaa-422c-be2b-89b6f028e5f6"
       }
     },
     "newArchEnabled": false,
-    "owner": "anilkhamsa",
+    "owner": "ak88",
     "updates": {
       "url": "https://u.expo.dev/5163460b-7d45-4c4c-b10d-c5effb08a3c3"
     }
