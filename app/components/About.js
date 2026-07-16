@@ -69,23 +69,23 @@ const About = ({ onBack }) => {
 
         <Text style={styles.sectionTitle}>Key Features</Text>
         <View style={styles.featureItem}>
-          <MaterialIcons name="flash-on" size={20} color={colors.accentPositive} />
+          <Text style={styles.featureBullet}>•</Text>
           <Text style={styles.featureText}>Real-time commodity news and price alerts</Text>
         </View>
         <View style={styles.featureItem}>
-          <MaterialIcons name="psychology" size={20} color={colors.accentData} />
+          <Text style={styles.featureBullet}>•</Text>
           <Text style={styles.featureText}>Sentiment analysis on market news</Text>
         </View>
         <View style={styles.featureItem}>
-          <MaterialIcons name="notifications-active" size={20} color="#FFD700" />
+          <Text style={styles.featureBullet}>•</Text>
           <Text style={styles.featureText}>Customizable alert preferences</Text>
         </View>
         <View style={styles.featureItem}>
-          <MaterialIcons name="bookmark" size={20} color="#FF6B6B" />
+          <Text style={styles.featureBullet}>•</Text>
           <Text style={styles.featureText}>Save and track important news</Text>
         </View>
         <View style={styles.featureItem}>
-          <MaterialIcons name="public" size={20} color={colors.accentPositive} />
+          <Text style={styles.featureBullet}>•</Text>
           <Text style={styles.featureText}>Global market coverage across regions</Text>
         </View>
 
@@ -202,6 +202,11 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     marginBottom: 12,
     gap: 12,
+  },
+  featureBullet: {
+    color: '#FFFFFF',
+    fontSize: 15,
+    lineHeight: 20,
   },
   featureText: {
     color: colors.textSecondary,
