@@ -21,6 +21,10 @@ from services.supabase_jwt import verify_supabase_jwt
 
 logger = logging.getLogger(__name__)
 
+# See main.py — learning loop is opt-in so torch stays unloaded while dormant.
+import os
+LEARNING_LOOP_ENABLED = os.environ.get("INTEGRA_ENABLE_LEARNING_LOOP", "").lower() in ("1", "true", "yes")
+
 router = APIRouter(prefix="/api/news", tags=["news-user"])
 
 
@@ -89,6 +93,9 @@ async def user_based_news(
 
 async def _log_predictions(user_id: str, articles: List[Dict[str, Any]]) -> None:
     if not articles:
+        return
+    # Learning loop is opt-in (see main.py) so torch isn't loaded while dormant.
+    if not LEARNING_LOOP_ENABLED:
         return
     try:
         from services.learning_loop import get_learning_loop

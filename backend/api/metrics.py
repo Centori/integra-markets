@@ -8,6 +8,7 @@ the database is unreachable so the endpoint still answers locally.
 from __future__ import annotations
 
 import logging
+import os
 from datetime import datetime, timedelta, timezone
 from typing import Any, Dict, List
 
@@ -17,9 +18,17 @@ logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/api/metrics", tags=["metrics"])
 
+# See main.py — the learning loop is opt-in so torch isn't loaded for a
+# dormant feature. Importing services.learning_loop pulls torch, so guard
+# every entry point on the same flag.
+LEARNING_LOOP_ENABLED = os.environ.get("INTEGRA_ENABLE_LEARNING_LOOP", "").lower() in ("1", "true", "yes")
+
 
 @router.get("/learning")
 async def learning_metrics(window_days: int = 7) -> Dict[str, Any]:
+    if not LEARNING_LOOP_ENABLED:
+        return {"source": "disabled", "enabled": False,
+                "message": "Learning loop is disabled (INTEGRA_ENABLE_LEARNING_LOOP not set)."}
     import asyncio
     from services.learning_loop import get_learning_loop
     from services._supabase import get_supabase_client

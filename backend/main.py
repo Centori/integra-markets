@@ -117,16 +117,29 @@ try:
 except ImportError:
     background_scheduler_available = False
 
-try:
-    from services.learning_loop import attach_supabase as _attach_loop_supabase
-    learning_loop_available = True
-except ImportError:
-    learning_loop_available = False
+# The learning loop (UCB1 keyword bandit + torch sentiment MLP) is dormant:
+# its Supabase tables aren't provisioned and no reward signal is wired in
+# (see SYSTEM_MAP.md). Importing it eagerly pulls torch (~large) into memory
+# at every boot for a feature that trains on nothing. Gate the import behind
+# an opt-in flag so torch is only loaded once the loop is actually activated.
+# Flip INTEGRA_ENABLE_LEARNING_LOOP=true (and apply 20260527_learning_loop.sql
+# + route feedback) to turn it back on.
+LEARNING_LOOP_ENABLED = os.environ.get("INTEGRA_ENABLE_LEARNING_LOOP", "").lower() in ("1", "true", "yes")
 
-try:
-    from jobs.outcome_evaluator import OutcomeEvaluator
-    outcome_evaluator_available = True
-except ImportError:
+if LEARNING_LOOP_ENABLED:
+    try:
+        from services.learning_loop import attach_supabase as _attach_loop_supabase
+        learning_loop_available = True
+    except ImportError:
+        learning_loop_available = False
+
+    try:
+        from jobs.outcome_evaluator import OutcomeEvaluator
+        outcome_evaluator_available = True
+    except ImportError:
+        outcome_evaluator_available = False
+else:
+    learning_loop_available = False
     outcome_evaluator_available = False
 
 _outcome_evaluator: Optional["OutcomeEvaluator"] = None

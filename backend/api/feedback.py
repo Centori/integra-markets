@@ -18,6 +18,10 @@ from services.supabase_jwt import verify_supabase_jwt
 
 logger = logging.getLogger(__name__)
 
+# See main.py — learning loop is opt-in so torch stays unloaded while dormant.
+import os
+LEARNING_LOOP_ENABLED = os.environ.get("INTEGRA_ENABLE_LEARNING_LOOP", "").lower() in ("1", "true", "yes")
+
 router = APIRouter(prefix="/api/feedback", tags=["feedback"])
 
 ALLOWED_ACTIONS = {"like", "dislike", "save", "dismiss", "share", "agree", "disagree"}
@@ -68,7 +72,6 @@ async def submit_feedback(
     # Always trust the authenticated user_id over whatever the client sends.
     user_id = auth["user_id"]
 
-    from services.learning_loop import get_learning_loop  # local import to avoid cycle
     from services._supabase import get_supabase_client
 
     supabase = get_supabase_client()
@@ -95,8 +98,12 @@ async def submit_feedback(
             logger.warning("supabase user_feedback insert failed: %s", exc)
 
     # Inject as a supervised experience when the user tagged a sentiment.
+    # Skipped entirely while the learning loop is disabled (default) so this
+    # endpoint never imports torch. Feedback is still persisted above.
     training_result = None
-    if payload.sentiment_vote and payload.action in EXPLICIT_VOTE_ACTIONS:
+    if (LEARNING_LOOP_ENABLED and payload.sentiment_vote
+            and payload.action in EXPLICIT_VOTE_ACTIONS):
+        from services.learning_loop import get_learning_loop  # local import: pulls torch
         loop = get_learning_loop()
         prediction_record = _lookup_prediction(supabase, payload.prediction_id) if supabase else None
         predicted_sentiment = (
