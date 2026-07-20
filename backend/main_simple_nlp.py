@@ -30,7 +30,14 @@ except ImportError:
 try:
     from article_summarizer import ArticleSummarizer
     SUMMARIZER_AVAILABLE = True
-except ImportError:
+except ImportError as _summarizer_import_error:
+    # Previously swallowed silently — /api/summarize/article degrades to its
+    # "unavailable" response with zero trace of why. Log it so a deploy that
+    # loses sumy/newspaper3k (both in requirements.txt) is diagnosable.
+    logging.getLogger(__name__).warning(
+        "Article summarizer unavailable (sumy/newspaper3k import failed): %s",
+        _summarizer_import_error,
+    )
     SUMMARIZER_AVAILABLE = False
 
 # Import news data sources

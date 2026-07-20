@@ -110,8 +110,12 @@ deployment/
 *.sh
 !start_backend.sh
 
-# Test files in root
-test_*.py
+# Stray test scripts in the repo root only (e.g. test_api_integration.py).
+# NOT anchored before: this also silently excluded the entire backend/tests/
+# pytest suite from ever being committed (confirmed: `git ls-files
+# backend/tests/` still shows test_news_fetch.py/test_sentiment_accuracy.py
+# only because they were force-added before this rule existed).
+/test_*.py
 -integra-markets/
 -integra-markets-backup/
 .vercel

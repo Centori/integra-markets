@@ -11,7 +11,6 @@ import {
   ActivityIndicator
 } from "react-native";
 import { MaterialIcons } from '@expo/vector-icons';
-import * as ImagePicker from 'expo-image-picker';
 import { Image } from 'react-native';
 import { useBookmarks } from '../providers/BookmarkProvider';
 import { userService } from '../services/userService';
@@ -60,7 +59,7 @@ const getRoleLabel = (role) => {
   return roleMap[role] || role;
 };
 
-export default function ProfileScreen({ userProfile, alertPreferences, apiKeys, onBack, onNavigateToSettings, onLogout, onNavigateToBookmarks, onAccountDeletionScheduled }) {
+export default function ProfileScreen({ userProfile, alertPreferences, apiKeys, onBack, onNavigateToSettings, onLogout, onNavigateToBookmarks, onOpenArticle, onAccountDeletionScheduled }) {
   const { tier } = useEntitlement();
   const paywall = usePaywall();
   const [selectedProvider, setSelectedProvider] = useState(null);
@@ -70,67 +69,12 @@ export default function ProfileScreen({ userProfile, alertPreferences, apiKeys, 
   const [loadingProfile, setLoadingProfile] = useState(true);
   const [profileError, setProfileError] = useState(null);
   const [resolvedProfile, setResolvedProfile] = useState(userProfile || null);
-  const [uploading, setUploading] = useState(false);
   const [showDeleteModal, setShowDeleteModal] = useState(false);
 
-  const pickImage = async () => {
-    try {
-      const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
-      if (status !== 'granted') {
-        Alert.alert('Permission Denied', 'Sorry, we need camera roll permissions to upload a profile photo.');
-        return;
-      }
-
-      const result = await ImagePicker.launchImagePickerAsync({
-        mediaTypes: ImagePicker.MediaTypeOptions.Images,
-        allowsEditing: true,
-        aspect: [1, 1],
-        quality: 0.8,
-      });
-
-      if (!result.canceled && result.assets && result.assets[0]) {
-        setUploading(true);
-        try {
-          // Upload to your backend/storage service
-          const formData = new FormData();
-          formData.append('photo', {
-            uri: result.assets[0].uri,
-            type: 'image/jpeg',
-            name: 'profile-photo.jpg',
-          });
-
-          // Update this with your actual API endpoint
-          const response = await fetch('YOUR_UPLOAD_ENDPOINT', {
-            method: 'POST',
-            body: formData,
-            headers: {
-              'Content-Type': 'multipart/form-data',
-            },
-          });
-
-          const uploadResult = await response.json();
-          
-          if (uploadResult.url) {
-            setResolvedProfile(prev => ({
-              ...prev,
-              photoUrl: uploadResult.url
-            }));
-            Alert.alert('Success', 'Profile photo updated successfully!');
-          } else {
-            throw new Error('Upload failed');
-          }
-        } catch (error) {
-          console.error('Error uploading photo:', error);
-          Alert.alert('Error', 'Failed to upload profile photo. Please try again.');
-        } finally {
-          setUploading(false);
-        }
-      }
-    } catch (error) {
-      console.error('Error picking image:', error);
-      Alert.alert('Error', 'Failed to select image. Please try again.');
-    }
-  };
+  // Avatar changes go through the Edit Profile flow (DetailsFormCard's photo
+  // picker -> supabaseService.uploadAvatar), which is the only working upload
+  // path. A duplicate picker used to live here calling a nonexistent
+  // ImagePicker method and posting to a placeholder URL — see SYSTEM_MAP.md.
   
   const { bookmarks, removeBookmark } = useBookmarks();
 
@@ -218,6 +162,35 @@ export default function ProfileScreen({ userProfile, alertPreferences, apiKeys, 
     setShowAllBookmarks(true);
   };
 
+  // Tapping a saved bookmark opens the underlying content instead of just
+  // re-triggering "view all" (the previous behavior — a bookmark tap did
+  // nothing distinguishable from tapping the section header).
+  const handleBookmarkPress = (bookmark) => {
+    if (bookmark.type === 'news') {
+      if (onOpenArticle) {
+        onOpenArticle({
+          title: bookmark.title,
+          summary: bookmark.summary,
+          fullSummary: bookmark.summary,
+          source: bookmark.source,
+          sourceUrl: bookmark.sourceUrl,
+          url: bookmark.sourceUrl,
+          sentiment: bookmark.sentiment,
+          sentimentScore: bookmark.sentimentScore,
+          commodities: bookmark.commodities,
+          marketImpact: bookmark.marketImpact,
+          timeAgo: new Date(bookmark.createdAt).toLocaleDateString(),
+        });
+      } else {
+        handleViewAllBookmarks();
+      }
+    } else {
+      // Chat bookmarks have no dedicated viewer screen yet — show the
+      // saved Q&A directly rather than silently doing nothing.
+      Alert.alert(bookmark.title || 'Saved chat', bookmark.response || bookmark.query || '');
+    }
+  };
+
   const navigateToScreen = (screenName) => {
     if (onNavigateToSettings) {
       onNavigateToSettings(screenName);
@@ -277,16 +250,13 @@ export default function ProfileScreen({ userProfile, alertPreferences, apiKeys, 
               onPress={() => navigateToScreen('EditProfile')}
               activeOpacity={0.7}
             >
-              <TouchableOpacity 
+              <TouchableOpacity
                 style={styles.profileAvatar}
-                onPress={pickImage}
-                disabled={uploading}
+                onPress={() => navigateToScreen('EditProfile')}
               >
-                {uploading ? (
-                  <ActivityIndicator color={colors.bgPrimary} />
-                ) : resolvedProfile?.photoUrl ? (
-                  <Image 
-                    source={{ uri: resolvedProfile.photoUrl }} 
+                {resolvedProfile?.profilePhoto ? (
+                  <Image
+                    source={{ uri: resolvedProfile.profilePhoto }}
                     style={styles.avatarImage}
                     defaultSource={require('../assets/default-avatar.png')}
                   />
@@ -505,10 +475,10 @@ export default function ProfileScreen({ userProfile, alertPreferences, apiKeys, 
           ) : (
             <View style={styles.bookmarksList}>
               {(showAllBookmarks ? bookmarks : bookmarks.slice(0, 3)).map((bookmark) => (
-                <TouchableOpacity 
-                  key={bookmark.id} 
+                <TouchableOpacity
+                  key={bookmark.id}
                   style={styles.bookmarkItem}
-                  onPress={() => onNavigateToBookmarks ? onNavigateToBookmarks() : handleViewAllBookmarks()}
+                  onPress={() => handleBookmarkPress(bookmark)}
                 >
                   <View style={styles.bookmarkContent}>
                     <Text style={styles.bookmarkTitle} numberOfLines={2}>

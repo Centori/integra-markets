@@ -178,9 +178,19 @@ Note: web bundle references the old Render backend `integra-markets-9zz1.onrende
 | Web login `deleted_client` | Supabase using a deleted OAuth client | set primary Client ID to live `btsk2…` |
 | App crashes on launch (SIGABRT) | runtime `require()` of missing pkg, or missing anon key, or gutted `app/App.js` | see memory `project_ios_crash_runtimeversion` |
 | OTA never arrives | `updates.url` ≠ `projectId`, or wrong account token | app.json `updates.url` must match `extra.eas.projectId` |
+| Profile avatar tap errors | Duplicate picker calling nonexistent `ImagePicker.launchImagePickerAsync` + a placeholder upload URL | `ProfileScreen.js` — removed; avatar now opens Edit Profile (the working `DetailsFormCard` → `uploadAvatar` path) |
+| Avatar uploads but never displays | Field-name mismatch: read `resolvedProfile.photoUrl`, but `userService` returns `profilePhoto` | `ProfileScreen.js` |
+| Tapping a saved bookmark does nothing useful | Item `onPress` called the same handler as the section's "view all" button | `ProfileScreen.js` — `handleBookmarkPress` now opens the article via `onOpenArticle` (prop already wired from App.js, just never received) |
+| Refresh-summary button always errors | `dashboardApi.getArticleSummary` didn't exist in `api.js` (guaranteed TypeError on tap) | `api.js` — added, calls `POST /api/summarize/article` |
+| Refresh-summary "succeeds" but shows nothing | Backend returns `summary` (string array) or `{fallback:true}`; mobile checked a `full_summary` field that never existed in either shape | `api.js` `getArticleSummary` now maps `summary` → `full_summary` and surfaces `unavailable` distinctly |
+| `/api/summarize/article` always degrades | `sumy`/`newspaper3k` fail to import server-side (in requirements.txt, but not loading in the deployed container) — was silently swallowed, invisible in logs | `main_simple_nlp.py` now logs the import error; **the underlying dependency issue itself still needs a container-level fix/redeploy check** |
+| No divergence-tagged news cards | Two stacked, mostly by-design reasons: (1) backend stripped divergence fields for every tier except `basic_markets`, while the client already opened the Divergence filter/Markets view to `free_trial` for evaluation — a cross-surface gating mismatch, now fixed in `news_feed.py`; (2) even so, a card only qualifies when news vs. market sentiment diverges >20pts within 24h (`services/divergence.py` `DEFAULT_THRESHOLD`) — zero articles clearing that bar today is a legitimate "nothing to flag" state, not a bug |
+| "Email Alerts" toggle in the Alerts tab | Pure local UI state — no email-sending capability exists anywhere in the backend | `AlertsScreen.js` — removed (dead/misleading control) |
 
 ## Punch-list before monetizing
-1. **Re-lock trial gates** — remove `free_trial` from Markets features in `entitlementGate.ts`.
+1. **Re-lock trial gates** — remove `free_trial` from Markets features in `entitlementGate.ts` **and** from the matching check in `backend/api/news_feed.py` (both added 2026-07-14/2026-07 for the same eval window — must come out together).
 2. **Verify Stripe** live keys + price IDs in Railway env.
 3. **Build web API console** (`/account/api`) — key creation + Mintlify docs.
 4. **Re-enable mobile AI chat** (currently `.disabled`).
+5. **Verify `sumy`/`newspaper3k` actually load in the deployed backend container** — `/api/summarize/article` has been degrading to "unavailable" in production; the import failure is now logged (`railway logs` will show why on next deploy) but the dependency itself hasn't been fixed.
+6. **Minor, unrelated to this sweep:** `jobs.outcome_evaluator` logs a recurring `public.predictions` table-not-found warning every cycle — background-job noise, not user-facing, not yet investigated.

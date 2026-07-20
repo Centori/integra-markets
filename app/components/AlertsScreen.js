@@ -55,11 +55,9 @@ const AlertsScreen = ({ onNavigateToAlertPreferences, onNavigateToBookmarks }) =
     alertFrequency: 'Real-time',
     alertThreshold: 'Medium',
     pushNotifications: true,
-    emailAlerts: false,
   });
   const [preferencesLoaded, setPreferencesLoaded] = useState(false);
   const [pushAlerts, setPushAlerts] = useState(true);
-  const [emailAlerts, setEmailAlerts] = useState(false);
   const [priceAlerts, setPriceAlerts] = useState(true);
   const [newsAlerts, setNewsAlerts] = useState(true);
   // Prediction-market divergence alerts (new in 2026-06).
@@ -250,9 +248,6 @@ const AlertsScreen = ({ onNavigateToAlertPreferences, onNavigateToBookmarks }) =
       case 'push':
         setPushAlerts(value);
         break;
-      case 'email':
-        setEmailAlerts(value);
-        break;
       case 'price':
         setPriceAlerts(value);
         break;
@@ -428,16 +423,6 @@ const AlertsScreen = ({ onNavigateToAlertPreferences, onNavigateToBookmarks }) =
               onValueChange={(value) => handleSettingChange('push', value)}
               trackColor={{ false: colors.bgSecondary, true: colors.accentPositive }}
               thumbColor={pushAlerts ? colors.textPrimary : colors.textSecondary}
-            />
-          </View>
-          
-          <View style={styles.settingRow}>
-            <Text style={styles.settingLabel}>Email Alerts</Text>
-            <Switch
-              value={emailAlerts}
-              onValueChange={(value) => handleSettingChange('email', value)}
-              trackColor={{ false: colors.bgSecondary, true: colors.accentPositive }}
-              thumbColor={emailAlerts ? colors.textPrimary : colors.textSecondary}
             />
           </View>
           

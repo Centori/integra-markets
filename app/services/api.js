@@ -507,6 +507,42 @@ export const dashboardApi = {
         error: error.message,
       };
     }
+  },
+
+  // Full-article extraction, used by the Integra Analysis "refresh summary"
+  // button. Backend returns EITHER a success shape ({summary: string[], ...})
+  // OR a graceful-degradation shape ({error, fallback: true, message}) when
+  // its extraction library isn't available server-side — there is no
+  // `full_summary` field in either case, so the caller must read `summary`.
+  getArticleSummary: async (url, options = {}) => {
+    try {
+      const response = await fetchWithRetry(`${API_URL}/summarize/article`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          url,
+          sentences: options.sentences || 5,
+          commodity: options.commodity || null,
+        }),
+      });
+
+      if (!response.ok) {
+        throw new Error(`API error: ${response.status}`);
+      }
+
+      const result = await response.json();
+      if (result.fallback || result.error || !result.summary) {
+        return { full_summary: null, unavailable: true, message: result.message || result.error };
+      }
+
+      const summaryText = Array.isArray(result.summary) ? result.summary.join(' ') : result.summary;
+      return { full_summary: summaryText, sentiment_analysis: result.sentiment_analysis };
+    } catch (error) {
+      console.error('Article summary API error:', error);
+      return { full_summary: null, unavailable: true, message: error.message };
+    }
   }
 };
 

@@ -958,6 +958,8 @@ const AIAnalysisOverlay: React.FC<AIAnalysisOverlayProps> = ({ newsData: newsDat
                                             const result = await dashboardApi.getArticleSummary(articleUrl);
                                             if (result?.full_summary) {
                                                 setExpandedSummary(result.full_summary);
+                                            } else if (result?.unavailable) {
+                                                Alert.alert('Unavailable', 'Full article extraction is temporarily unavailable. Please try again later.');
                                             } else {
                                                 Alert.alert('No extra content', 'Could not extract more text from this article.');
                                             }

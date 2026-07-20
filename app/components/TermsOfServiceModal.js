@@ -34,55 +34,70 @@ const TermsOfServiceModal = ({ visible, onClose }) => {
           </TouchableOpacity>
         </View>
         
+        {/* Mirrors www.integramarkets.app/settings/terms — keep the two in sync */}
         <ScrollView style={styles.content} showsVerticalScrollIndicator={false}>
-          <Text style={styles.sectionTitle}>Acceptance of Terms</Text>
+          <Text style={styles.text}>Last updated: April 2026</Text>
+
+          <Text style={styles.sectionTitle}>1. Agreement to Terms</Text>
           <Text style={styles.text}>
-            By accessing and using Integra, you accept and agree to be bound by the terms 
-            and provision of this agreement.
+            These Terms of Service constitute a legally binding agreement made between you,
+            whether personally or on behalf of an entity ("you") and Integra Markets
+            ("Company", "we", "us", or "our"), concerning your access to and use of the
+            Integra Markets mobile application as well as any other form of media, media
+            channel, mobile website, or mobile application related, linked, or otherwise
+            connected thereto (collectively, the "Site").
           </Text>
-          
-          <Text style={styles.sectionTitle}>Use License</Text>
+
+          <Text style={styles.sectionTitle}>2. Financial Information Disclaimer</Text>
           <Text style={styles.text}>
-            Permission is granted to temporarily use Integra for personal, non-commercial 
-            transitory viewing only. This is the grant of a license, not a transfer of title.
+            Integra Markets provides AI-powered financial analysis and market insights for
+            informational purposes only. This information does not constitute financial
+            advice, investment recommendations, or trading signals. You acknowledge that:{'\n\n'}
+            • All market analysis is based on AI interpretation and may contain errors{'\n'}
+            • Past performance does not guarantee future results{'\n'}
+            • Trading and investment decisions carry inherent risks{'\n'}
+            • You should consult with qualified financial advisors before making investment decisions{'\n'}
+            • Integra Markets is not liable for any financial losses resulting from use of our services
           </Text>
-          
-          <Text style={styles.sectionTitle}>Disclaimer</Text>
+
+          <Text style={styles.sectionTitle}>3. API Key Management (BYOK)</Text>
           <Text style={styles.text}>
-            The materials on Integra are provided on an 'as is' basis. Integra makes no warranties, 
-            expressed or implied, and hereby disclaims and negates all other warranties including 
-            without limitation, implied warranties or conditions of merchantability, fitness for a 
-            particular purpose, or non-infringement of intellectual property or other violation of rights.
+            Our Bring Your Own Key (BYOK) model requires you to:{'\n\n'}
+            • Maintain valid API keys with supported AI providers (OpenAI, Anthropic, Groq){'\n'}
+            • Be responsible for all costs and usage associated with your API keys{'\n'}
+            • Ensure your API keys comply with the respective provider's terms of service{'\n'}
+            • Understand that we do not monitor or control your API usage{'\n'}
+            • Accept that service interruptions may occur due to API key issues or provider downtime
           </Text>
-          
-          <Text style={styles.sectionTitle}>Limitations</Text>
+
+          <Text style={styles.sectionTitle}>4. Prohibited Uses</Text>
           <Text style={styles.text}>
-            In no event shall Integra or its suppliers be liable for any damages (including, without 
-            limitation, damages for loss of data or profit, or due to business interruption) arising 
-            out of the use or inability to use Integra, even if Integra or an authorized representative 
-            has been notified orally or in writing of the possibility of such damage.
+            You may not use our service:{'\n\n'}
+            • For any unlawful purpose or to solicit others to unlawful acts{'\n'}
+            • To violate any international, federal, provincial, or state regulations or laws{'\n'}
+            • To impersonate or attempt to impersonate the Company, employees, or other users{'\n'}
+            • To engage in any automated use of the system
           </Text>
-          
-          <Text style={styles.sectionTitle}>Accuracy of Materials</Text>
+
+          <Text style={styles.sectionTitle}>5. Privacy Policy</Text>
           <Text style={styles.text}>
-            The materials appearing on Integra could include technical, typographical, or photographic 
-            errors. Integra does not warrant that any of the materials on its service are accurate, 
-            complete, or current.
+            Your privacy is important to us. Please review our Privacy Policy, which also
+            governs your use of the Site, to understand our practices.
           </Text>
-          
-          <Text style={styles.sectionTitle}>Modifications</Text>
+
+          <Text style={styles.sectionTitle}>6. Contact Information</Text>
           <Text style={styles.text}>
-            Integra may revise these terms of service at any time without notice. By using this 
-            service, you are agreeing to be bound by the then current version of these terms of service.
+            Questions about the Terms of Service should be sent to us at:{'\n\n'}
+            Email: contact@integramarkets.app
           </Text>
-          
-          <Text style={styles.sectionTitle}>Contact Information</Text>
+
           <Text style={styles.text}>
-            If you have any questions about these Terms of Service, please contact us at legal@integra.app
+            By using Integra Markets, you acknowledge that you have read and agree to these
+            Terms of Service.
           </Text>
-          
+
           <View style={styles.footer}>
-            <Text style={styles.footerText}>Last updated: December 2024</Text>
+            <Text style={styles.footerText}>Last updated: April 2026</Text>
           </View>
         </ScrollView>
       </SafeAreaView>

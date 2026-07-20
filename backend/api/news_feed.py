@@ -108,9 +108,17 @@ async def get_news_feed(
     except Exception as exc:  # noqa: BLE001
         logger.debug("news_enricher skipped in /feed: %s", exc)
 
-    # For non-basic_markets tiers, strip divergence fields from the response
-    # so paid features never leak into free responses.
-    if tier != "basic_markets":
+    # Strip divergence fields for tiers that shouldn't see them so paid
+    # features never leak into free responses.
+    #
+    # 'free_trial' allowed here to mirror app/services/entitlementGate.ts
+    # (divergence_alerts / polymarket_kalshi_view / divergence_filter opened
+    # 2026-07-14 "so trial users... can see and evaluate the Markets
+    # features"). Before this fix the client showed the Divergence filter to
+    # free_trial users while the backend silently stripped the data behind
+    # it — remove 'free_trial' from BOTH this line and entitlementGate.ts
+    # together before charging for basic_markets.
+    if tier not in ("free_trial", "basic_markets"):
         for art in articles:
             for k in ("divergenceStatus", "divergenceProvider", "divergenceDelta", "divergenceTopic"):
                 art.pop(k, None)
