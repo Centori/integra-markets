@@ -27,7 +27,7 @@
     ],
     "ios": {
       "bundleIdentifier": "com.centori.integramarkets",
-      "buildNumber": "82",
+      "buildNumber": "83",
       "deploymentTarget": "13.0",
       "supportsTablet": true,
       "requireFullScreen": false,
@@ -73,7 +73,7 @@
           "UNAuthorizationOptionProvidesAppNotificationSettings": true
         }
       },
-      "runtimeVersion": "1.0.3",
+      "runtimeVersion": "1.0.4",
       "jsEngine": "hermes",
       "appleTeamId": "2ABHLWV763",
       "usesAppleSignIn": true
@@ -95,7 +95,7 @@
         "android.permission.WRITE_EXTERNAL_STORAGE",
         "android.permission.USE_FINGERPRINT"
       ],
-      "runtimeVersion": "1.0.3"
+      "runtimeVersion": "1.0.4"
     },
     "web": {
       "favicon": "./assets/favicon.png",

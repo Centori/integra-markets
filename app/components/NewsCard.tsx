@@ -1,9 +1,14 @@
-import React, { useState } from 'react';
-import { View, Text, StyleSheet, TouchableOpacity, Linking, Alert, Share, Platform, ActionSheetIOS, Clipboard, Image } from 'react-native';
+import React, { useState, useRef } from 'react';
+import { View, Text, StyleSheet, TouchableOpacity, Linking, Alert, Share, Platform, ActionSheetIOS, Image } from 'react-native';
+import * as Clipboard from 'expo-clipboard';
+import { captureRef } from 'react-native-view-shot';
+import * as Sharing from 'expo-sharing';
+import { LinearGradient } from 'expo-linear-gradient';
 import { Feather, MaterialIcons } from '@expo/vector-icons';
 import * as Haptics from 'expo-haptics';
 import { SingleStar } from './CustomStarIcon';
 import PolymarketIcon from './PolymarketIcon';
+import KalshiIcon from './KalshiIcon';
 import { useBookmarks } from '../providers/BookmarkProvider';
 import { getPreferredSourceUrl } from '../utils/polymarketLinks';
 import { cleanSummaryText } from '../utils/cleanSummary';
@@ -53,6 +58,10 @@ export default function NewsCard({ item, onAIClick }: NewsCardProps) {
   const bookmarkLimit = useTierLimit('bookmarks', newsBookmarks.length);
   const [showBookmarkUpgrade, setShowBookmarkUpgrade] = useState(false);
   const paywall = usePaywall();
+  // Ref on the card root so we can capture it as an image to share (X/Twitter
+  // Web Intent can't attach media — the only way to share the card visual is to
+  // snapshot the view and hand the file to the native share sheet).
+  const cardRef = useRef<View>(null);
 
   // Tap anywhere on the card opens Integra Analysis (build-64 behavior).
   const handlePress = () => {
@@ -147,15 +156,17 @@ export default function NewsCard({ item, onAIClick }: NewsCardProps) {
     const fullShareText = shareUrl ? `${shareMessage}\n\nRead more: ${shareUrl}` : shareMessage;
     
     if (Platform.OS === 'ios') {
-      // iOS: Show ActionSheet with specific options
+      // iOS: Show ActionSheet with specific options. "Share Card Image" snapshots
+      // the card and shares the PNG (the only way to get the visual onto X).
       const options = [
         'Cancel',
+        'Share Card Image',
+        'Share on X (link)',
         'Share via Email',
-        'Share on Twitter',
         'Copy Link',
         'More Options'
       ];
-      
+
       ActionSheetIOS.showActionSheetWithOptions(
         {
           options,
@@ -166,16 +177,19 @@ export default function NewsCard({ item, onAIClick }: NewsCardProps) {
         async (buttonIndex) => {
           try {
             switch (buttonIndex) {
-              case 1: // Email
-                await handleEmailShare(shareMessage, shareUrl);
+              case 1: // Card image (native sheet → pick X/any app)
+                await handleImageShare();
                 break;
-              case 2: // Twitter
+              case 2: // X / Twitter (text + link, renders the source OG card)
                 await handleTwitterShare(item.title, shareUrl);
                 break;
-              case 3: // Copy Link
+              case 3: // Email
+                await handleEmailShare(shareMessage, shareUrl);
+                break;
+              case 4: // Copy Link
                 await handleCopyLink(shareUrl || fullShareText);
                 break;
-              case 4: // More Options (Native Share Sheet)
+              case 5: // More Options (native text share sheet)
                 await handleNativeShare(fullShareText, shareUrl);
                 break;
             }
@@ -186,8 +200,12 @@ export default function NewsCard({ item, onAIClick }: NewsCardProps) {
         }
       );
     } else {
-      // Android: Use native share directly
-      await handleNativeShare(fullShareText, shareUrl);
+      // Android: no ActionSheet — offer the same image-vs-link choice.
+      Alert.alert('Share Article', item.title, [
+        { text: 'Share Card Image', onPress: () => handleImageShare() },
+        { text: 'Share Link', onPress: () => handleNativeShare(fullShareText, shareUrl) },
+        { text: 'Cancel', style: 'cancel' },
+      ]);
     }
   };
   
@@ -229,11 +247,11 @@ export default function NewsCard({ item, onAIClick }: NewsCardProps) {
     try {
       if (preferredSourceUrl) {
         // Copy just the URL if available
-        await Clipboard.setString(preferredSourceUrl);
+        await Clipboard.setStringAsync(preferredSourceUrl);
         Alert.alert('Link Copied', `${isPolymarket ? 'Event' : 'Article'} link copied to clipboard.`);
       } else {
         // Copy the full text if no URL
-        await Clipboard.setString(content);
+        await Clipboard.setStringAsync(content);
         Alert.alert('Text Copied', 'Article content copied to clipboard.');
       }
     } catch (error) {
@@ -255,13 +273,35 @@ export default function NewsCard({ item, onAIClick }: NewsCardProps) {
       }
       
       const result = await Share.share(shareOptions);
-      
+
       if (result.action === Share.sharedAction) {
         console.log('Content shared successfully');
       }
     } catch (error) {
       console.error('Native share error:', error);
       Alert.alert('Share Error', 'Unable to share this article.');
+    }
+  };
+
+  // Snapshot the card view and share the PNG through the native share sheet.
+  // The user can then pick X (or any app) and post with the card image attached
+  // — the piece the x.com/intent text-only flow can't do. expo-sharing handles
+  // the file/content URI correctly on both iOS and Android.
+  const handleImageShare = async () => {
+    try {
+      if (!(await Sharing.isAvailableAsync())) {
+        Alert.alert('Sharing unavailable', 'Image sharing is not available on this device.');
+        return;
+      }
+      const uri = await captureRef(cardRef, { format: 'png', quality: 0.95 });
+      await Sharing.shareAsync(uri, {
+        mimeType: 'image/png',
+        dialogTitle: item.title,
+        UTI: 'public.png',
+      });
+    } catch (error) {
+      console.error('Image share error:', error);
+      Alert.alert('Share Error', 'Unable to capture the card image. Please try again.');
     }
   };
 
@@ -281,6 +321,8 @@ export default function NewsCard({ item, onAIClick }: NewsCardProps) {
 
   return (
     <TouchableOpacity
+      ref={cardRef}
+      collapsable={false}
       style={styles.card}
       onPress={handlePress}
       onLongPress={handleLongPress}
@@ -291,6 +333,17 @@ export default function NewsCard({ item, onAIClick }: NewsCardProps) {
           article has no image (build-64 behavior). Sentiment pill overlays the
           bottom-left, showing label + score, exactly as build 64. */}
       <View style={[styles.imageContainer, !item.image_url && styles.imageContainerFallback]}>
+        {/* Brand-gradient backdrop for the logo fallback — softens the hard
+            square edge of the icon against the flat background (matches the
+            preview's dark-green → charcoal wash). Only when no article image. */}
+        {!item.image_url && (
+          <LinearGradient
+            colors={['#21403A', '#16241F', '#101815']}
+            start={{ x: 0.15, y: 0.05 }}
+            end={{ x: 0.9, y: 1 }}
+            style={StyleSheet.absoluteFill}
+          />
+        )}
         <Image
           source={item.image_url ? { uri: item.image_url } : require('../../assets/NewLogoInt.png.png')}
           style={[styles.cardImage, !item.image_url && styles.cardImageFallback]}
@@ -337,7 +390,11 @@ export default function NewsCard({ item, onAIClick }: NewsCardProps) {
             divergence reading (sentiment vs. prediction-market gap). */}
         {item.divergenceStatus === 'DIVERGENCE' && item.divergenceProvider && typeof item.divergenceDelta === 'number' && (
           <View style={styles.divergenceFooter}>
-            <Feather name="alert-triangle" size={12} color="#fbbf24" />
+            {item.divergenceProvider === 'polymarket' ? (
+              <PolymarketIcon size={16} rounded={false} style={undefined} />
+            ) : (
+              <KalshiIcon size={16} rounded={false} style={undefined} />
+            )}
             <Text style={styles.divergenceText}>
               {item.divergenceProvider === 'polymarket' ? 'Polymarket' : 'Kalshi'}
               {' '}
@@ -428,9 +485,10 @@ const styles = StyleSheet.create({
     height: '100%',
   },
   cardImageFallback: {
-    opacity: 0.8,
-    width: '55%',
-    height: '55%',
+    opacity: 0.85,
+    width: '52%',
+    height: '52%',
+    borderRadius: 16, // soften the icon's square edge against the gradient
   },
   imageSentimentBadge: {
     position: 'absolute',

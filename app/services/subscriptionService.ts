@@ -13,7 +13,7 @@ import type { Tier } from './entitlementGate';
 // ⚠️ REPLACE_ME — paste your iOS Public SDK key from RevenueCat dashboard
 // (Project Settings → API Keys → iOS). Starts with `appl_`. This is public;
 // safe to commit. Do NOT paste the Secret V2 key here.
-const REVENUECAT_IOS_API_KEY = 'appl_REPLACE_WITH_YOUR_KEY';
+const REVENUECAT_IOS_API_KEY = 'appl_KkZPpwqYwBZmRDTIcKjfBRdUdjB';
 
 // Entitlement identifiers as configured in RevenueCat dashboard. When a user
 // subscribes to `basic_markets_monthly_v1`, RC should grant both entitlements
@@ -26,16 +26,22 @@ const ENTITLEMENT_IDS = {
 let _initialized = false;
 let _cachedTier: Tier = 'free_trial';
 
-// react-native-purchases is NOT installed (not in package.json / the binary).
-// DO NOT lazy-require it: Metro's guardedLoadModule routes an outermost
-// runtime require failure to ErrorUtils.reportFatalError — it NEVER reaches
-// a local try/catch — which SIGABRT'd every build since 65 at startup
-// (proven via on-device stack: unknownModuleError -> guardedLoadModule ->
-// metroRequire -> loadPurchases). Short-circuit to the free_trial fallback.
-// When RevenueCat is really added: `npx expo install react-native-purchases`,
-// new native build, THEN restore the require here.
+// react-native-purchases is now installed and linked into the native binary
+// (build 83+, via `npx expo install react-native-purchases`). The historical
+// SIGABRT came from lazy-requiring a MISSING module — Metro's guardedLoadModule
+// routes that outermost failure to ErrorUtils.reportFatalError, bypassing any
+// local try/catch. With the module present AND the require guarded to iOS (the
+// only wired platform), it resolves cleanly; web/Android bundles never execute
+// the require and fall back to free_trial.
 function loadPurchases(): typeof import('react-native-purchases') | null {
-  return null;
+  if (Platform.OS !== 'ios') return null;
+  try {
+    // eslint-disable-next-line @typescript-eslint/no-var-requires
+    return require('react-native-purchases');
+  } catch (err) {
+    console.warn('[subscriptions] react-native-purchases not linked:', err);
+    return null;
+  }
 }
 
 export async function initSubscriptions(userId?: string): Promise<void> {

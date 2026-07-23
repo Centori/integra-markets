@@ -1,5 +1,5 @@
 // Full Integra App v1.0 - TestFlight Ready with All Features
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import {
   StyleSheet,
   Text,
@@ -48,6 +48,7 @@ import EditAlertsModal from './components/EditAlertsModal';
 import AlertsScreen from './components/AlertsScreen';
 import NewsCard from './components/NewsCard';
 import AIAnalysisOverlay from './components/AIAnalysisOverlay';
+import { bootstrapEntitlements } from './hooks/useEntitlement';
 import ProfileScreen from './components/ProfileScreen';
 import { BookmarkProvider } from './providers/BookmarkProvider';
 import PrivacyPolicyModal from './components/PrivacyPolicyModal';
@@ -114,6 +115,43 @@ const sampleNewsData = [
   },
 ];
 
+// One-off demo divergence card. It is injected into the Today feed ONLY when the
+// live feed contains no real divergence-tagged article yet (see getFilteredNews),
+// so that build 83 always shows at least one prediction-market divergence card
+// with the Polymarket/Kalshi mark. The moment the backend enriches a real article
+// with `divergenceStatus: 'DIVERGENCE'`, this card drops out automatically and the
+// live one takes over — no other live card is touched. `__isMockDivergence` marks
+// it so it is never cached or counted as real data.
+const MOCK_DIVERGENCE_CARD = {
+  id: 'mock-divergence',
+  __isMockDivergence: true,
+  title: 'Crude oil sentiment diverges from prediction-market pricing',
+  summary:
+    'News flow around crude is running more bearish than Polymarket’s implied '
+    + 'probability suggests — a gap the market has not yet priced in. Sample card '
+    + 'shown while live divergence data is unavailable; it refreshes automatically '
+    + 'when a real divergence signal arrives.',
+  fullSummary:
+    'News flow around crude is running more bearish than the prediction market’s '
+    + 'implied probability, opening a measurable gap between the crowd and the '
+    + 'headlines. This is a demonstration card and self-replaces once live '
+    + 'divergence data is available.',
+  source: 'Integra',
+  sourceUrl: '',
+  timeAgo: 'just now',
+  sentiment: 'BEARISH',
+  sentimentScore: '0.68',
+  keywords: ['crude oil', 'divergence', 'prediction market'],
+  marketImpact: 'MEDIUM',
+  commodities: ['Crude Oil'],
+  // Divergence enrichment fields the NewsCard footer + analysis overlay render.
+  divergenceProvider: 'polymarket',
+  divergenceStatus: 'DIVERGENCE',
+  divergenceDelta: -0.28, // signed: news more bearish than market → "overpricing"
+  divergenceTopic: 'crude_oil',
+  timestamp: Date.now(),
+};
+
 // Profile Screen Component
 
 
@@ -144,6 +182,19 @@ const App = () => {
   const [alertPreferences, setAlertPreferences] = useState(null);
   const [refreshing, setRefreshing] = useState(false);
   const [loadingMore, setLoadingMore] = useState(false);
+
+  // Initialize RevenueCat + resolve the user's tier exactly once, as soon as we
+  // know who the user is (covers every path: session-restore, fresh login,
+  // guest). `bootstrapEntitlements` is idempotent, so re-runs are harmless.
+  const entitlementsBootstrapped = useRef(false);
+  useEffect(() => {
+    if (userData && !entitlementsBootstrapped.current) {
+      entitlementsBootstrapped.current = true;
+      bootstrapEntitlements(userData.id).catch((err) =>
+        console.warn('[entitlements] bootstrap failed:', err)
+      );
+    }
+  }, [userData]);
 
   // Load alert preferences
   const loadAlertPreferences = async () => {
@@ -837,12 +888,15 @@ const App = () => {
 
     // Fetch full profile from Supabase
     let fullUserData = { ...authData };
+    let profileComplete = false;
     try {
       const { supabaseService } = require('./services/supabaseService');
       const profile = await supabaseService.getProfile(authData.id);
 
       if (profile) {
         console.log('[App] Loaded profile from Supabase:', profile);
+        // A populated profile means this user has onboarded before.
+        profileComplete = !!(profile.username || profile.role || profile.experience_level);
         fullUserData = {
           ...authData,
           username: profile.username || authData.username,
@@ -865,23 +919,27 @@ const App = () => {
     await AsyncStorage.setItem('user_data', JSON.stringify(fullUserData));
     setShowAuth(false);
 
-    // Check if we should skip onboarding (returning user)
-    if (authData.skipOnboarding) {
-      console.log('User has skipOnboarding=true, checking alerts...');
-      // User has already completed onboarding, go straight to main app
-      const alertsCompleted = await AsyncStorage.getItem('alerts_completed');
-      console.log('Alerts completed status:', alertsCompleted);
+    // Returning users must never be forced back through onboarding. Treat the
+    // user as onboarded if their Supabase profile is populated OR we've locally
+    // recorded completion — not only when a caller passes skipOnboarding (no
+    // auth handler ever set that, which is why sign-in kept re-onboarding).
+    const onboardingCompletedFlag = await AsyncStorage.getItem('onboarding_completed');
+    const alreadyOnboarded =
+      authData.skipOnboarding === true ||
+      onboardingCompletedFlag === 'true' ||
+      profileComplete;
 
+    if (alreadyOnboarded) {
+      console.log('Returning user — skipping onboarding');
+      // Persist so subsequent sign-ins are instant even before the profile loads.
+      await AsyncStorage.setItem('onboarding_completed', 'true');
+      const alertsCompleted = await AsyncStorage.getItem('alerts_completed');
       if (alertsCompleted !== 'true') {
-        console.log('Showing alert preferences');
         setShowAlertPreferences(true);
-      } else {
-        console.log('All onboarding complete, showing main app');
       }
-      // Otherwise, show main app (all flags remain false)
+      // else: fully set up — show the main app (all flags remain false)
     } else {
-      console.log('User needs onboarding, showing onboarding screen');
-      // New user or user who hasn't completed onboarding
+      console.log('New user — showing onboarding');
       setShowOnboarding(true);
     }
   };
@@ -1112,10 +1170,24 @@ const App = () => {
   };
 
   const getFilteredNews = () => {
-    if (activeFilter === 'All') return liveNews;
+    if (activeFilter === 'All') return withMockDivergence(liveNews);
     // When filtering by sentiment, search ALL news — not just the paginated slice.
     // This ensures Bearish/Bullish articles beyond the initial 8 are shown immediately.
     return allNews.filter(item => item.sentiment === activeFilter.toUpperCase());
+  };
+
+  // Inject the one-off demo divergence card only when (a) real news has loaded
+  // and (b) no live article already carries a DIVERGENCE signal. As soon as the
+  // backend enriches a real card, the condition flips false and the mock drops
+  // out — live data always wins, other cards are never mutated or reordered.
+  const withMockDivergence = (items) => {
+    if (!Array.isArray(items) || items.length === 0) return items;
+    const hasLiveDivergence = items.some(
+      (n) => n.divergenceStatus === 'DIVERGENCE' && !n.__isMockDivergence,
+    );
+    if (hasLiveDivergence) return items;
+    // Place it second so it is visible without displacing the newest headline.
+    return [items[0], MOCK_DIVERGENCE_CARD, ...items.slice(1)];
   };
 
   const handleLoadMore = async () => {
@@ -1448,16 +1520,6 @@ const App = () => {
       <View style={styles.container}>
         <View style={styles.header}>
           <Text style={styles.headerTitle}>Today</Text>
-          <TouchableOpacity onPress={async () => {
-            const enabled = await ensurePushEnabled();
-            if (enabled) {
-              setActiveNav('Alerts');
-            } else {
-              openSystemSettings();
-            }
-          }}>
-            <MaterialIcons name="notifications-none" size={24} color={colors.textPrimary} />
-          </TouchableOpacity>
         </View>
 
         {!notifEnabled && !bannerDismissed && (

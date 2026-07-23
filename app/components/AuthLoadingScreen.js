@@ -101,14 +101,14 @@ const AuthLoadingScreen = ({ onAuthComplete, onSkip }) => {
                 // Updater stays pure — completion side effect lives in the
                 // effect below (React may invoke updaters twice).
                 setProgress((prev) => (prev >= 100 ? 100 : prev + 1));
-            }, 30); // Faster loading
+            }, 10); // ~1s branded splash (was 30ms ≈ 3s of dead time)
             return () => clearInterval(timer);
         }
     }, [currentScreen]);
 
     useEffect(() => {
         if (currentScreen === 'loading' && progress >= 100) {
-            const t = setTimeout(() => setCurrentScreen('auth'), 500);
+            const t = setTimeout(() => setCurrentScreen('auth'), 120);
             return () => clearTimeout(t);
         }
     }, [currentScreen, progress]);
@@ -116,7 +116,7 @@ const AuthLoadingScreen = ({ onAuthComplete, onSkip }) => {
     useEffect(() => {
         Animated.timing(progressAnim, {
             toValue: progress,
-            duration: 30,
+            duration: 10,
             useNativeDriver: false,
         }).start();
     }, [progress]);
@@ -161,26 +161,42 @@ const AuthLoadingScreen = ({ onAuthComplete, onSkip }) => {
             setIsLoading(false);
 
             if (result.success) {
-                // Check if email confirmation is required
+                // Sign-up while the project requires email confirmation: no
+                // session exists yet, so we must NOT proceed as logged in.
                 if (result.requiresConfirmation) {
                     Alert.alert(
-                        'Confirm Your Email',
-                        result.message || 'Please check your email to confirm your account',
+                        'Confirm your email',
+                        `We sent a verification link to ${email.trim()} from integramarkets.app. Tap it to activate your account, then sign in.`,
                         [{ text: 'OK' }]
                     );
                     return;
                 }
 
-                // Successful authentication
+                // Real authenticated session — use the actual Supabase user id,
+                // never a fabricated one (a fake id was breaking profile loads).
+                if (!result.user?.id) {
+                    Alert.alert('Sign-in issue', 'Signed in, but your account could not be loaded. Please try again.');
+                    return;
+                }
                 const userData = {
-                    id: result.user?.id || Date.now().toString(),
-                    email: result.user?.email || email.trim(),
-                    fullName: result.user?.fullName || (isSignUp ? fullName.trim() : email.split('@')[0]),
-                    username: email.split('@')[0],
+                    id: result.user.id,
+                    email: result.user.email || email.trim(),
+                    fullName: result.user.fullName || (isSignUp ? fullName.trim() : ''),
+                    username: (result.user.email || email).split('@')[0],
                     authMethod: 'email',
                     isNewUser: isSignUp,
                 };
                 onAuthComplete(userData);
+            } else if (result.needsEmailConfirmation) {
+                // Sign-in blocked because the account is not yet confirmed.
+                Alert.alert(
+                    'Email not confirmed',
+                    'Please confirm your email first — check your inbox for the link from integramarkets.app.',
+                    [
+                        { text: 'Resend email', onPress: () => authService.sendVerificationEmail(email.trim()) },
+                        { text: 'OK', style: 'cancel' },
+                    ]
+                );
             } else {
                 // Show error message
                 Alert.alert(
@@ -207,10 +223,10 @@ const AuthLoadingScreen = ({ onAuthComplete, onSkip }) => {
             setIsLoading(false);
             if (result.success) {
                 onAuthComplete({
-                    id: Date.now().toString(),
-                    email: '',
-                    fullName: '',
-                    username: 'apple_user',
+                    id: result.user?.id,
+                    email: result.user?.email || '',
+                    fullName: result.user?.fullName || '',
+                    username: (result.user?.email || 'apple_user').split('@')[0],
                     authMethod: 'apple',
                     isNewUser: false,
                 });
@@ -231,10 +247,10 @@ const AuthLoadingScreen = ({ onAuthComplete, onSkip }) => {
             setIsLoading(false);
             if (result.success) {
                 onAuthComplete({
-                    id: Date.now().toString(),
-                    email: '',
-                    fullName: '',
-                    username: 'google_user',
+                    id: result.user?.id,
+                    email: result.user?.email || '',
+                    fullName: result.user?.fullName || '',
+                    username: (result.user?.email || 'google_user').split('@')[0],
                     authMethod: 'google',
                     isNewUser: false,
                 });

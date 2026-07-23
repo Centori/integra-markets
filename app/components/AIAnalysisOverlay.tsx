@@ -1,10 +1,16 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { View, Text, StyleSheet, Modal, TouchableOpacity, ScrollView, Platform, Clipboard, Alert, Linking, Animated, Easing, ActivityIndicator } from 'react-native';
+import { View, Text, StyleSheet, Modal, TouchableOpacity, ScrollView, Platform, Alert, Linking, Animated, Easing, ActivityIndicator } from 'react-native';
+import * as Clipboard from 'expo-clipboard';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { MaterialIcons } from '@expo/vector-icons';
 import { useBookmarks } from '../providers/BookmarkProvider';
 import { sentimentApi, dashboardApi } from '../services/api';
 import { supabaseService } from '../services/supabaseService';
+import { BlurView } from 'expo-blur';
+import { useEntitlement } from '../hooks/useEntitlement';
+import { usePaywall } from '../paywall/PaywallProvider';
+import PolymarketIcon from './PolymarketIcon';
+import KalshiIcon from './KalshiIcon';
 
 interface NewsData {
     title?: string;
@@ -43,6 +49,25 @@ interface AIAnalysisOverlayProps {
     onClose: () => void;
 }
 
+// Pro-gate: Pro users see children normally; free users see the real content
+// blurred behind an "Upgrade to Pro" overlay that opens the paywall on tap.
+function ProGate({ locked, onUpgrade, children }: { locked: boolean; onUpgrade: () => void; children: React.ReactNode }) {
+    if (!locked) return <>{children}</>;
+    return (
+        <View style={styles.gateWrap}>
+            <View pointerEvents="none">{children}</View>
+            <BlurView intensity={24} tint="dark" style={StyleSheet.absoluteFill} />
+            <TouchableOpacity style={styles.gateOverlay} activeOpacity={0.9} onPress={onUpgrade}>
+                <View style={styles.gateBadge}>
+                    <MaterialIcons name="lock-outline" size={22} color="#4ECCA3" />
+                </View>
+                <Text style={styles.gateTitle}>Upgrade to Pro for full access</Text>
+                <Text style={styles.gateSub}>Key drivers · market impact · community poll</Text>
+            </TouchableOpacity>
+        </View>
+    );
+}
+
 const AIAnalysisOverlay: React.FC<AIAnalysisOverlayProps> = ({ newsData: newsDataProp, news, isVisible, onClose }) => {
     // Support both prop names
     // Support both prop names and unwrap originalArticle if present (from Alerts)
@@ -66,6 +91,9 @@ const AIAnalysisOverlay: React.FC<AIAnalysisOverlayProps> = ({ newsData: newsDat
     // After voting, results can be collapsed with the X and reopened.
     const [pollCollapsed, setPollCollapsed] = useState(false);
     const { addNewsBookmark, removeBookmark, isBookmarked, bookmarks } = useBookmarks();
+    const { tier } = useEntitlement();
+    const paywall = usePaywall();
+    const isPro = tier === 'basic' || tier === 'basic_markets';
     const [analysis, setAnalysis] = useState<{
         summary: string;
         finBertSentiment: { bullish: number; bearish: number; neutral: number };
@@ -303,7 +331,12 @@ const AIAnalysisOverlay: React.FC<AIAnalysisOverlayProps> = ({ newsData: newsDat
     const isCurrentlyBookmarked = newsData ? isBookmarked(newsData.title || '') : false;
 
     const handleBookmarkToggle = async () => {
-        if (!newsData || !analysis) return;
+        // Only require newsData — analysisData carries a fallback built from
+        // newsData, so bookmarking works even before the internal analysis
+        // computes (previously guarding on `analysis` made the button a silent
+        // no-op during the load window / if analysis never populated).
+        if (!newsData) return;
+        const fb = analysisData.finBertSentiment;
 
         try {
             if (isCurrentlyBookmarked) {
@@ -315,17 +348,13 @@ const AIAnalysisOverlay: React.FC<AIAnalysisOverlayProps> = ({ newsData: newsDat
             } else {
                 await addNewsBookmark({
                     title: newsData.title || '',
-                    summary: analysis.summary,
+                    summary: analysisData.summary,
                     source: newsData.source,
                     sourceUrl: newsData.sourceUrl || '',
-                    sentiment: analysis.finBertSentiment.bullish > analysis.finBertSentiment.bearish
-                        ? (analysis.finBertSentiment.bullish > analysis.finBertSentiment.neutral ? 'BULLISH' : 'NEUTRAL')
-                        : (analysis.finBertSentiment.bearish > analysis.finBertSentiment.neutral ? 'BEARISH' : 'NEUTRAL'),
-                    sentimentScore: Math.max(
-                        analysis.finBertSentiment.bullish,
-                        analysis.finBertSentiment.bearish,
-                        analysis.finBertSentiment.neutral
-                    ) / 100
+                    sentiment: fb.bullish > fb.bearish
+                        ? (fb.bullish > fb.neutral ? 'BULLISH' : 'NEUTRAL')
+                        : (fb.bearish > fb.neutral ? 'BEARISH' : 'NEUTRAL'),
+                    sentimentScore: Math.max(fb.bullish, fb.bearish, fb.neutral) / 100
                 });
                 Alert.alert('Saved', 'AI Analysis saved to bookmarks');
             }
@@ -821,21 +850,43 @@ const AIAnalysisOverlay: React.FC<AIAnalysisOverlayProps> = ({ newsData: newsDat
 
     if (!newsData) return null;
 
-    const copyToClipboard = (text: string, sectionName: string) => {
-        // `Clipboard` from react-native is undefined on RN 0.76 (removed from core).
-        // Guard so tapping copy can never crash; no-op if unavailable.
-        if (Clipboard && typeof Clipboard.setString === 'function') {
-            Clipboard.setString(text);
+    // Plain-language methodology note for the divergence signal. Explains the
+    // concept (news sentiment vs. market-implied probability) without exposing
+    // the proprietary model — no lexicon, weights, thresholds, or lookback.
+    const showDivergenceInfo = () => {
+        Alert.alert(
+            'How divergence works',
+            'Integra compares its aggregated news-sentiment reading for a topic against the '
+            + 'probability implied by prediction markets (Polymarket / Kalshi) over the same period.\n\n'
+            + 'When the two disagree by more than a set margin, we flag it:\n'
+            + '• “underpricing” — the news is more bullish than the market’s price implies\n'
+            + '• “overpricing” — the news is more bearish than the market implies\n\n'
+            + 'The number is the size of that gap. It’s a directional research signal, not '
+            + 'investment advice — market-implied probabilities can move quickly.',
+            [{ text: 'Got it' }]
+        );
+    };
+
+    const copyToClipboard = async (text: string, sectionName: string) => {
+        // expo-clipboard replaces RN-core `Clipboard`, which is undefined on RN 0.76.
+        try {
+            await Clipboard.setStringAsync(text);
             Alert.alert('Copied!', `${sectionName} copied to clipboard`);
-        } else {
-            Alert.alert('Copy unavailable', 'Clipboard is not available in this build.');
+        } catch {
+            Alert.alert('Copy failed', 'Could not copy to clipboard. Please try again.');
         }
     };
 
+    // Free users only get summary + sentiment (the same split as the on-screen
+    // Pro gate). Copying must not leak the Pro-gated key drivers / market impact.
     const formatAnalysisForCopy = () => {
         const sentiment = `Bullish: ${analysisData.finBertSentiment.bullish}%, Bearish: ${analysisData.finBertSentiment.bearish}%, Neutral: ${analysisData.finBertSentiment.neutral}%`;
+        const head = `INTEGRA AI ANALYSIS\n\nArticle: ${newsData.title}\nSource: ${newsData.source}\n\nSUMMARY:\n${analysisData.summary}\n\nSENTIMENT:\n${sentiment}`;
+        if (!isPro) {
+            return `${head}\n\n— Upgrade to Pro for key drivers & market impact.`;
+        }
         const drivers = analysisData.keyDrivers.map(d => `${d.text} (${d.score})`).join(', ');
-        return `INTEGRA AI ANALYSIS\n\nArticle: ${newsData.title}\nSource: ${newsData.source}\n\nSUMMARY:\n${analysisData.summary}\n\nSENTIMENT:\n${sentiment}\n\nKEY DRIVERS:\n${drivers}\n\nMARKET IMPACT:\n${analysisData.marketImpact.level} (Confidence: ${analysisData.marketImpact.confidence})`;
+        return `${head}\n\nKEY DRIVERS:\n${drivers}\n\nMARKET IMPACT:\n${analysisData.marketImpact.level} (Confidence: ${analysisData.marketImpact.confidence})`;
     };
 
     const analysisData = analysis || {
@@ -1015,6 +1066,38 @@ const AIAnalysisOverlay: React.FC<AIAnalysisOverlayProps> = ({ newsData: newsDat
                                 </View>
                             </View>
 
+                            {/* Prediction-market divergence (shown to all when present) */}
+                            {newsData?.divergenceStatus === 'DIVERGENCE' && newsData?.divergenceProvider && typeof newsData?.divergenceDelta === 'number' && (
+                                <View style={styles.section}>
+                                    <View style={styles.sectionHeader}>
+                                        <View style={styles.sectionIndicator} />
+                                        <Text style={styles.sectionTitle}>Prediction Market</Text>
+                                        <TouchableOpacity
+                                            onPress={showDivergenceInfo}
+                                            style={styles.divergenceInfoBtn}
+                                            hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+                                            accessibilityLabel="How divergence is calculated"
+                                        >
+                                            <MaterialIcons name="info-outline" size={15} color="#A0A0A0" />
+                                        </TouchableOpacity>
+                                    </View>
+                                    <View style={styles.divergenceRow}>
+                                        {newsData.divergenceProvider === 'polymarket' ? (
+                                            <PolymarketIcon size={22} rounded={false} style={undefined} />
+                                        ) : (
+                                            <KalshiIcon size={22} rounded={false} style={undefined} />
+                                        )}
+                                        <Text style={styles.divergenceOverlayText}>
+                                            {newsData.divergenceProvider === 'polymarket' ? 'Polymarket' : 'Kalshi'} is{' '}
+                                            {newsData.divergenceDelta > 0 ? 'underpricing' : 'overpricing'} this by{' '}
+                                            {Math.round(Math.abs(newsData.divergenceDelta) * 100)}pt vs. news sentiment
+                                        </Text>
+                                    </View>
+                                </View>
+                            )}
+
+                            {/* Pro-gated: deep analysis (drivers, market impact, poll) */}
+                            <ProGate locked={!isPro} onUpgrade={() => paywall.open()}>
                             {/* Key Sentiment Drivers - Now with individual keywords */}
                             <View style={styles.section}>
                                 <View style={styles.sectionHeader}>
@@ -1185,6 +1268,7 @@ const AIAnalysisOverlay: React.FC<AIAnalysisOverlayProps> = ({ newsData: newsDat
                                     </View>
                                 )}
                             </Animated.View>
+                            </ProGate>
                         </ScrollView>
                     </View>
                 </View>
@@ -1264,6 +1348,51 @@ const AIAnalysisOverlay: React.FC<AIAnalysisOverlayProps> = ({ newsData: newsDat
 };
 
 const styles = StyleSheet.create({
+    gateWrap: {
+        position: 'relative',
+        borderRadius: 12,
+        overflow: 'hidden',
+    },
+    gateOverlay: {
+        ...StyleSheet.absoluteFillObject,
+        alignItems: 'center',
+        justifyContent: 'center',
+        paddingHorizontal: 24,
+        gap: 4,
+    },
+    gateBadge: {
+        width: 44,
+        height: 44,
+        borderRadius: 22,
+        alignItems: 'center',
+        justifyContent: 'center',
+        backgroundColor: 'rgba(78,204,163,0.12)',
+        borderWidth: 1,
+        borderColor: 'rgba(78,204,163,0.4)',
+        marginBottom: 8,
+    },
+    gateTitle: {
+        color: '#ECECEC',
+        fontSize: 16,
+        fontWeight: '700',
+        textAlign: 'center',
+    },
+    gateSub: {
+        color: '#A0A0A0',
+        fontSize: 12.5,
+        textAlign: 'center',
+    },
+    divergenceRow: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        gap: 10,
+    },
+    divergenceOverlayText: {
+        flex: 1,
+        color: '#ECECEC',
+        fontSize: 13.5,
+        lineHeight: 19,
+    },
     overlayContainer: {
         flex: 1,
         backgroundColor: 'rgba(0, 0, 0, 0.8)',
@@ -1349,6 +1478,10 @@ const styles = StyleSheet.create({
         flexDirection: 'row',
         alignItems: 'center',
         marginBottom: 12,
+    },
+    divergenceInfoBtn: {
+        marginLeft: 6,
+        padding: 2,
     },
     sectionIndicator: {
         width: 3,

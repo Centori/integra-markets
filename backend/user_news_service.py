@@ -25,6 +25,20 @@ except ImportError:
 try:
     from nltk.sentiment.vader import SentimentIntensityAnalyzer
     vader_analyzer = SentimentIntensityAnalyzer()
+    # Extend VADER's general lexicon with the finance-tuned terms so the FEED
+    # scores articles at the same ~69% accuracy as the /api/sentiment engine
+    # (main_simple_nlp.py). Without this the feed ran plain VADER (~54% on
+    # financial text). Scales mirror main_simple_nlp.py (SENTIBIG=0.1, HENRY=2.0/1.5).
+    try:
+        from services.lexicons import HENRY, SENTI_BIG_NOMICS
+        vader_analyzer.lexicon.update({k: v * 0.1 for k, v in SENTI_BIG_NOMICS.items()})
+        vader_analyzer.lexicon.update({k: v * (2.0 / 1.5) for k, v in HENRY.items()})
+        logging.info(
+            "user_news_service VADER lexicon extended: +%d SentiBignomics, +%d Henry",
+            len(SENTI_BIG_NOMICS), len(HENRY),
+        )
+    except ImportError as _lex_err:
+        logging.warning("finance lexicons unavailable in feed, using plain VADER: %s", _lex_err)
     VADER_AVAILABLE = True
 except ImportError:
     VADER_AVAILABLE = False

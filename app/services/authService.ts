@@ -22,7 +22,47 @@ function ensureGoogleSigninConfigured() {
   _googleSigninConfigured = true;
 }
 
-export type AuthOutcome = { success: boolean; error?: string };
+export type AuthUser = {
+  id: string;
+  email: string;
+  fullName: string;
+  emailConfirmed: boolean;
+};
+
+export type AuthOutcome = {
+  success: boolean;
+  error?: string;
+  /** The real Supabase user — screens must use this id, never a fabricated one. */
+  user?: AuthUser;
+  /** Sign-up succeeded but a session does NOT yet exist: the user must click
+   *  the confirmation link before they can sign in. */
+  requiresConfirmation?: boolean;
+  /** Sign-in failed specifically because the email hasn't been confirmed yet. */
+  needsEmailConfirmation?: boolean;
+};
+
+/** Normalize a Supabase user object into the shape the app's screens consume. */
+function mapAuthUser(
+  user:
+    | {
+        id: string;
+        email?: string;
+        email_confirmed_at?: string | null;
+        user_metadata?: Record<string, unknown>;
+      }
+    | null
+    | undefined,
+): AuthUser | undefined {
+  if (!user) return undefined;
+  const meta = user.user_metadata ?? {};
+  const fullName = (meta.full_name as string) || (meta.name as string) || '';
+  return {
+    id: user.id,
+    email: user.email ?? '',
+    fullName,
+    emailConfirmed: user.email_confirmed_at != null,
+  };
+}
 
 export class AuthService {
   /**
@@ -32,9 +72,19 @@ export class AuthService {
    */
   async signInWithEmail(email: string, password: string): Promise<AuthOutcome> {
     try {
-      const { error } = await supabase.auth.signInWithPassword({ email, password });
-      if (error) throw error;
-      return { success: true };
+      const { data, error } = await supabase.auth.signInWithPassword({ email, password });
+      if (error) {
+        // Distinguish "email not yet confirmed" so the UI can prompt the user
+        // to check their inbox instead of showing a generic failure.
+        if (
+          (error as { code?: string }).code === 'email_not_confirmed' ||
+          /not confirmed/i.test(error.message ?? '')
+        ) {
+          return { success: false, error: error.message, needsEmailConfirmation: true };
+        }
+        throw error;
+      }
+      return { success: true, user: mapAuthUser(data.user) };
     } catch (error: any) {
       console.error('Error signing in with email:', error);
       return { success: false, error: error?.message ?? 'sign_in_failed' };
@@ -52,13 +102,21 @@ export class AuthService {
     userData?: Record<string, unknown>,
   ): Promise<AuthOutcome> {
     try {
-      const { error } = await supabase.auth.signUp({
+      const { data, error } = await supabase.auth.signUp({
         email,
         password,
         options: userData ? { data: userData } : undefined,
       });
       if (error) throw error;
-      return { success: true };
+      // When the project requires email confirmation, Supabase returns a user
+      // record but NO session — the account isn't usable until the link is
+      // clicked. Signal that so the UI shows "check your email" rather than
+      // dropping the user into a session-less, broken "logged in" state.
+      return {
+        success: true,
+        user: mapAuthUser(data.user),
+        requiresConfirmation: !data.session,
+      };
     } catch (error: any) {
       console.error('Error signing up with email:', error);
       return { success: false, error: error?.message ?? 'sign_up_failed' };
@@ -107,7 +165,20 @@ export class AuthService {
 
       await persistAppleNameIfFirstSignIn(credential, data.user?.id);
 
-      return { success: true };
+      // Apple only returns the name on first sign-in; merge it in so the
+      // profile isn't blank before the user_metadata has populated.
+      const mapped = mapAuthUser(data.user);
+      const appleName = [
+        credential.fullName?.givenName,
+        credential.fullName?.familyName,
+      ]
+        .filter(Boolean)
+        .join(' ')
+        .trim();
+      return {
+        success: true,
+        user: mapped ? { ...mapped, fullName: mapped.fullName || appleName } : mapped,
+      };
     } catch (error: any) {
       if (error?.code === 'ERR_REQUEST_CANCELED') {
         return { success: false, error: 'cancelled' };
@@ -158,12 +229,12 @@ export class AuthService {
       if (!idToken) {
         return { success: false, error: 'missing_identity_token' };
       }
-      const { error } = await supabase.auth.signInWithIdToken({
+      const { data, error } = await supabase.auth.signInWithIdToken({
         provider: 'google',
         token: idToken,
       });
       if (error) throw error;
-      return { success: true };
+      return { success: true, user: mapAuthUser(data.user) };
     } catch (error: any) {
       if (
         error?.code === GoogleStatusCodes?.SIGN_IN_CANCELLED ||
@@ -195,8 +266,14 @@ export class AuthService {
    */
   async sendPasswordResetEmail(email: string): Promise<{ success: boolean; error?: string }> {
     try {
+      // window.location only exists on web; on native use the app deep link
+      // so password reset doesn't throw a ReferenceError.
+      const redirectTo =
+        Platform.OS === 'web' && typeof window !== 'undefined'
+          ? `${window.location.origin}/auth/reset-password`
+          : 'integra://auth/reset-password';
       const { error } = await supabase.auth.resetPasswordForEmail(email, {
-        redirectTo: `${window.location.origin}/auth/reset-password`,
+        redirectTo,
       });
 
       if (error) {

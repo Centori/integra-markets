@@ -15,6 +15,7 @@ import { MaterialIcons } from '@expo/vector-icons';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import HollowCircularIcon from './HollowCircularIcon';
 import alertMonitoringService from '../services/alertMonitoringService';
+import supabaseService from '../services/supabaseService';
 import { useEntitlement } from '../hooks/useEntitlement';
 import { canAccess } from '../services/entitlementGate';
 import { usePaywall } from '../paywall/PaywallProvider';
@@ -270,10 +271,13 @@ const AlertsScreen = ({ onNavigateToAlertPreferences, onNavigateToBookmarks }) =
     }
   };
 
-  // Persist to AsyncStorage immediately (so the toggle survives a kill).
-  // Backend sync happens in the next request cycle via the existing
-  // user preferences PATCH endpoint — wiring that here would create
-  // a tight coupling; instead the value is read alongside other prefs.
+  // Persist to AsyncStorage immediately (so the toggle survives a kill) AND
+  // upsert into the Supabase `alert_preferences` row that the backend
+  // `jobs/divergence_monitor.py` polls (`divergence_alerts_enabled`). Without
+  // this bridge the monitor never sees the user, so divergence push alerts
+  // could not fire. supabaseService also writes the AsyncStorage backup, but
+  // we keep the local write here too so the UI state is durable even if the
+  // network call throws.
   const persistDivergencePrefs = async ({ enabled, threshold }) => {
     try {
       await AsyncStorage.setItem(
@@ -281,7 +285,15 @@ const AlertsScreen = ({ onNavigateToAlertPreferences, onNavigateToBookmarks }) =
         JSON.stringify({ enabled, threshold }),
       );
     } catch (err) {
-      console.warn('failed to persist divergence prefs:', err);
+      console.warn('failed to persist divergence prefs locally:', err);
+    }
+    try {
+      const res = await supabaseService.saveDivergenceAlertPreferences({ enabled, threshold });
+      if (!res?.success) {
+        console.warn('divergence prefs backend sync failed:', res?.error);
+      }
+    } catch (err) {
+      console.warn('failed to sync divergence prefs to backend:', err);
     }
   };
 
@@ -312,12 +324,6 @@ const AlertsScreen = ({ onNavigateToAlertPreferences, onNavigateToBookmarks }) =
       {/* Header */}
       <View style={styles.header}>
         <Text style={styles.headerTitle}>Alerts</Text>
-        <TouchableOpacity 
-          style={styles.bookmarkButton}
-          onPress={onNavigateToBookmarks}
-        >
-          <MaterialIcons name="bookmark" size={24} color={colors.textPrimary} />
-        </TouchableOpacity>
       </View>
 
       <ScrollView 

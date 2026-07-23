@@ -36,15 +36,6 @@ const colors = {
   cardBorder: '#333333',
 };
 
-const getProviderLabel = (provider) => {
-  switch (provider) {
-    case 'openai': return 'OpenAI ChatGPT';
-    case 'claude': return 'Anthropic Claude';
-    case 'groq': return 'Groq';
-    default: return provider;
-  }
-};
-
 const getRoleLabel = (role) => {
   const roleMap = {
     'trader': 'Trader',
@@ -59,11 +50,9 @@ const getRoleLabel = (role) => {
   return roleMap[role] || role;
 };
 
-export default function ProfileScreen({ userProfile, alertPreferences, apiKeys, onBack, onNavigateToSettings, onLogout, onNavigateToBookmarks, onOpenArticle, onAccountDeletionScheduled }) {
+export default function ProfileScreen({ userProfile, alertPreferences, onBack, onNavigateToSettings, onLogout, onNavigateToBookmarks, onOpenArticle, onAccountDeletionScheduled }) {
   const { tier } = useEntitlement();
   const paywall = usePaywall();
-  const [selectedProvider, setSelectedProvider] = useState(null);
-  const [showAPIKeySetup, setShowAPIKeySetup] = useState(false);
   const [showAlertPreferences, setShowAlertPreferences] = useState(false);
   const [showAllBookmarks, setShowAllBookmarks] = useState(false);
   const [loadingProfile, setLoadingProfile] = useState(true);
@@ -102,27 +91,6 @@ export default function ProfileScreen({ userProfile, alertPreferences, apiKeys, 
     return () => { mounted = false; };
   }, []);
 
-  const handleDeleteKey = (keyId, keyName) => {
-    Alert.alert(
-      'Delete API Key',
-      `Are you sure you want to delete "${keyName}"?`,
-      [
-        { text: 'Cancel', style: 'cancel' },
-        {
-          text: 'Delete',
-          style: 'destructive',
-          onPress: () => {
-            // Handle key deletion here
-            console.log('Delete key:', keyId);
-          }
-        }
-      ]
-    );
-  };
-
-  const handleProviderSelect = (provider) => {
-    setSelectedProvider(provider);
-  };
 
 // Remove demo defaults; derive from resolvedProfile
   const effectiveUserProfile = resolvedProfile || null;
@@ -133,8 +101,6 @@ export default function ProfileScreen({ userProfile, alertPreferences, apiKeys, 
     notifications: true
   };
 
-  const defaultAPIKeys = apiKeys || [];
-  
   const handleDeleteBookmark = (bookmarkId, bookmarkTitle) => {
     Alert.alert(
       'Delete Bookmark',
@@ -298,7 +264,7 @@ export default function ProfileScreen({ userProfile, alertPreferences, apiKeys, 
               <View style={styles.profileStats}>
                 <TouchableOpacity 
                   style={styles.profileStat}
-                  onPress={() => navigateToScreen('MarketFocus')}
+                  onPress={() => navigateToScreen('EditMarketFocus')}
                   activeOpacity={0.7}
                 >
                   <Text style={styles.profileStatValue}>
@@ -309,7 +275,7 @@ export default function ProfileScreen({ userProfile, alertPreferences, apiKeys, 
                 </TouchableOpacity>
                 <TouchableOpacity 
                   style={styles.profileStat}
-                  onPress={() => navigateToScreen('Experience')}
+                  onPress={() => navigateToScreen('EditExperience')}
                   activeOpacity={0.7}
                 >
                   <Text style={styles.profileStatValue}>
@@ -364,7 +330,7 @@ export default function ProfileScreen({ userProfile, alertPreferences, apiKeys, 
           </TouchableOpacity>
           <TouchableOpacity 
             style={styles.alertRow}
-            onPress={() => navigateToScreen('AlertFrequency')}
+            onPress={() => navigateToScreen('AlertPreferences')}
             activeOpacity={0.7}
           >
             <Text style={styles.alertLabel}>Frequency</Text>
@@ -377,7 +343,7 @@ export default function ProfileScreen({ userProfile, alertPreferences, apiKeys, 
           </TouchableOpacity>
           <TouchableOpacity 
             style={styles.alertRow}
-            onPress={() => navigateToScreen('NotificationSettings')}
+            onPress={() => navigateToScreen('NotificationsSettings')}
             activeOpacity={0.7}
           >
             <Text style={styles.alertLabel}>Notifications</Text>
@@ -389,64 +355,6 @@ export default function ProfileScreen({ userProfile, alertPreferences, apiKeys, 
             </View>
           </TouchableOpacity>
           </View>
-        </View>
-
-        {/* API Keys Section */}
-        <View style={styles.section}>
-          <View style={styles.sectionHeader}>
-            <View style={styles.sectionTitleContainer}>
-              <MaterialIcons name="vpn-key" color={colors.accentPositive} size={20} />
-              <Text style={styles.sectionTitle}>API Keys</Text>
-            </View>
-            <TouchableOpacity
-              style={styles.addButton}
-              onPress={() => setShowAPIKeySetup(true)}
-            >
-              <MaterialIcons name="add" color={colors.accentPositive} size={20} />
-            </TouchableOpacity>
-          </View>
-
-          {defaultAPIKeys.length === 0 ? (
-            <View style={styles.emptyState}>
-              <Text style={styles.emptyStateText}>No API keys configured</Text>
-              <Text style={styles.emptyStateSubtext}>
-                Add an API key to start chatting with AI
-              </Text>
-            </View>
-          ) : (
-            <View style={styles.keysList}>
-              {defaultAPIKeys.map((key) => (
-                <View key={key.id} style={styles.keyItem}>
-                  <TouchableOpacity
-                    style={[
-                      styles.keyContent,
-                      selectedProvider === key.provider && styles.selectedKey
-                    ]}
-                    onPress={() => handleProviderSelect(key.provider)}
-                  >
-                    <View style={styles.keyInfo}>
-                      <Text style={styles.keyName}>{key.name}</Text>
-                      <Text style={styles.keyProvider}>{getProviderLabel(key.provider)}</Text>
-                      <Text style={styles.keyDate}>
-                        Added {key.createdAt?.toLocaleDateString() || 'Recently'}
-                      </Text>
-                    </View>
-                    {selectedProvider === key.provider && (
-                      <View style={styles.selectedBadge}>
-                        <Text style={styles.selectedBadgeText}>Active</Text>
-                      </View>
-                    )}
-                  </TouchableOpacity>
-                  <TouchableOpacity
-                    style={styles.deleteButton}
-                    onPress={() => handleDeleteKey(key.id, key.name)}
-                  >
-                    <MaterialIcons name="delete" color={colors.accentNegative} size={18} />
-                  </TouchableOpacity>
-                </View>
-              ))}
-            </View>
-          )}
         </View>
 
         {/* Bookmarks Section */}

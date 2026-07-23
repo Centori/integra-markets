@@ -254,6 +254,71 @@ class SupabaseService {
         }
     }
 
+    /**
+     * Persist the prediction-market divergence alert settings to the same
+     * `alert_preferences` row the backend `jobs/divergence_monitor.py` reads.
+     *
+     * The monitor selects users on `divergence_alerts_enabled = true` and skips
+     * anyone whose `divergence_topics` is empty, so we default topics to the
+     * backend's DEFAULT_USER_TOPICS set (topic_taxonomy.py) when the user hasn't
+     * picked their own — otherwise enabling the toggle would never fire an alert.
+     *
+     * This is a PARTIAL upsert: only the divergence_* columns are written, so an
+     * existing row's commodities/keywords/etc. are preserved (ON CONFLICT DO
+     * UPDATE only touches the columns in the payload).
+     */
+    async saveDivergenceAlertPreferences({ enabled, threshold, topics, providers } = {}) {
+        const DEFAULT_TOPICS = [
+            'crude_oil', 'natural_gas', 'fed_rates', 'opec_decisions', 'iran_middle_east',
+        ];
+        const payloadTopics = (Array.isArray(topics) && topics.length > 0)
+            ? topics
+            : DEFAULT_TOPICS;
+        const payloadProviders = (Array.isArray(providers) && providers.length > 0)
+            ? providers
+            : ['polymarket', 'kalshi'];
+        try {
+            // Local backup so the toggle survives a kill even when offline.
+            await AsyncStorage.setItem(
+                'divergence_alert_prefs',
+                JSON.stringify({ enabled: !!enabled, threshold: threshold ?? 20 }),
+            );
+
+            const userId = await this.getCurrentUserId();
+            if (!userId) {
+                console.log('[SupabaseService] No user ID, divergence prefs saved to AsyncStorage only');
+                return { success: true, local: true };
+            }
+
+            const { data, error } = await supabase
+                .from('alert_preferences')
+                .upsert({
+                    user_id: userId,
+                    divergence_alerts_enabled: !!enabled,
+                    divergence_threshold: threshold ?? 20,
+                    divergence_topics: payloadTopics,
+                    divergence_providers: payloadProviders,
+                    updated_at: new Date().toISOString(),
+                }, {
+                    onConflict: 'user_id',
+                    ignoreDuplicates: false,
+                })
+                .select()
+                .single();
+
+            if (error) {
+                console.error('[SupabaseService] Error saving divergence prefs:', error);
+                return { success: false, error: error.message };
+            }
+
+            console.log('[SupabaseService] Divergence alert prefs saved to database');
+            return { success: true, data };
+        } catch (error) {
+            console.error('[SupabaseService] saveDivergenceAlertPreferences error:', error);
+            return { success: false, error: error.message };
+        }
+    }
+
     // ==========================================
     // SENTIMENT POLL VOTES
     // ==========================================
