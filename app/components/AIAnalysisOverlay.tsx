@@ -344,7 +344,7 @@ const AIAnalysisOverlay: React.FC<AIAnalysisOverlayProps> = ({ newsData: newsDat
             return newData;
         });
 
-        const articleId = newsData.title.replace(/\s+/g, '-').toLowerCase().slice(0, 50);
+        const articleId = (newsData.title || '').replace(/\s+/g, '-').toLowerCase().slice(0, 50);
 
         // Submit vote
         const result = await supabaseService.submitPollVote(articleId, newsData.title, vote);
@@ -691,22 +691,23 @@ const AIAnalysisOverlay: React.FC<AIAnalysisOverlayProps> = ({ newsData: newsDat
                 const webSentiment = getSentimentPercentages();
 
                 // Use backend keywords directly (matching web behavior)
+                // Keywords arrive in two shapes across sources: plain strings
+                // (['opec','crude']) OR objects ({word,score}). Assuming `.word`
+                // on a string yields undefined text → downstream render crash.
+                // Normalize both, and drop anything without usable text.
+                const kwText = (k: any): string =>
+                    typeof k === 'string' ? k : String(k?.word ?? k?.text ?? '');
+                const kwScore = (k: any): number =>
+                    typeof k === 'string' ? 0.9 : Number(k?.score ?? 0.9);
                 const getDirectKeywords = (): { text: string; score: number }[] => {
-                    // First check if article has top-level keywords from backend
-                    if (newsData.keywords && newsData.keywords.length > 0) {
-                        return newsData.keywords.map((k: any) => ({
-                            text: k.word,
-                            score: k.score || 0.9
-                        }));
-                    }
-                    // Fall back to analysis keywords
-                    if (newsData.analysis?.keywords && newsData.analysis.keywords.length > 0) {
-                        return newsData.analysis.keywords.map((k: any) => ({
-                            text: k.word,
-                            score: k.score || 0.9
-                        }));
-                    }
-                    return [];
+                    const src = (newsData.keywords && newsData.keywords.length > 0)
+                        ? newsData.keywords
+                        : (newsData.analysis?.keywords && newsData.analysis.keywords.length > 0)
+                            ? newsData.analysis.keywords
+                            : [];
+                    return src
+                        .map((k: any) => ({ text: kwText(k), score: kwScore(k) }))
+                        .filter((d: { text: string }) => d.text.length > 0);
                 };
 
                 // Get direct keywords from backend
@@ -947,10 +948,13 @@ const AIAnalysisOverlay: React.FC<AIAnalysisOverlayProps> = ({ newsData: newsDat
         </View>
     );
 
-    const toTitle = (s: string) => s.replace(/\S+/g, (w) => w.charAt(0).toUpperCase() + w.slice(1));
-    const renderDriverPill = (driver: { text: string; score: number }) => (
-        <View key={driver.text} style={styles.driverPill}>
-            <Text style={styles.driverText}>{toTitle(driver.text)}</Text>
+    // Null-safe: a driver with undefined/empty `text` used to throw here
+    // (s.replace on undefined) DURING RENDER, which propagated to the app's
+    // ROOT error boundary → "Something went wrong" on every affected card.
+    const toTitle = (s?: string) => (s || '').replace(/\S+/g, (w) => w.charAt(0).toUpperCase() + w.slice(1));
+    const renderDriverPill = (driver: { text?: string; score?: number }, idx: number) => (
+        <View key={driver?.text || `driver-${idx}`} style={styles.driverPill}>
+            <Text style={styles.driverText}>{toTitle(driver?.text)}</Text>
         </View>
     );
 
@@ -1142,8 +1146,8 @@ const AIAnalysisOverlay: React.FC<AIAnalysisOverlayProps> = ({ newsData: newsDat
                                     <Text style={styles.sectionTitle}>Key Sentiment Drivers</Text>
                                 </View>
                                 <View style={styles.driversContainer}>
-                                    {analysisData.keyDrivers.length > 0 ? (
-                                        analysisData.keyDrivers.slice(0, 5).map(renderDriverPill)
+                                    {analysisData.keyDrivers.filter((d) => d && d.text).length > 0 ? (
+                                        analysisData.keyDrivers.filter((d) => d && d.text).slice(0, 5).map(renderDriverPill)
                                     ) : (
                                         <View style={styles.driverPill}>
                                             <Text style={styles.driverText}>Market Activity</Text>

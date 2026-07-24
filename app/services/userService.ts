@@ -27,16 +27,19 @@ class UserService {
         return null;
       }
 
-      // Then get the profile data from Supabase
+      // Then get the profile data from Supabase. maybeSingle() (not single())
+      // so a MISSING profile row returns null instead of throwing PGRST116 —
+      // a signed-in user with no profile row should still get a usable profile
+      // built from their auth record, not a hard failure.
       const { data: profile, error: profileError } = await supabase
         .from('profiles')
         .select('*')
         .eq('id', user.id)
-        .single();
+        .maybeSingle();
 
       if (profileError) {
-        console.error('Error fetching user profile:', profileError);
-        return null;
+        console.error('Error fetching user profile (continuing from auth):', profileError);
+        // fall through — build from the auth user below rather than returning null
       }
 
       // Combine auth and profile data

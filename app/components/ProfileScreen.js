@@ -77,12 +77,22 @@ export default function ProfileScreen({ userProfile, alertPreferences, onBack, o
         if (mounted) {
           if (profile) {
             setResolvedProfile(profile);
+          } else if (userProfile) {
+            // Fall back to the profile App.js already resolved (passed as prop).
+            // The fresh fetch needs a LIVE Supabase session; if that hiccups
+            // (e.g. session not restored after an app upgrade) we must NOT blank
+            // the whole Profile tab — that also locks the user out of the paywall.
+            setResolvedProfile(userProfile);
           } else {
             setProfileError('Unable to load user profile.');
           }
         }
       } catch (e) {
-        if (mounted) setProfileError('An unexpected error occurred loading the profile.');
+        // Same principle on a thrown error: prefer the prop over a dead screen.
+        if (mounted) {
+          if (userProfile) setResolvedProfile(userProfile);
+          else setProfileError('An unexpected error occurred loading the profile.');
+        }
       } finally {
         if (mounted) setLoadingProfile(false);
       }
@@ -336,7 +346,7 @@ export default function ProfileScreen({ userProfile, alertPreferences, onBack, o
             <Text style={styles.alertLabel}>Frequency</Text>
             <View style={styles.alertValueContainer}>
               <Text style={styles.alertValue}>
-                {defaultAlertPreferences.frequency.charAt(0).toUpperCase() + defaultAlertPreferences.frequency.slice(1)}
+                {(() => { const f = defaultAlertPreferences.frequency || defaultAlertPreferences.alert_frequency || 'Daily'; return f.charAt(0).toUpperCase() + f.slice(1); })()}
               </Text>
               <MaterialIcons name="chevron-right" size={16} color={colors.textSecondary} />
             </View>

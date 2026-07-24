@@ -113,6 +113,18 @@ Found + fixed real broken buttons (native → couldn't be OTA'd later, so must s
 - Note this is **100% frontend/native** — no backend involvement. The text-only "Share on X (link)" option is kept for those who want the source OG-card preview.
 - Tests: `__tests__/clipboard-share-build83.test.js` (now 7, green).
 
+## 🔴 BUILD 84 STILL CRASHED → BUILD 85 — THE REAL ROOT CAUSE (2026-07-24)
+
+Build 84 fixed the loading page but Profile + overlay crashes **persisted** — because my build-84 diagnosis (node_modules) was wrong; I fixed by inspection instead of reproducing. Build 85 fixes the **actually-reproduced** bugs (caught with react-test-renderer + native-leaf mocks):
+
+1. **Overlay "Something went wrong" on every card tap** — `getDirectKeywords` mapped `newsData.keywords` assuming `{word}` objects, but keywords also arrive as **plain strings** → `driver.text` undefined → the Key Sentiment Drivers render did `toTitle(driver.text).replace(...)` on undefined → threw **during render** → propagated to the app ROOT boundary (the overlay boundary I added in 84 couldn't catch it — the throw is in the overlay's own render, above its children). Fixed at **source** (normalize string|{word} shapes, drop empties) + **render** (null-safe `toTitle`, filter driverless entries, guarded poll `articleId`).
+2. **Profile "fails to load" / paywall unreachable** — ProfileScreen ignores the `userProfile` prop App.js already resolved and re-fetches via `userService.getCurrentUser()`, which needs a LIVE Supabase session and used `.single()` (throws PGRST116 on a missing row). On a session hiccup it set an error that blanked the **whole** screen (incl. the upgrade/paywall button). Fixed: fall back to the prop, and `getCurrentUser` now uses `.maybeSingle()` + builds from the auth user if no row.
+3. **Second profile crash path** — `defaultAlertPreferences.frequency.charAt(0)` threw when prefs lacked `frequency` (Supabase column is `alert_frequency`). Guarded.
+
+Verified: reproduced each throw in a render harness, applied fixes, re-ran → clean; **45/45 source tests** (`render-crash-guards-build85.test.js` added); build 85 export clean. buildNumber → **85**.
+
+**Lesson saved to memory:** don't ship a crash fix diagnosed by inspection — reproduce the throw first (render harness with native mocks). See [[reference_nested_node_modules_bundle_poison]] (the 84 misdiagnosis).
+
 ## 🔴 BUILD 83 POSTMORTEM → BUILD 84 (2026-07-24)
 
 **Device symptoms (user, build 83):** (1) generic circle loading page before the branded splash; (2) Profile fails to load / paywall unreachable; (3) tapping any news card → flash → "Something went wrong".
