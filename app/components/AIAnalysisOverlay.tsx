@@ -49,6 +49,42 @@ interface AIAnalysisOverlayProps {
     onClose: () => void;
 }
 
+// Containment boundary (build-83 postmortem): a render failure inside the
+// analysis overlay used to propagate to the app's ROOT ErrorBoundary, replacing
+// the ENTIRE app with "Something went wrong". Contain it here instead — the
+// user gets a readable message and a Close button; the rest of the app lives.
+class OverlayErrorBoundary extends React.Component<
+    { onClose: () => void; children: React.ReactNode },
+    { hasError: boolean }
+> {
+    state = { hasError: false };
+    static getDerivedStateFromError() {
+        return { hasError: true };
+    }
+    render() {
+        if (this.state.hasError) {
+            return (
+                <View style={{ flex: 1, backgroundColor: '#1E1E1E', alignItems: 'center', justifyContent: 'center', padding: 32 }}>
+                    <MaterialIcons name="error-outline" size={40} color="#4ECCA3" />
+                    <Text style={{ color: '#ECECEC', fontSize: 16, fontWeight: '600', marginTop: 12, textAlign: 'center' }}>
+                        Couldn’t display this analysis
+                    </Text>
+                    <Text style={{ color: '#A0A0A0', fontSize: 13, marginTop: 6, textAlign: 'center' }}>
+                        Close and try another article — the rest of the app is unaffected.
+                    </Text>
+                    <TouchableOpacity
+                        onPress={this.props.onClose}
+                        style={{ marginTop: 20, backgroundColor: '#4ECCA3', borderRadius: 10, paddingVertical: 10, paddingHorizontal: 28 }}
+                    >
+                        <Text style={{ color: '#121212', fontWeight: '700' }}>Close</Text>
+                    </TouchableOpacity>
+                </View>
+            );
+        }
+        return this.props.children;
+    }
+}
+
 // Pro-gate: Pro users see children normally; free users see the real content
 // blurred behind an "Upgrade to Pro" overlay that opens the paywall on tap.
 function ProGate({ locked, onUpgrade, children }: { locked: boolean; onUpgrade: () => void; children: React.ReactNode }) {
@@ -925,6 +961,7 @@ const AIAnalysisOverlay: React.FC<AIAnalysisOverlayProps> = ({ newsData: newsDat
             visible={isVisible}
             onRequestClose={onClose}
         >
+          <OverlayErrorBoundary onClose={onClose}>
             <View style={styles.overlayContainer}>
                 <View style={styles.webWrapper}>
                     <View style={styles.contentContainer}>
@@ -1343,6 +1380,7 @@ const AIAnalysisOverlay: React.FC<AIAnalysisOverlayProps> = ({ newsData: newsDat
                     </View>
                 </View>
             </Modal>
+          </OverlayErrorBoundary>
         </Modal>
     );
 };

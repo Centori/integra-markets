@@ -8,6 +8,23 @@ config.resolver.alias = {
   '@': path.resolve(__dirname, 'app'),
 };
 
+// GUARD (build-83 postmortem): an accidental nested `app/node_modules` (an
+// SDK-53 tree from a stray npm install inside app/) shipped inside the EAS
+// upload, and Metro's nearest-first lookup resolved SDK-53 JS against the
+// SDK-52 native binary — crashing Profile and the analysis overlay on device.
+// Block any node_modules under app/ so a recreated nested tree can never
+// enter a bundle again. Root node_modules stays fully resolvable.
+const priorBlockList = config.resolver.blockList
+  ? Array.isArray(config.resolver.blockList)
+    ? config.resolver.blockList
+    : [config.resolver.blockList]
+  : [];
+config.resolver.blockList = [
+  ...priorBlockList,
+  /\/app\/node_modules\/.*/,
+  /\/app\/_node_modules_SDK53_QUARANTINED\/.*/,
+];
+
 // Fix for iOS 18.6 compatibility issues
 config.resolver.sourceExts = [...config.resolver.sourceExts, 'cjs'];
 config.transformer.minifierConfig = {

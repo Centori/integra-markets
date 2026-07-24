@@ -49,6 +49,7 @@ import AlertsScreen from './components/AlertsScreen';
 import NewsCard from './components/NewsCard';
 import AIAnalysisOverlay from './components/AIAnalysisOverlay';
 import { bootstrapEntitlements } from './hooks/useEntitlement';
+import { PaywallProvider } from './paywall/PaywallProvider';
 import ProfileScreen from './components/ProfileScreen';
 import { BookmarkProvider } from './providers/BookmarkProvider';
 import PrivacyPolicyModal from './components/PrivacyPolicyModal';
@@ -1721,13 +1722,19 @@ const WebContainer = ({ children }) => {
   );
 };
 
-// Wrapped App - AuthProvider removed since import is commented out
+// Wrapped App - AuthProvider removed since import is commented out.
+// PaywallProvider MUST be mounted here: it hosts the paywall <Modal>. It was
+// previously only mounted in the legacy root-level MainApp.js (which is not in
+// the entry chain), so every paywall.open() in the shipped app was a silent
+// no-op — nobody could ever see the paywall. (Found in build-83 diagnostics.)
 const WrappedApp = () => (
   <ErrorBoundary>
     <BookmarkProvider>
-      <WebContainer>
-        <App />
-      </WebContainer>
+      <PaywallProvider>
+        <WebContainer>
+          <App />
+        </WebContainer>
+      </PaywallProvider>
     </BookmarkProvider>
   </ErrorBoundary>
 );

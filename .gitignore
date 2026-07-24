@@ -1,7 +1,11 @@
 # See https://help.github.com/articles/ignoring-files/ for more about ignoring files.
 
-# dependencies
-/node_modules
+# dependencies — unrooted on purpose: a nested app/node_modules (accidental
+# SDK-53 install, Jun 2026) was never matched by the old rooted `/node_modules`,
+# got committed AND shipped inside the build-83 EAS upload, poisoning Metro
+# resolution with SDK-53 modules against the SDK-52 binary. Never root this.
+node_modules/
+app/_node_modules_SDK53_QUARANTINED/
 
 # next.js
 /.next/

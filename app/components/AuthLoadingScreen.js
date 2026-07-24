@@ -73,7 +73,12 @@ const ShinyText = ({ text, disabled = false, speed = 3, style = {} }) => {
 };
 
 const AuthLoadingScreen = ({ onAuthComplete, onSkip }) => {
-    const [currentScreen, setCurrentScreen] = useState('loading'); // 'loading', 'auth', 'login', 'signup'
+    // Start directly on the auth screen. The old 'loading' phase was a SECOND
+    // splash (circle logo + progress bar) shown right after IntegraLoadingPage,
+    // so users saw two loading pages back-to-back. Removed per user request
+    // (build 83 feedback: "get rid of it"). The 'loading' render branch below
+    // is intentionally unreachable but kept for the dev-only screen switcher.
+    const [currentScreen, setCurrentScreen] = useState('auth'); // 'auth', 'login', 'signup' ('loading' retired)
     const [progress, setProgress] = useState(0);
     const [email, setEmail] = useState('');
     const [password, setPassword] = useState('');

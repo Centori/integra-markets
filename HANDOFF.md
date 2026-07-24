@@ -113,6 +113,28 @@ Found + fixed real broken buttons (native → couldn't be OTA'd later, so must s
 - Note this is **100% frontend/native** — no backend involvement. The text-only "Share on X (link)" option is kept for those who want the source OG-card preview.
 - Tests: `__tests__/clipboard-share-build83.test.js` (now 7, green).
 
+## 🔴 BUILD 83 POSTMORTEM → BUILD 84 (2026-07-24)
+
+**Device symptoms (user, build 83):** (1) generic circle loading page before the branded splash; (2) Profile fails to load / paywall unreachable; (3) tapping any news card → flash → "Something went wrong".
+
+**ROOT CAUSE — poisoned dependency tree shipped in the bundle:**
+A rogue **`app/node_modules/` (365 MB, created Jun 24)** contained a full **SDK-53** tree (`expo@53.0.20`, `expo-font@13.3.2`, `@expo/vector-icons@14.1.0`, its own react/react-native) with **no `app/package.json`** owning it (stray npm install inside `app/`). Three failures stacked:
+1. `.gitignore` had **rooted** `/node_modules` → nested tree never ignored;
+2. the pre-build `git add -A` **committed 32,612 of its files**;
+3. no `.easignore` → it rode the 128 MB EAS upload, and **Metro's nearest-first resolution bundled SDK-53 JS against the SDK-52 native binary**. Hard evidence: build-83's export pulled fonts from `app/node_modules/@expo/vector-icons/...` and produced a **5.32 MB** bundle; after the fix, root paths and **4.41 MB** (~0.9 MB of duplicate SDK-53 JS removed).
+
+**Repairs (all in build 84):**
+- Quarantined the tree → `app/_node_modules_SDK53_QUARANTINED/` (renamed, not deleted — delete at leisure); `git rm -r --cached` the 32,612 files; `.gitignore` now `node_modules/` (unrooted, any depth); **metro.config.js blockList** hard-blocks any `app/node_modules` forever.
+- **`PaywallProvider` was NEVER mounted** in the shipped tree (only in legacy `MainApp.js`, not in the `index.ts → app/App.js` entry chain) → every `paywall.open()` was a silent no-op. Now mounted in `WrappedApp` (ErrorBoundary → BookmarkProvider → **PaywallProvider** → WebContainer → App). This alone fixed "can't see the paywalls".
+- **Second loading page removed:** `AuthLoadingScreen` booted into its own `'loading'` phase (circle logo + progress) right after `IntegraLoadingPage` — two splashes back-to-back. Now starts at `'auth'` directly.
+- **Overlay containment boundary:** `OverlayErrorBoundary` inside `AIAnalysisOverlay`'s Modal — a render failure there now shows "Couldn't display this analysis" + Close instead of nuking the whole app via the root boundary.
+- `react-test-renderer@18.3.1` added as devDep (diagnostics); the RN-render jest path is still blocked by the pre-existing transform config — source-assertion tests remain the pattern.
+- `buildNumber` → **84**. Verified: all edits babel-compile, metro config loads, clean export, **38/38 tests green**.
+
+**Watch for on build 84:** if anything STILL misbehaves on-device, next suspects in order: (a) BlurView (expo-blur) on iOS 26.5 — this device killed builds over native init before (build 63); the overlay boundary now contains it if so; (b) session restore state from the 82→84 upgrade.
+
+---
+
 ## ▶ RESUME HERE (2026-07-22) — RevenueCat / App Store Connect setup, mid-flight
 
 **Project:** RevenueCat project `5109aaa4`. ASC app `6749469306`, bundle `com.centori.integramarkets`, team `2ABHLWV763`.
