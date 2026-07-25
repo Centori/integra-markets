@@ -36,6 +36,10 @@ class TierLimits:
     alert_types: tuple[str, ...]
     push_mode: str  # "batched" | "realtime"
     push_per_day: float
+    # Bulk/CSV export ("download to Excel") — the conversion lever on the API
+    # trial. False on the 30-day trial; True on the paid API tiers. Defaults
+    # False so any tier that doesn't opt in cannot export.
+    exports_enabled: bool = False
 
 
 LIMITS: dict[str, TierLimits] = {
@@ -87,22 +91,39 @@ LIMITS: dict[str, TierLimits] = {
         push_mode="batched",
         push_per_day=0,
     ),
-    # API tiers (web-only, purchased via Stripe). Mobile features are all
-    # unlimited so API subscribers who also install the app aren't limited.
-    # The distinction between api_basic and api_history is `history_days`:
-    # api_basic gets a 90-day rolling window on public API queries; api_history
-    # unlocks the full archive built by backend/scripts/backfill/*.
+    # API tiers (web-only, purchased via Stripe). The ladder:
+    #   api_trial   → 30-day free evaluation: API reads, 30-day window, NO export.
+    #   api_basic   → $99/mo: API + export, 30-day rolling window (no deep archive).
+    #   api_history → $179/mo: everything + FULL archive (backfill/*).
+    # Mobile-feature limits stay UNLIMITED so an API subscriber who also installs
+    # the app isn't clamped; whether a given API tier actually UNLOCKS mobile Pro
+    # is decided client-side (subscriptionService.fetchBackendTier maps only
+    # api_history → basic_markets today).
+    "api_trial": TierLimits(
+        bookmarks=UNLIMITED,
+        alerts=UNLIMITED,
+        commodities=UNLIMITED,
+        custom_rss_urls=UNLIMITED,
+        ai_overlay_per_day=UNLIMITED,
+        history_days=30,
+        articles_per_session=UNLIMITED,
+        alert_types=("news", "sentiment", "divergence"),
+        push_mode="realtime",
+        push_per_day=UNLIMITED,
+        exports_enabled=False,  # the trial's conversion lever
+    ),
     "api_basic": TierLimits(
         bookmarks=UNLIMITED,
         alerts=UNLIMITED,
         commodities=UNLIMITED,
         custom_rss_urls=UNLIMITED,
         ai_overlay_per_day=UNLIMITED,
-        history_days=90,
+        history_days=30,
         articles_per_session=UNLIMITED,
         alert_types=("news", "sentiment", "divergence"),
         push_mode="realtime",
         push_per_day=UNLIMITED,
+        exports_enabled=True,
     ),
     "api_history": TierLimits(
         bookmarks=UNLIMITED,
@@ -115,6 +136,7 @@ LIMITS: dict[str, TierLimits] = {
         alert_types=("news", "sentiment", "divergence"),
         push_mode="realtime",
         push_per_day=UNLIMITED,
+        exports_enabled=True,
     ),
 }
 
@@ -152,6 +174,13 @@ def get_effective_tier(supabase, user_id: str) -> str:
 def limits_for(tier: str) -> TierLimits:
     canonical = _TIER_ALIASES.get(tier, tier)
     return LIMITS.get(canonical, LIMITS["free_trial"])
+
+
+def exports_allowed(tier: str) -> bool:
+    """True if the tier may bulk/CSV export ("download to Excel"). Gate the
+    export endpoints on this so the 30-day api_trial can read but not extract.
+    """
+    return limits_for(tier).exports_enabled
 
 
 def clamp_hours_back(tier: str, requested_hours: int) -> int:
