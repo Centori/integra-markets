@@ -41,7 +41,12 @@ from typing import Any, Dict, List, Optional
 
 from fastapi import APIRouter, Depends, HTTPException, Query
 
-from services.api_key_auth import verify_api_key
+from services.api_key_auth import (
+    HISTORY_SCOPE,
+    assert_history_depth,
+    require_scopes,
+    verify_api_key,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -142,7 +147,7 @@ async def sentiment_history(
     from_: Optional[str] = Query(default=None, alias="from", description="ISO 8601 UTC timestamp"),
     to: Optional[str] = Query(default=None, description="ISO 8601 UTC timestamp"),
     limit: int = Query(default=DEFAULT_HISTORY_LIMIT, ge=1, le=MAX_HISTORY_LIMIT),
-    _auth: Dict[str, Any] = Depends(verify_api_key),
+    auth: Dict[str, Any] = Depends(require_scopes(HISTORY_SCOPE)),
 ) -> Dict[str, Any]:
     """Time-series of individual scored documents for `commodity`."""
     supabase = _supabase()
@@ -152,6 +157,10 @@ async def sentiment_history(
     start = _parse_iso(from_, "from") if from_ else end - dt.timedelta(days=7)
     if start >= end:
         raise HTTPException(status_code=400, detail="'from' must be earlier than 'to'")
+
+    # Depth gate: history-scoped ($99) keys are capped at 90 days look-back;
+    # deeper queries require the archive ($249) scope.
+    assert_history_depth(auth, (end - start).total_seconds() / 86400.0)
 
     try:
         rows = (
@@ -182,9 +191,12 @@ async def sentiment_history(
 async def sentiment_daily(
     commodity: str,
     days: int = Query(default=30, ge=1, le=MAX_DAILY_DAYS),
-    _auth: Dict[str, Any] = Depends(verify_api_key),
+    auth: Dict[str, Any] = Depends(require_scopes(HISTORY_SCOPE)),
 ) -> Dict[str, Any]:
     """Daily aggregates for the last N days, computed on-the-fly."""
+    # Depth gate: history-scoped ($99) keys are capped at 90 days; deeper
+    # ranges require the archive ($249) scope.
+    assert_history_depth(auth, days)
     supabase = _supabase()
     commodity_lc = commodity.strip().lower()
     end = dt.datetime.now(dt.timezone.utc)
