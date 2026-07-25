@@ -24,21 +24,29 @@ async function call<T>(path: string, init: RequestInit = {}): Promise<T> {
   return res.json() as Promise<T>;
 }
 
-export function listKeys(userId: string) {
-  return call<KeyRow[]>(`/api/keys?user_id=${encodeURIComponent(userId)}`);
+// The backend derives user_id from the Supabase JWT (verify_supabase_jwt), so
+// every call carries the caller's access token as a Bearer header. user_id is
+// NEVER sent in the body/query — that path was spoofable.
+function authHeaders(token: string): Record<string, string> {
+  return { Authorization: `Bearer ${token}` };
 }
 
-export function createKey(userId: string, name: string) {
+export function listKeys(token: string) {
+  return call<KeyRow[]>("/api/keys", { headers: authHeaders(token) });
+}
+
+export function createKey(token: string, name: string) {
   return call<CreateKeyResponse>("/api/keys", {
     method: "POST",
-    body: JSON.stringify({ user_id: userId, name }),
+    headers: authHeaders(token),
+    body: JSON.stringify({ name }),
   });
 }
 
-export function revokeKey(userId: string, keyId: string) {
-  return call<{ revoked: true }>(
-    `/api/keys/${encodeURIComponent(keyId)}?user_id=${encodeURIComponent(userId)}`,
-    { method: "DELETE" }
+export function revokeKey(token: string, keyId: string) {
+  return call<{ status: string; id: string }>(
+    `/api/keys/${encodeURIComponent(keyId)}`,
+    { method: "DELETE", headers: authHeaders(token) }
   );
 }
 
