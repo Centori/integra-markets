@@ -101,7 +101,11 @@ async def get_news_feed(
     # so paid features never leak into free responses.
     if tier != "basic_markets":
         for art in articles:
-            for k in ("divergenceStatus", "divergenceProvider", "divergenceDelta", "divergenceTopic"):
+            for k in (
+                "divergenceStatus", "divergenceProvider", "divergenceDelta", "divergenceTopic",
+                "crossMarketStatus", "crossMarketDelta", "crossMarketTopic",
+                "polymarketImplied", "kalshiImplied",
+            ):
                 art.pop(k, None)
 
     return {
