@@ -95,11 +95,14 @@ def enrich_articles_with_divergence(
     article_topics: List[List[str]] = []
     unique_topics: set[str] = set()
     for art in articles:
+        title = str(art.get("title") or "")
         text = " ".join([
-            str(art.get("title") or ""),
+            title,
             str(art.get("summary") or art.get("description") or ""),
         ])
-        topics = detect_topics(text) if text.strip() else []
+        # Title-aware: a headline hit tags the topic; body-only needs ≥2
+        # keyword hits, so passing mentions/boilerplate don't get stamped.
+        topics = detect_topics(text, title=title) if text.strip() else []
         article_topics.append(topics)
         unique_topics.update(topics)
 
