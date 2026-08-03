@@ -426,7 +426,7 @@ async def test_notification():
     return {
         "status": "sent",
         "notification": {
-            "title": "Integra Markets Alert",
+            "title": "Integra Markets",
             "body": "Oil prices surge 7.2% on OPEC+ production cuts",
             "data": {
                 "type": "price_alert",
