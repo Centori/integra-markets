@@ -41,6 +41,27 @@ def _pick_strongest_signal(reading) -> Optional[Dict[str, Any]]:
     return {"provider": provider, "delta": delta, "status": status}
 
 
+def _cross_market_signal(reading, threshold: float) -> Optional[Dict[str, Any]]:
+    """Kalshi-vs-Polymarket disagreement (market vs market), independent of news.
+
+    Returns None unless BOTH providers priced this topic. `crossDelta` is signed
+    (kalshi_implied - polymarket_implied), both in [-1, +1]; DIVERGENCE when the
+    two prediction markets disagree by more than `threshold` — the "the crowd
+    can't even agree with itself" signal, distinct from news-vs-market divergence.
+    """
+    poly = reading.polymarket_implied
+    kal = reading.kalshi_implied
+    if poly is None or kal is None:
+        return None
+    delta = round(kal - poly, 4)
+    return {
+        "polymarketImplied": poly,
+        "kalshiImplied": kal,
+        "crossDelta": delta,
+        "crossStatus": "DIVERGENCE" if abs(delta) >= threshold else "ALIGNED",
+    }
+
+
 def enrich_articles_with_divergence(
     supabase,
     articles: List[Dict[str, Any]],
@@ -99,20 +120,37 @@ def enrich_articles_with_divergence(
     for art, topics in zip(articles, article_topics):
         best_signal: Optional[Dict[str, Any]] = None
         best_topic: Optional[str] = None
+        best_cross: Optional[Dict[str, Any]] = None
+        best_cross_topic: Optional[str] = None
         for topic_key in topics:
             reading = readings.get(topic_key)
             if reading is None:
                 continue
+            # News-vs-market divergence (strongest provider wins the card).
             signal = _pick_strongest_signal(reading)
-            if signal is None:
-                continue
-            if best_signal is None or abs(signal["delta"]) > abs(best_signal["delta"]):
+            if signal is not None and (
+                best_signal is None or abs(signal["delta"]) > abs(best_signal["delta"])
+            ):
                 best_signal = signal
                 best_topic = topic_key
+            # Market-vs-market (Kalshi vs Polymarket) — independent of news, so
+            # it can surface even when one provider has no news-sentiment delta.
+            cross = _cross_market_signal(reading, thr)
+            if cross is not None and (
+                best_cross is None or abs(cross["crossDelta"]) > abs(best_cross["crossDelta"])
+            ):
+                best_cross = cross
+                best_cross_topic = topic_key
         if best_signal is not None:
             art["divergenceProvider"] = best_signal["provider"]
             art["divergenceStatus"] = best_signal["status"]
             art["divergenceDelta"] = best_signal["delta"]
             art["divergenceTopic"] = best_topic
+        if best_cross is not None:
+            art["crossMarketStatus"] = best_cross["crossStatus"]
+            art["crossMarketDelta"] = best_cross["crossDelta"]
+            art["polymarketImplied"] = best_cross["polymarketImplied"]
+            art["kalshiImplied"] = best_cross["kalshiImplied"]
+            art["crossMarketTopic"] = best_cross_topic
 
     return articles
