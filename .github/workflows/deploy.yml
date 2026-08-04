@@ -1,10 +1,23 @@
 name: Deploy Backend to Railway
 
+# RAILWAY_TOKEN must be a PROJECT token for integra-markets-backend
+# (project 18e783a9, environment "production"): Railway dashboard →
+# integra-markets-backend → Settings → Tokens. An account/team token
+# resolves no project context and `railway up` fails with
+# "Service not found" — which is why every deploy failed since 2026-07-02.
+
 on:
   push:
     branches: [main]
-    paths: ['backend/**', 'railway.toml', '.railwayignore']
+    paths: ['backend/**', 'railway.toml', '.railwayignore', 'Dockerfile']
   workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: deploy-backend
+  cancel-in-progress: false
 
 jobs:
   deploy:
@@ -12,9 +25,16 @@ jobs:
 
     steps:
       - uses: actions/checkout@v4
+        with:
+          submodules: false
 
       - name: Install Railway CLI
         run: npm install -g @railway/cli
+
+      - name: Verify token resolves the project
+        run: railway status || { echo "::error::RAILWAY_TOKEN is not a project token for integra-markets-backend — see comment at top of this workflow"; exit 1; }
+        env:
+          RAILWAY_TOKEN: ${{ secrets.RAILWAY_TOKEN }}
 
       - name: Deploy
         run: railway up --service backend --detach

@@ -1,8 +1,10 @@
 name: Deploy Web to Vercel
 
+# Manual-only: www.integramarkets.app deploys via Vercel's git integration
+# (integra-web project, render-deploy branch) — not from this repo. This
+# workflow fired on every push with dead Vercel secrets and failed at
+# "Pull Vercel environment" every time since 2026-07-02.
 on:
-  push:
-    branches: [main]
   workflow_dispatch:
 
 permissions:
