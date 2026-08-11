@@ -235,16 +235,199 @@ TOPICS: Dict[str, Dict[str, Any]] = {
         "polymarket_match": _kw_in_title(["ethereum", "eth"]),
         "kalshi_match": _kw_in_title(["ethereum", "eth"]),
     },
+
+    # =========================================================
+    # REFINED PRODUCTS & GAS LIQUIDS
+    # No prediction market prices these, so they never carry a divergence
+    # badge (market_coverage=False) — they exist so the news is TAGGED,
+    # filterable, and matchable against user alert preferences.
+    # =========================================================
+    "lpg_ngl": {
+        "label": "LPG / NGLs",
+        "category": "energy_products",
+        "market_coverage": False,
+        "news_keywords": [
+            "lpg", "ngl", "ngls", "propane", "butane", "liquefied petroleum gas",
+            "natural gas liquids", "ethane", "mont belvieu",
+        ],
+    },
+    "refined_products": {
+        "label": "Diesel / Gasoline / Jet",
+        "category": "energy_products",
+        "market_coverage": False,
+        "news_keywords": [
+            "diesel", "gasoil", "gasoline", "petrol", "jet fuel", "kerosene",
+            "naphtha", "fuel oil", "crack spread", "rbob",
+        ],
+    },
+    "coal": {
+        "label": "Coal",
+        "category": "energy_products",
+        "market_coverage": False,
+        "news_keywords": ["coal", "thermal coal", "coking coal", "metallurgical coal", "newcastle coal"],
+    },
+    "power_electricity": {
+        "label": "Power / Electricity",
+        "category": "energy_products",
+        "market_coverage": False,
+        "news_keywords": [
+            "electricity", "power prices", "power grid", "megawatt", "mwh",
+            "baseload", "ercot", "grid operator",
+        ],
+    },
+
+    # =========================================================
+    # BATTERY / ENERGY-TRANSITION METALS
+    # =========================================================
+    "lithium": {
+        "label": "Lithium",
+        "category": "transition_metals",
+        "market_coverage": False,
+        "news_keywords": ["lithium", "spodumene", "lithium carbonate", "lithium hydroxide"],
+    },
+    "cobalt_nickel": {
+        "label": "Cobalt / Nickel",
+        "category": "transition_metals",
+        "market_coverage": False,
+        "news_keywords": ["cobalt", "nickel", "laterite", "nickel pig iron"],
+    },
+    "rare_earths": {
+        "label": "Rare earths",
+        "category": "transition_metals",
+        "market_coverage": False,
+        "news_keywords": [
+            "rare earth", "rare earths", "neodymium", "praseodymium",
+            "dysprosium", "samarium", "critical minerals",
+        ],
+    },
+    "uranium": {
+        "label": "Uranium",
+        "category": "transition_metals",
+        "market_coverage": False,
+        "news_keywords": ["uranium", "u3o8", "yellowcake", "enrichment", "nuclear fuel"],
+    },
+    "helium": {
+        "label": "Helium / Industrial gases",
+        "category": "transition_metals",
+        "market_coverage": False,
+        "news_keywords": [
+            "helium", "industrial gas", "industrial gases", "argon", "neon gas", "krypton",
+        ],
+    },
+
+    # =========================================================
+    # PRECIOUS & INDUSTRIAL METALS (beyond gold/copper)
+    # =========================================================
+    "silver": {
+        "label": "Silver",
+        "category": "commodities",
+        "market_coverage": False,
+        "news_keywords": ["silver", "xag", "silver price"],
+    },
+    "platinum_palladium": {
+        "label": "Platinum / Palladium",
+        "category": "commodities",
+        "market_coverage": False,
+        "news_keywords": ["platinum", "palladium", "pgm", "pgms", "autocatalyst"],
+    },
+    "iron_ore_steel": {
+        "label": "Iron ore / Steel",
+        "category": "commodities",
+        "market_coverage": False,
+        "news_keywords": [
+            "iron ore", "steel", "steelmaking", "rebar", "hot-rolled coil",
+            "blast furnace", "scrap steel",
+        ],
+    },
+    "aluminium_zinc": {
+        "label": "Aluminium / Zinc",
+        "category": "commodities",
+        "market_coverage": False,
+        "news_keywords": ["aluminium", "aluminum", "alumina", "bauxite", "zinc", "lead smelter", "tin"],
+    },
+
+    # =========================================================
+    # SOFTS, LIVESTOCK & INPUTS
+    # =========================================================
+    "softs": {
+        "label": "Coffee / Cocoa / Sugar",
+        "category": "agriculture",
+        "market_coverage": False,
+        "news_keywords": [
+            "coffee", "arabica", "robusta", "cocoa", "sugar", "raw sugar",
+            "cotton", "orange juice", "palm oil", "rubber",
+        ],
+    },
+    "livestock": {
+        "label": "Livestock",
+        "category": "agriculture",
+        "market_coverage": False,
+        "news_keywords": [
+            "cattle", "live cattle", "feeder cattle", "hogs", "lean hogs",
+            "poultry", "beef", "pork", "dairy", "milk price",
+        ],
+    },
+    "fertilizer": {
+        "label": "Fertilizer / Inputs",
+        "category": "agriculture",
+        "market_coverage": False,
+        "news_keywords": [
+            "fertilizer", "fertiliser", "urea", "potash", "phosphate",
+            "ammonia", "nitrogen fertilizer", "dap", "map fertilizer",
+        ],
+    },
+
+    # =========================================================
+    # LOGISTICS & CARBON — move commodity prices, tradable context
+    # =========================================================
+    "freight_shipping": {
+        "label": "Freight / Shipping",
+        "category": "logistics",
+        "market_coverage": False,
+        "news_keywords": [
+            "freight", "shipping rates", "baltic dry", "tanker rates", "vlcc",
+            "container rates", "suez canal", "panama canal", "port strike",
+        ],
+    },
+    "carbon_markets": {
+        "label": "Carbon markets",
+        "category": "logistics",
+        "market_coverage": False,
+        "news_keywords": [
+            "carbon credit", "carbon credits", "carbon price", "emissions trading",
+            "eu ets", "cbam", "offsets market",
+        ],
+    },
 }
 
 
 CATEGORIES: Dict[str, Dict[str, Any]] = {
-    "commodities":  {"label": "Commodities",       "default_expanded": True},
-    "macro":        {"label": "Macro / Policy",    "default_expanded": True},
-    "geopolitical": {"label": "Geopolitics",       "default_expanded": True},
-    "political":    {"label": "Politics",          "default_expanded": False},
-    "crypto":       {"label": "Crypto",            "default_expanded": False},
+    "commodities":       {"label": "Commodities",            "default_expanded": True},
+    "energy_products":   {"label": "Energy products",        "default_expanded": True},
+    "transition_metals": {"label": "Battery & transition",   "default_expanded": False},
+    "agriculture":       {"label": "Agriculture & softs",    "default_expanded": False},
+    "logistics":         {"label": "Freight & carbon",       "default_expanded": False},
+    "macro":             {"label": "Macro / Policy",         "default_expanded": True},
+    "geopolitical":      {"label": "Geopolitics",            "default_expanded": True},
+    "political":         {"label": "Politics",               "default_expanded": False},
+    "crypto":            {"label": "Crypto",                 "default_expanded": False},
 }
+
+
+def has_market_coverage(topic_key: str) -> bool:
+    """True when a prediction market actually prices this topic.
+
+    Only these topics can produce a divergence reading (news sentiment vs
+    market-implied odds). The rest are news-tagging only: they power feed
+    personalization, filtering and alerts, but never show a divergence badge.
+    """
+    topic = TOPICS.get(topic_key)
+    return bool(topic) and topic.get("market_coverage", True)
+
+
+def tradable_topics() -> List[str]:
+    """Topic keys eligible for divergence enrichment."""
+    return [k for k in TOPICS if has_market_coverage(k)]
 
 
 # Topics turned on by default for a new user — chosen for highest signal
@@ -269,6 +452,8 @@ def list_topics_for_api() -> List[Dict[str, Any]]:
             "category": t["category"],
             "category_label": CATEGORIES[t["category"]]["label"],
             "news_keywords": t["news_keywords"][:3],  # preview only
+            # False → tagged in the feed, but never carries a divergence badge
+            "market_coverage": t.get("market_coverage", True),
         }
         for key, t in TOPICS.items()
     ]
@@ -330,5 +515,8 @@ def matching_markets(topic_key: str, markets: List[Dict[str, Any]], provider: st
     if not topic:
         return []
     matcher_key = "polymarket_match" if provider.lower() == "polymarket" else "kalshi_match"
-    matcher = topic[matcher_key]
+    # News-tagging-only topics (market_coverage=False) declare no matcher.
+    matcher = topic.get(matcher_key)
+    if matcher is None:
+        return []
     return [m for m in markets if matcher(m)]
