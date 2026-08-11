@@ -296,14 +296,21 @@ class EnhancedSentimentAnalyzer:
         self.alert_dqn = CommodityAlertDQN().to(self.device)
         self.alert_agent = AlertRecommendationAgent()
         
-        # Market sector categories
-        self.market_sectors = {
-            "energy": ["oil", "gas", "coal", "renewable", "solar", "wind"],
-            "metals": ["gold", "silver", "copper", "iron", "steel", "lithium"],
-            "agriculture": ["wheat", "corn", "soybeans", "cotton", "coffee", "sugar"],
-            "livestock": ["cattle", "hogs", "poultry", "dairy"],
-            "financial": ["rates", "bonds", "forex", "cryptocurrency"]
-        }
+        # Market sector categories — sourced from the shared topic taxonomy so
+        # every commodity the news pipeline can tag (LPG, lithium, helium,
+        # freight, carbon...) is also visible to sector scoring. Falls back to
+        # the original hand-written buckets if the taxonomy can't be imported.
+        try:
+            from services.topic_taxonomy import sector_terms
+            self.market_sectors = sector_terms()
+        except Exception:  # noqa: BLE001
+            self.market_sectors = {
+                "energy": ["oil", "gas", "coal", "renewable", "solar", "wind"],
+                "metals": ["gold", "silver", "copper", "iron", "steel", "lithium"],
+                "agriculture": ["wheat", "corn", "soybeans", "cotton", "coffee", "sugar"],
+                "livestock": ["cattle", "hogs", "poultry", "dairy"],
+                "financial": ["rates", "bonds", "forex", "cryptocurrency"]
+            }
         
         # Dynamic keyword importance weights
         self.keyword_weights = defaultdict(lambda: 1.0)

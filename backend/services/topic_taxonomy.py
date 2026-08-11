@@ -466,6 +466,54 @@ def list_categories_for_api() -> List[Dict[str, Any]]:
     ]
 
 
+# ---------------------------------------------------------------------------
+# Single source of truth for "what is this article about?"
+#
+# Every engine that needs to react to a commodity mention calls classify():
+#   * news_enricher  -> divergence badge (tradable topics only)
+#   * archive_writer -> entity_mentions rows that feed divergence sentiment
+#   * enhanced_sentiment -> sector impact scoring
+#   * news feed       -> personalization / filtering / alerts
+#
+# Adding a commodity to TOPICS therefore lights it up everywhere at once,
+# instead of needing a parallel keyword list per engine.
+# ---------------------------------------------------------------------------
+
+def classify(text: str, title: Optional[str] = None) -> Dict[str, Any]:
+    """Full classification of an article for every downstream engine."""
+    topics = detect_topics(text, title=title)
+    return {
+        "topics": topics,
+        "tradable_topics": [t for t in topics if has_market_coverage(t)],
+        "categories": sorted({TOPICS[t]["category"] for t in topics}),
+        "labels": [TOPICS[t]["label"] for t in topics],
+    }
+
+
+def sector_terms() -> Dict[str, List[str]]:
+    """Category -> flattened keyword list, for keyword/sector scoring engines.
+
+    Replaces hand-maintained sector dictionaries so a new topic's vocabulary
+    (e.g. 'spodumene', 'mont belvieu', 'baltic dry') is immediately visible
+    to the sentiment engine.
+    """
+    out: Dict[str, List[str]] = {}
+    for t in TOPICS.values():
+        out.setdefault(t["category"], []).extend(t["news_keywords"])
+    return {k: sorted(set(v)) for k, v in out.items()}
+
+
+def topic_for_alias(term: str) -> Optional[str]:
+    """Reverse lookup: a keyword/alias -> its topic key (exact, lowercased)."""
+    needle = (term or "").strip().lower()
+    if not needle:
+        return None
+    for key, t in TOPICS.items():
+        if needle == key or needle in (k.lower() for k in t["news_keywords"]):
+            return key
+    return None
+
+
 # Compiled word-boundary patterns, built lazily per topic. Substring matching
 # caused two classes of false positives that blanket-stamped divergence onto
 # nearly every card: "eth" inside "whether", "oil" inside "turmoil", and
