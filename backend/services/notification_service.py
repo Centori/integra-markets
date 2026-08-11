@@ -346,7 +346,7 @@ class NotificationService:
             if prefs.data:
                 # Create notification
                 notification = NotificationData(
-                    title=f"{alert['commodity']} Alert",
+                    title=alert['commodity'],
                     body=alert['message'],
                     type=NotificationType.MARKET_ALERT,
                     severity=alert['severity'],
