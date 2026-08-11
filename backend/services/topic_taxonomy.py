@@ -21,7 +21,8 @@ based on observed false-positives / false-negatives.
 
 from __future__ import annotations
 
-from typing import Any, Callable, Dict, List
+import re
+from typing import Any, Callable, Dict, List, Optional
 
 
 def _kw_in_title(keywords: List[str]) -> Callable[[Dict[str, Any]], bool]:
@@ -280,12 +281,42 @@ def list_categories_for_api() -> List[Dict[str, Any]]:
     ]
 
 
-def detect_topics(text: str) -> List[str]:
-    """Return all topic keys whose keywords appear in `text` (case-insensitive)."""
-    lowered = (text or "").lower()
+# Compiled word-boundary patterns, built lazily per topic. Substring matching
+# caused two classes of false positives that blanket-stamped divergence onto
+# nearly every card: "eth" inside "whether", "oil" inside "turmoil", and
+# "crypto" inside the Fusion Media "cryptocurrencies are volatile" boilerplate.
+_TOPIC_PATTERNS: Dict[str, "re.Pattern[str]"] = {}
+
+
+def _pattern_for(topic_key: str) -> "re.Pattern[str]":
+    pat = _TOPIC_PATTERNS.get(topic_key)
+    if pat is None:
+        kws = sorted(TOPICS[topic_key]["news_keywords"], key=len, reverse=True)
+        joined = "|".join(re.escape(k) for k in kws)
+        pat = re.compile(r"\b(?:" + joined + r")\b", re.IGNORECASE)
+        _TOPIC_PATTERNS[topic_key] = pat
+    return pat
+
+
+def detect_topics(text: str, title: Optional[str] = None) -> List[str]:
+    """Word-boundary topic tagging with a relevance bar.
+
+    A topic is tagged when its keywords hit the *title*, or appear at least
+    twice in the full text. A single passing body mention (or legal
+    boilerplate) no longer tags an article — previously that stamped one
+    divergence reading across nearly every card in the feed.
+
+    `title=None` keeps the legacy call signature working (the ≥2-hits rule
+    still applies to the full text).
+    """
+    body = text or ""
     matches: List[str] = []
-    for key, t in TOPICS.items():
-        if any(kw in lowered for kw in t["news_keywords"]):
+    for key in TOPICS:
+        pat = _pattern_for(key)
+        if title and pat.search(title):
+            matches.append(key)
+            continue
+        if len(pat.findall(body)) >= 2:
             matches.append(key)
     return matches
 
