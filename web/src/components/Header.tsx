@@ -63,6 +63,9 @@ export default function Header() {
                     <Link href="/#features" className="text-[14px] font-light text-zinc-400 hover:text-white transition-colors">
                         Features
                     </Link>
+                    <Link href="/#api" className="text-[14px] font-light text-zinc-400 hover:text-white transition-colors">
+                        API
+                    </Link>
                     <Link href="/#how-it-works" className="text-[14px] font-light text-zinc-400 hover:text-white transition-colors">
                         How It Works
                     </Link>
