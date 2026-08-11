@@ -1,8 +1,17 @@
 'use client';
 
 import Link from 'next/link';
+import { useEffect, useState } from 'react';
 import { motion } from 'framer-motion';
 import { Terminal, Database, Webhook, KeyRound, Check } from 'lucide-react';
+import { createClient } from '@/lib/supabase';
+
+// The API console lives in the dashboard app (separate Vercel project,
+// same Supabase project) on its own subdomain. www only owns the marketing
+// surface, so every API CTA hands off here.
+const DASHBOARD = 'https://dashboard.integramarkets.app';
+const PRICING_URL = `${DASHBOARD}/api-tier`;
+const CONSOLE_URL = `${DASHBOARD}/account/api`;
 
 const capabilities = [
     {
@@ -33,6 +42,7 @@ const tiers = [
         tagline: '30 days, free',
         features: ['Full API access', '30-day data window', 'Read-only — no exports'],
         cta: 'Start free trial',
+        plan: 'api_trial',
         highlighted: false
     },
     {
@@ -40,6 +50,7 @@ const tiers = [
         tagline: 'For production use',
         features: ['Everything in Trial', 'Exports (CSV / Excel)', '30-day rolling window', 'Includes Integra Pro on mobile'],
         cta: 'Get API access',
+        plan: 'api_basic',
         highlighted: true
     },
     {
@@ -47,11 +58,36 @@ const tiers = [
         tagline: 'For research & backtesting',
         features: ['Everything in API', 'Full historical archive', 'Unlimited lookback', 'Priority support'],
         cta: 'Talk to us',
+        plan: 'api_history',
         highlighted: false
     }
 ];
 
 export default function ApiOffering() {
+    const [signedIn, setSignedIn] = useState<boolean | null>(null);
+
+    useEffect(() => {
+        let active = true;
+        (async () => {
+            try {
+                const supabase = createClient();
+                const { data: { session } } = await supabase.auth.getSession();
+                if (active) setSignedIn(!!session);
+            } catch {
+                if (active) setSignedIn(false);
+            }
+        })();
+        return () => { active = false; };
+    }, []);
+
+    // Signed in  -> straight to the API console (it gates on its own session).
+    // Signed out -> the dashboard's PUBLIC pricing page, which carries its own
+    //               "Sign in" and Stripe checkout. www's /signup does not yet
+    //               honour a ?next= param, so routing through it would silently
+    //               drop the destination — send people somewhere that works.
+    const ctaHref = (tier: string) =>
+        signedIn ? `${CONSOLE_URL}?plan=${tier}` : `${PRICING_URL}?plan=${tier}`;
+
     return (
         <section id="api" className="py-32 bg-gradient-to-b from-black to-[#0a0a0a] relative">
             <div className="max-w-7xl mx-auto px-6 relative z-10">
@@ -123,14 +159,14 @@ export default function ApiOffering() {
                                 ))}
                             </ul>
                             <Link
-                                href="/api-tier"
+                                href={ctaHref(t.plan)}
                                 className={`flex items-center justify-center h-11 rounded-[8px] text-[14px] font-medium transition-colors ${
                                     t.highlighted
                                         ? 'bg-[#4ECCA3] hover:bg-[#45b393] text-black'
                                         : 'border border-white/15 text-zinc-300 hover:border-[#4ECCA3]/40 hover:text-white'
                                 }`}
                             >
-                                {t.cta}
+                                {signedIn && t.plan !== 'api_history' ? 'Open API console' : t.cta}
                             </Link>
                         </motion.div>
                     ))}
