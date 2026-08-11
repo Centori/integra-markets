@@ -120,6 +120,12 @@ def enrich_articles_with_divergence(
         except Exception as exc:  # noqa: BLE001
             logger.warning("news_enricher: compute failed for %s: %s", topic_key, exc)
 
+    # Pass 1 — resolve each article's best signal WITHOUT writing it yet.
+    # A divergence reading belongs to a topic, not to an article, so if we
+    # stamped every matching article the badge would land on every card in a
+    # single-theme feed ("Oil…", "Gold…", "Oil…") and read as wallpaper rather
+    # than signal. We therefore choose one owner article per topic below.
+    candidates: List[Optional[Dict[str, Any]]] = []
     for art, topics in zip(articles, article_topics):
         best_signal: Optional[Dict[str, Any]] = None
         best_topic: Optional[str] = None
@@ -144,16 +150,48 @@ def enrich_articles_with_divergence(
             ):
                 best_cross = cross
                 best_cross_topic = topic_key
-        if best_signal is not None:
+        candidates.append({
+            "signal": best_signal, "topic": best_topic,
+            "cross": best_cross, "cross_topic": best_cross_topic,
+            "topics": topics,
+        })
+
+    # Pass 2 — pick the single owner article per topic: the one whose title
+    # is most specifically about that topic (title hit beats body-only, then
+    # earlier position = fresher). Every other article stays clean.
+    def _owner(topic_key: str, field: str) -> Optional[int]:
+        best_idx, best_rank = None, None
+        for idx, (art, cand) in enumerate(zip(articles, candidates)):
+            if cand[field] is None or cand["topic" if field == "signal" else "cross_topic"] != topic_key:
+                continue
+            title = str(art.get("title") or "")
+            in_title = bool(detect_topics(title, title=title) and topic_key in detect_topics(title, title=title))
+            rank = (0 if in_title else 1, idx)
+            if best_rank is None or rank < best_rank:
+                best_rank, best_idx = rank, idx
+        return best_idx
+
+    signal_owners = {
+        c["topic"]: _owner(c["topic"], "signal")
+        for c in candidates if c["signal"] is not None and c["topic"]
+    }
+    cross_owners = {
+        c["cross_topic"]: _owner(c["cross_topic"], "cross")
+        for c in candidates if c["cross"] is not None and c["cross_topic"]
+    }
+
+    for idx, (art, cand) in enumerate(zip(articles, candidates)):
+        best_signal, best_cross = cand["signal"], cand["cross"]
+        if best_signal is not None and signal_owners.get(cand["topic"]) == idx:
             art["divergenceProvider"] = best_signal["provider"]
             art["divergenceStatus"] = best_signal["status"]
             art["divergenceDelta"] = best_signal["delta"]
-            art["divergenceTopic"] = best_topic
-        if best_cross is not None:
+            art["divergenceTopic"] = cand["topic"]
+        if best_cross is not None and cross_owners.get(cand["cross_topic"]) == idx:
             art["crossMarketStatus"] = best_cross["crossStatus"]
             art["crossMarketDelta"] = best_cross["crossDelta"]
             art["polymarketImplied"] = best_cross["polymarketImplied"]
             art["kalshiImplied"] = best_cross["kalshiImplied"]
-            art["crossMarketTopic"] = best_cross_topic
+            art["crossMarketTopic"] = cand["cross_topic"]
 
     return articles
