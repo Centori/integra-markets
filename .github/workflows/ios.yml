@@ -1,10 +1,9 @@
 name: iOS Build and Deploy
 
+# Manual-only: iOS builds ship through EAS (eas build/submit), not Actions.
+# Running this on every push burned a macOS runner per commit and failed at
+# `yarn install` (repo is npm-based) — red X noise on unrelated backend pushes.
 on:
-  push:
-    branches: [ main ]
-  pull_request:
-    branches: [ main ]
   workflow_dispatch:  # Allow manual triggering
 
 jobs:
