@@ -232,12 +232,25 @@ def persist_articles(
 
     if entity_rows:
         try:
-            supabase.table("entity_mentions").insert(entity_rows).execute()
+            # UPSERT, not insert. news_fetcher re-scans the same articles every
+            # 10 minutes, so a plain insert re-added identical (document, entity)
+            # rows on every tick — production reached 72x duplication (one doc
+            # counted 525 times). divergence._aggregate_sentiment averages over
+            # these rows, so duplicates silently weighted stale articles far
+            # above fresh ones. Unique index:
+            #   entity_mentions (document_id, entity, entity_type, coalesce(model_version,''))
+            (
+                supabase.table("entity_mentions")
+                .upsert(
+                    entity_rows,
+                    on_conflict="document_id,entity,entity_type,model_version",
+                    ignore_duplicates=True,
+                )
+                .execute()
+            )
         except Exception as exc:  # noqa: BLE001
-            # Non-fatal: scores already persisted. Likely a duplicate-insert
-            # race; entity_mentions has no unique constraint by design (one
-            # doc can be re-extracted under multiple model versions).
-            logger.debug("archive_writer: entity_mentions insert skipped: %s", exc)
+            # Non-fatal: scores are already persisted; the next tick retries.
+            logger.debug("archive_writer: entity_mentions upsert skipped: %s", exc)
 
     return {
         "documents": len(doc_rows),
