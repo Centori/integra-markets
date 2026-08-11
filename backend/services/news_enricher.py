@@ -106,6 +106,15 @@ def enrich_articles_with_divergence(
         article_topics.append(topics)
         unique_topics.update(topics)
 
+    # Only topics a prediction market actually prices can diverge. Tagging-only
+    # topics (LPG, lithium, helium, freight…) still label the article for
+    # personalization and filtering — they just never hit compute().
+    try:
+        from services.topic_taxonomy import has_market_coverage
+        unique_topics = {t for t in unique_topics if has_market_coverage(t)}
+    except ImportError:
+        pass
+
     readings: Dict[str, Any] = {}
     for topic_key in unique_topics:
         try:
