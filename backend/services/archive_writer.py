@@ -207,11 +207,15 @@ def persist_articles(
             if not doc_id or not url_hash:
                 continue
             article = article_by_url_hash.get(url_hash) or {}
+            article_title = str(article.get("title") or "")
             text_for_match = " ".join([
-                str(article.get("title") or ""),
+                article_title,
                 str(article.get("summary") or ""),
             ])
-            detected = detect_topics(text_for_match)
+            # Title-aware, matching news_enricher exactly — otherwise the
+            # sentiment rows feeding divergence would be tagged under a
+            # different rule than the badge that reads them.
+            detected = detect_topics(text_for_match, title=article_title)
             score = score_by_doc.get(doc_id)
             for topic_key in detected:
                 entity_rows.append({
