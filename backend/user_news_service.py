@@ -33,6 +33,58 @@ except ImportError:
 
 logger = logging.getLogger(__name__)
 
+# Publisher legal/footer text that scrapers pick up when they fail to isolate
+# the article body. Investing.com sits behind bot protection, so
+# summarize_url() there returned Fusion Media's site-wide disclaimer instead of
+# the story — the same paragraph on every card (reported on build 88).
+# Any candidate summary matching these is discarded rather than shown.
+_BOILERPLATE_RE = re.compile(
+    r"fusion media|"
+    r"cryptocurrencies are extremely volatile|"
+    r"prohibited to use, store, reproduce|"
+    r"not necessarily real-time nor accurate|"
+    r"would like to remind you|"
+    r"all rights reserved|"
+    r"terms of use|privacy policy|cookie policy|"
+    r"is not responsible for any loss|"
+    r"enable javascript|subscribe to (?:continue|read)",
+    re.IGNORECASE,
+)
+
+# Below this a "summary" carries no more information than the headline.
+_MIN_SUMMARY_CHARS = 60
+
+
+def clean_summary_text(raw: str) -> str:
+    """Strip markup/entities out of an RSS description and normalise spacing."""
+    if not raw:
+        return ""
+    text = BeautifulSoup(str(raw), "html.parser").get_text(" ")
+    return re.sub(r"\s+", " ", text).strip()
+
+
+def is_usable_summary(text: str, title: str = "") -> bool:
+    """
+    True when `text` is worth showing as an article summary.
+
+    Rejects: empties, publisher boilerplate, anything too short to add detail,
+    and text that merely restates the headline (which is what the feed emitted
+    for every article before this).
+    """
+    cleaned = clean_summary_text(text)
+    if len(cleaned) < _MIN_SUMMARY_CHARS:
+        return False
+    if _BOILERPLATE_RE.search(cleaned):
+        return False
+    if title:
+        norm = lambda s: re.sub(r"\W+", " ", s).strip().lower()
+        if norm(cleaned) == norm(title) or (
+            norm(cleaned).startswith(norm(title)) and len(cleaned) < len(title) * 1.3
+        ):
+            return False
+    return True
+
+
 class UserNewsService:
     """Service for fetching news based on user preferences"""
     
@@ -56,7 +108,22 @@ class UserNewsService:
         }
         
         # RSS feeds for commodities news
+        # Verified live 2026-08-14. `with_summary` = entries whose RSS
+        # description is usable as-is (>=60 chars, not boilerplate), which is
+        # what populates the card summary without any scraping.
+        #
+        #   oilprice   200  15 entries  10 with_summary   <- best source
+        #   eia_today  200  16 entries  10 with_summary   <- .../petroleum/weekly/
+        #                   includes/newsletter_rss.xml was retired and 404s
+        #   investing  200  10 entries   0 with_summary   <- headlines only, and
+        #                   the site blocks scraping, so those cards carry the
+        #                   title until another source covers the story
+        #   reuters via Google News returns 503 from datacenter IPs (Railway)
+        #                   while working from residential ones — kept because
+        #                   it degrades to zero entries rather than erroring.
         self.rss_feeds = {
+            "oilprice": "https://oilprice.com/rss/main",
+            "eia_today": "https://www.eia.gov/rss/todayinenergy.xml",
             "reuters_commodities": "https://news.google.com/rss/search?q=commodity+prices+oil+gold+wheat&hl=en-US&gl=US&ceid=US:en",
             "marketwatch": "https://feeds.marketwatch.com/marketwatch/marketpulse/",
             "investing": "https://www.investing.com/rss/commodities.rss"
@@ -170,6 +237,41 @@ class UserNewsService:
         
         return news_items
     
+    # Browser UA mirroring data_sources.py. feedparser.parse(url) does its own
+    # fetch with a feedparser user-agent, which oilprice.com and eia.gov serve
+    # empty/403 from datacenter IPs — so on Railway those feeds silently
+    # yielded zero entries (feedparser sets .bozo rather than raising), leaving
+    # only investing.com. Fetching the bytes ourselves with real headers fixes
+    # it: data_sources.py uses the same UA and pulls 15 OilPrice articles per
+    # tick from the same host.
+    _FEED_HEADERS = {
+        'User-Agent': (
+            'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 '
+            '(KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36'
+        ),
+        'Accept': 'application/rss+xml, application/xml, text/xml;q=0.9, */*;q=0.8',
+    }
+
+    async def _parse_feed(self, feed_url: str):
+        """Fetch a feed with browser headers, then parse. Falls back to
+        feedparser's own fetch if the request fails outright."""
+        try:
+            async with httpx.AsyncClient(
+                timeout=15.0, follow_redirects=True, headers=self._FEED_HEADERS
+            ) as client:
+                resp = await client.get(feed_url)
+                if resp.status_code == 200 and resp.content:
+                    parsed = feedparser.parse(resp.content)
+                    if parsed.entries:
+                        return parsed
+                logger.warning(
+                    "Feed %s returned HTTP %s (%d bytes)",
+                    feed_url, resp.status_code, len(resp.content or b'')
+                )
+        except Exception as exc:  # noqa: BLE001
+            logger.warning("Feed fetch failed for %s: %s", feed_url, exc)
+        return feedparser.parse(feed_url)
+
     async def _fetch_from_rss(self, commodities: List[str], regions: List[str], keywords: List[str]) -> List[Dict]:
         """Fetch news from RSS feeds and enhance with article summaries"""
         news_items = []
@@ -183,39 +285,64 @@ class UserNewsService:
                     query = "+".join(search_terms)
                     feed_url = f"https://news.google.com/rss/search?q={query}&hl=en-US&gl=US&ceid=US:en"
                 
-                feed = feedparser.parse(feed_url)
-                
+                feed = await self._parse_feed(feed_url)
+
+                if not feed.entries:
+                    logger.warning("Feed %s returned 0 entries", feed_name)
+
                 for entry in feed.entries[:10]:  # Limit entries per feed
                     title = entry.get('title', '')
                     url = entry.get('link', '')
-                    
+
                     # Check relevance
                     relevant = any(comm.lower() in title.lower() for comm in commodities)
-                    
+
                     if relevant or not commodities:  # Include if relevant or no specific commodities
+                        # The publisher's own RSS description is the most
+                        # reliable summary available: no scraping, no bot walls,
+                        # no boilerplate. OilPrice ships ~550 chars per item;
+                        # Investing.com ships none, which is why those cards
+                        # previously fell through to the title (or worse, to a
+                        # scraped legal disclaimer).
+                        rss_summary = clean_summary_text(
+                            entry.get('summary') or entry.get('description') or ''
+                        )
+                        if not is_usable_summary(rss_summary, title):
+                            rss_summary = ''
+
                         # Initialize news item
                         news_item = {
                             "title": title,
                             "source": feed_name,
                             "url": url,
                             "published": entry.get('published', datetime.now().isoformat()),
-                            "relevance_score": 0.9 if relevant else 0.5
+                            "relevance_score": 0.9 if relevant else 0.5,
+                            # Guaranteed non-empty; scraping may improve on it below.
+                            "summary": rss_summary or title,
                         }
-                        
-                        # Use article summarizer to get real content and summary
-                        if self.summarizer and url:
+
+                        # Scrape only when RSS gave us nothing usable — it is the
+                        # slow, failure-prone path (0.5s rate limit per item).
+                        if self.summarizer and url and not rss_summary:
                             try:
                                 # Summarize article using NLTK/Sumy/Newspaper3k
                                 summary_result = self.summarizer.summarize_url(url, sentences=3, method='auto')
                                 
                                 if 'error' not in summary_result:
-                                    # Get the actual summary from the article
+                                    # Accept the scrape only if it beats what we
+                                    # already have — this is the gate that keeps
+                                    # publisher disclaimers off the cards.
                                     summary_sentences = summary_result.get('summary', [])
-                                    if summary_sentences:
-                                        news_item['summary'] = ' '.join(summary_sentences)
+                                    scraped = ' '.join(summary_sentences) if summary_sentences else ''
+                                    if is_usable_summary(scraped, title):
+                                        news_item['summary'] = clean_summary_text(scraped)
                                     else:
-                                        news_item['summary'] = title  # Fallback to title
-                                    
+                                        if scraped:
+                                            logger.info(
+                                                "Discarded unusable scrape for %s (boilerplate or too short)", url
+                                            )
+                                        news_item['summary'] = rss_summary or title
+
                                     # Extract keywords if available
                                     if 'keywords' in summary_result:
                                         news_item['keywords'] = summary_result['keywords'][:5]
@@ -242,23 +369,29 @@ class UserNewsService:
                                         # Use basic sentiment if VADER not available
                                         self._add_basic_sentiment(news_item, full_text or title)
                                 else:
-                                    # Summarization failed, use title as summary
-                                    news_item['summary'] = title
-                                    self._add_basic_sentiment(news_item, title)
-                                    
+                                    # Summarization failed — keep whatever the
+                                    # feed gave us rather than dropping to title.
+                                    news_item['summary'] = rss_summary or title
+                                    self._add_basic_sentiment(news_item, news_item['summary'])
+
                             except Exception as e:
                                 logger.warning(f"Could not summarize {url}: {e}")
-                                news_item['summary'] = title
-                                self._add_basic_sentiment(news_item, title)
+                                news_item['summary'] = rss_summary or title
+                                self._add_basic_sentiment(news_item, news_item['summary'])
                         else:
-                            # No summarizer available, use title as summary
-                            news_item['summary'] = title
-                            self._add_basic_sentiment(news_item, title)
+                            # Either no summarizer, or (the common case now) the
+                            # RSS description was already good enough to skip
+                            # scraping entirely. Score sentiment on it.
+                            self._add_basic_sentiment(news_item, news_item['summary'])
                         
                         news_items.append(news_item)
-                        
-                        # Rate limiting to avoid overwhelming servers
-                        await asyncio.sleep(0.5)
+
+                        # Rate-limit only when we actually hit the publisher.
+                        # Items served from the RSS description make no outbound
+                        # request, so sleeping on them cost ~0.5s each (20s+
+                        # across the feed set) for nothing.
+                        if self.summarizer and url and not rss_summary:
+                            await asyncio.sleep(0.5)
                         
             except Exception as e:
                 logger.error(f"Error fetching RSS feed {feed_name}: {e}")
