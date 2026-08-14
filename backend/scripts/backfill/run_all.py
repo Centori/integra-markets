@@ -47,6 +47,14 @@ def main() -> None:
     ap.add_argument("--until", required=True, help="ISO date, exclusive")
     ap.add_argument("--only", nargs="+", choices=_SOURCES, help="Restrict to specific sources")
     ap.add_argument("--verbose", action="store_true")
+    ap.add_argument(
+        "--max-days",
+        type=int,
+        default=None,
+        help="Bound each source to N days of data per invocation. Sources write "
+             "their cursor as they go, so a bounded run is a checkpoint: schedule "
+             "this repeatedly and it walks the full range without ever running long.",
+    )
     args = ap.parse_args()
 
     setup_logging(args.verbose)
@@ -61,7 +69,14 @@ def main() -> None:
         logger.info("=== %s ===", name)
         try:
             fn = _import_backfill(name)
-            n = fn(supabase, since=since, until=until)
+            kwargs = {"since": since, "until": until}
+            # Only pass max_days to sources that accept it — the light sources
+            # (price series, COT, settled markets) fetch a whole range in one
+            # small request and have nothing to bound.
+            import inspect
+            if args.max_days is not None and "max_days" in inspect.signature(fn).parameters:
+                kwargs["max_days"] = args.max_days
+            n = fn(supabase, **kwargs)
             totals[name] = n
         except Exception as exc:  # noqa: BLE001
             logger.error("%s failed: %s\n%s", name, exc, traceback.format_exc())
