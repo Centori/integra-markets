@@ -14,7 +14,12 @@ __tests__/
 ios/
 android/
 expo-plugins/
-scripts/
+# NOT `scripts/` — that blanket rule was aimed at the repo-root mobile build
+# scripts, but it also stripped backend/scripts/, which contains the archive
+# backfill pipeline. The container then failed with
+# "No module named 'scripts'" on every run while the code sat correctly on
+# main. Exclude only the root-level mobile scripts.
+/scripts/
 supabase/
 *.log
 xcodebuild_test.log
