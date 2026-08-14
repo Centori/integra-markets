@@ -37,7 +37,17 @@ _SOURCES = [
 
 
 def _import_backfill(name: str):
-    mod = __import__(f"backend.scripts.backfill.{name}", fromlist=["backfill"])
+    """Import a sibling source module by name.
+
+    Relative to THIS package rather than an absolute "backend.scripts..." path:
+    the Dockerfile does `COPY backend/ .`, so inside the container the package
+    root is `scripts.backfill`, not `backend.scripts.backfill`. Hardcoding the
+    absolute path worked from a repo checkout and would have failed on every
+    scheduled run in Railway.
+    """
+    from importlib import import_module
+
+    mod = import_module(f".{name}", package=__package__)
     return mod.backfill
 
 

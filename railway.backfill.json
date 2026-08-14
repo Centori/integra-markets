@@ -1,0 +1,13 @@
+{
+  "$schema": "https://railway.com/railway.schema.json",
+  "build": {
+    "builder": "DOCKERFILE",
+    "dockerfilePath": "Dockerfile"
+  },
+  "deploy": {
+    "startCommand": "python -m scripts.backfill.run_all --since 2020-01-01 --until 2026-07-01 --max-days 3",
+    "cronSchedule": "*/15 * * * *",
+    "restartPolicyType": "NEVER",
+    "numReplicas": 1
+  }
+}
