@@ -96,7 +96,17 @@ def _parse_gdelt_row(row: list[str]) -> dict[str, Any] | None:
         return None
     try:
         global_event_id = row[0]
-        sql_date = row[1]  # YYYYMMDD
+        # Col 1 ("Day") is GDELT's NOMINAL event date and is not safe for an
+        # archive: in 20200101000000.export.CSV every row carries Day=20190101,
+        # and malformed values like 19200101 appear too (that is where the
+        # 1920-dated rows in the first backfill run came from).
+        #
+        # Col 59 DATEADDED is when GDELT ingested the story — i.e. when the
+        # news actually entered the world. That is also the correct semantics
+        # for backtesting: it is the first moment a trader could have acted on
+        # it. Prefer it, fall back to Day, and reject anything implausible.
+        sql_date = row[1]  # YYYYMMDD (nominal, unreliable)
+        date_added = row[59] if len(row) > 59 else ""  # YYYYMMDDHHMMSS
         event_code = row[26]
         actor1_name = row[6] or ""
         actor2_name = row[16] or ""
@@ -117,9 +127,8 @@ def _parse_gdelt_row(row: list[str]) -> dict[str, Any] | None:
     if not tags:
         return None
 
-    try:
-        event_date = dt.datetime.strptime(sql_date, "%Y%m%d").date()
-    except ValueError:
+    event_date = _resolve_event_date(date_added, sql_date)
+    if event_date is None:
         return None
 
     actors = [a for a in (actor1_name, actor2_name) if a]
@@ -139,6 +148,32 @@ def _parse_gdelt_row(row: list[str]) -> dict[str, Any] | None:
         "source_url": source_url,
         "headline": None,  # GDELT events don't ship a headline column
     }
+
+
+# GDELT 2.0 starts in Feb 2015; anything outside this is a parse artefact.
+_MIN_PLAUSIBLE_YEAR = 2000
+
+
+def _resolve_event_date(date_added: str, nominal_day: str) -> dt.date | None:
+    """Best available date for an event, preferring DATEADDED.
+
+    Returns None when neither field yields a plausible date, so the row is
+    dropped rather than written with a bogus timestamp — a wrong date in a
+    backtesting archive is worse than a missing row.
+    """
+    max_year = dt.date.today().year + 1
+
+    for value, fmt in ((date_added, "%Y%m%d%H%M%S"), (nominal_day, "%Y%m%d")):
+        text = (value or "").strip()
+        if not text:
+            continue
+        try:
+            parsed = dt.datetime.strptime(text, fmt).date()
+        except ValueError:
+            continue
+        if _MIN_PLAUSIBLE_YEAR <= parsed.year <= max_year:
+            return parsed
+    return None
 
 
 def _safe_float(s: str | None) -> float | None:
