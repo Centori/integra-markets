@@ -88,6 +88,12 @@ except ImportError:
     news_feed_available = False
 
 try:
+    from api.summarize import router as summarize_router
+    summarize_available = True
+except ImportError:
+    summarize_available = False
+
+try:
     from api.subscriptions import router as subscriptions_router
     subscriptions_available = True
 except ImportError:
@@ -197,6 +203,8 @@ if divergence_available:
     app.include_router(divergence_router)
 if news_feed_available:
     app.include_router(news_feed_router)
+if summarize_available:
+    app.include_router(summarize_router)
 if kalshi_available:
     app.include_router(kalshi_router)
 if subscriptions_available:

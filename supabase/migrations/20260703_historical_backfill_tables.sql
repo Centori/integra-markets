@@ -51,8 +51,12 @@ create index if not exists idx_historical_prices_source_date
 create table if not exists public.historical_positioning (
     id                  bigserial   primary key,
     commodity           text        not null,
+    -- Single-source for now; kept as an IN list so adding an exchange later
+    -- is a one-word change. (Was `in ('cftc_cot',)` — a Python-style trailing
+    -- comma, which is a SQL syntax error and blocked this entire migration
+    -- from ever being applied.)
     source              text        not null default 'cftc_cot'
-                           check (source in ('cftc_cot',)),
+                           check (source in ('cftc_cot')),
     report_date         date        not null,
     trader_category     text        not null,   -- 'managed_money', 'commercial', etc.
     long_positions      bigint      not null default 0,

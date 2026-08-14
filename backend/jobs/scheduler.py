@@ -53,7 +53,7 @@ def start_all() -> None:
     if _threads:
         return
     try:
-        from jobs import divergence_monitor, news_fetcher
+        from jobs import divergence_monitor, news_fetcher, pipeline_health
     except ImportError as exc:
         logger.warning("scheduler: jobs not importable: %s", exc)
         return
@@ -69,6 +69,15 @@ def start_all() -> None:
     t2 = _SchedulerThread("divergence_monitor", divergence_monitor.run, interval_s=600)
     t2.start()
     _threads["divergence_monitor"] = t2
+
+    # Data-freshness check every 15 min. The other two jobs report "tick ok"
+    # even when their writes are being rejected downstream, so this one
+    # asserts that data actually LANDED: entity_mentions and raw_documents are
+    # recent, the feed still spans >1 source, and summaries aren't all
+    # title-echoes. Logs at ERROR when any of that stops being true.
+    t3 = _SchedulerThread("pipeline_health", pipeline_health.run, interval_s=900)
+    t3.start()
+    _threads["pipeline_health"] = t3
 
 
 def stop_all() -> None:

@@ -150,8 +150,21 @@ def _safe_float(s: str | None) -> float | None:
         return None
 
 
-def backfill(supabase, *, since: dt.date, until: dt.date) -> int:
-    """Backfill events between [since, until). Resumes from cursor if newer."""
+def backfill(
+    supabase,
+    *,
+    since: dt.date,
+    until: dt.date,
+    max_days: int | None = None,
+) -> int:
+    """Backfill events between [since, until). Resumes from cursor if newer.
+
+    `max_days` bounds ONE invocation to that many days of data. Because the
+    cursor is written after every day, a bounded run is not a partial failure
+    — it is a checkpoint. Scheduling `--max-days 3` every 15 minutes walks
+    five years in a few days of wall-clock at negligible sustained load,
+    instead of saturating the network for hours in a single run.
+    """
     cursor_iso = read_cursor(supabase, SOURCE, "event_date")
     if cursor_iso:
         cursor_date = parse_iso_date(cursor_iso)
@@ -160,7 +173,15 @@ def backfill(supabase, *, since: dt.date, until: dt.date) -> int:
             since = cursor_date
 
     total = 0
+    processed = 0
     for day in daterange(since, until):
+        if max_days is not None and processed >= max_days:
+            logger.info(
+                "gdelt: hit --max-days=%d budget at %s, stopping (cursor saved; "
+                "next run resumes here)", max_days, day
+            )
+            break
+        processed += 1
         try:
             zip_bytes = _download_day(day)
         except urllib.error.HTTPError as exc:
@@ -193,6 +214,13 @@ def main() -> None:
     ap.add_argument("--since", required=True, help="ISO date, inclusive")
     ap.add_argument("--until", required=True, help="ISO date, exclusive")
     ap.add_argument("--verbose", action="store_true")
+    ap.add_argument(
+        "--max-days",
+        type=int,
+        default=None,
+        help="Bound this run to N days of data. The cursor is saved after every "
+             "day, so a bounded run is a checkpoint, not a partial failure.",
+    )
     args = ap.parse_args()
 
     setup_logging(args.verbose)
@@ -201,6 +229,7 @@ def main() -> None:
         supabase,
         since=parse_iso_date(args.since),
         until=parse_iso_date(args.until),
+        max_days=args.max_days,
     )
     print(f"gdelt: {total} events ingested")
 
