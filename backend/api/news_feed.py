@@ -130,16 +130,30 @@ def _resolve_preferences(
     }
 
 
+async def _live_rss_fallback(
+    request: "NewsFeedRequest", preferences: Dict[str, Any]
+) -> List[Dict[str, Any]]:
+    """Request-time RSS fetch — the old primary path, now the safety net.
+
+    Only reached when the store is empty or unreachable (a fresh database, or
+    the ingest cron wedged). It is kept because returning stale-but-real news
+    beats returning nothing, but it is deliberately not the default: it takes
+    ~28s, cannot reach Reuters from Railway, and emits unparsed dates.
+    """
+    try:
+        from user_news_service import UserNewsService  # type: ignore
+    except ImportError as exc:
+        raise HTTPException(status_code=503, detail=f"news service unavailable: {exc}")
+    service = UserNewsService()
+    result = await service.get_user_based_news(preferences)
+    return result.get("news") or result.get("articles") or []
+
+
 @router.post("/feed")
 async def get_news_feed(
     request: NewsFeedRequest,
     auth: Optional[Dict[str, Any]] = Depends(optional_supabase_jwt),
 ) -> Dict[str, Any]:
-    try:
-        from user_news_service import UserNewsService  # type: ignore
-    except ImportError as exc:
-        raise HTTPException(status_code=503, detail=f"news service unavailable: {exc}")
-
     # Server-side tier enforcement — anonymous / expired requests get
     # free_trial limits (1 day of history, 20 articles/session max).
     from services._supabase import get_supabase_client
@@ -160,7 +174,6 @@ async def get_news_feed(
     clamped_hours = clamp_hours_back(tier, request.hours_back or 24)
     clamped_max = clamp_max_articles(tier, request.max_articles or 20)
 
-    service = UserNewsService()
     # Personalization: authed users get their saved alert_preferences
     # (commodities, keywords, regions, custom RSS capped by tier); explicit
     # request fields win; anonymous users fall back to defaults.
@@ -169,15 +182,43 @@ async def get_news_feed(
         request, stored, tier, limits_for(tier).custom_rss_urls
     )
     personalized = preferences.pop("_personalized", False)
-    try:
-        result = await service.get_user_based_news(preferences)
-    except Exception as exc:  # noqa: BLE001
-        logger.exception("user_news_service failed")
-        raise HTTPException(status_code=500, detail=str(exc))
 
-    articles: List[Dict[str, Any]] = result.get("news") or result.get("articles") or []
-    # Apply tier-clamped article ceiling (not just whatever the client asked for).
-    articles = articles[:clamped_max]
+    # Primary path: read the store the ingest cron writes and that
+    # /api/news/latest — the endpoint the notification poller uses — also
+    # reads. Sharing one corpus is what makes a notification's story
+    # guaranteed to be present in the feed.
+    from services.feed_store import fetch_feed
+
+    feed_source = "store"
+    window_hours = clamped_hours
+    try:
+        store_result = fetch_feed(
+            supabase,
+            hours_back=clamped_hours,
+            max_articles=clamped_max,
+            commodities=preferences.get("commodities"),
+            keywords=preferences.get("keywords"),
+        )
+        articles: List[Dict[str, Any]] = store_result["articles"]
+        window_hours = store_result["window_hours"]
+    except Exception as exc:  # noqa: BLE001
+        logger.exception("feed_store read failed, falling back to live RSS: %s", exc)
+        articles = []
+
+    if not articles:
+        logger.warning(
+            "feed_store returned nothing for tier=%s window=%sh — using live RSS fallback",
+            tier, clamped_hours,
+        )
+        feed_source = "live_rss"
+        try:
+            articles = await _live_rss_fallback(request, preferences)
+        except HTTPException:
+            raise
+        except Exception as exc:  # noqa: BLE001
+            logger.exception("live RSS fallback also failed")
+            raise HTTPException(status_code=500, detail=str(exc))
+        articles = articles[:clamped_max]
 
     try:
         from services.news_enricher import enrich_articles_with_divergence
@@ -202,9 +243,16 @@ async def get_news_feed(
         "status": "success" if articles else "fallback",
         "tier": tier,
         "personalized": personalized,
+        # Which path served this response. Lets the pipeline_health job spot a
+        # wedged ingest cron: sustained "live_rss" means the store went stale.
+        "feed_source": feed_source,
         "applied_limits": {
             "hours_back": clamped_hours,
             "max_articles": clamped_max,
+            # The window actually used. Equal to hours_back unless too few
+            # articles existed in it and the reader widened (never past the
+            # tier's own allowance).
+            "window_hours": window_hours,
         },
         "timestamp": datetime.now(timezone.utc).isoformat(),
     }
