@@ -96,6 +96,92 @@ async def get_markets(
         logger.error(f"Error fetching markets: {str(e)}")
         raise HTTPException(status_code=500, detail=f"Failed to fetch markets: {str(e)}")
 
+# FastAPI matches routes in declaration order, so every literal path under
+# /markets/ MUST be declared before the parameterised /markets/{ticker}.
+# These three were declared after it, so {ticker} captured them:
+# GET /kalshi/markets/trending was handled by get_market(ticker='trending'),
+# which asked Kalshi for a market with that ticker and returned
+# 500 "Failed to fetch market: ... 404 ... /markets/trending".
+# /markets/categories and /markets/formatted were broken the same way.
+
+@router.get("/markets/categories")
+async def get_market_categories():
+    """Get available market categories"""
+    try:
+        client = get_kalshi_client()
+        categories = client.get_market_categories()
+        return {"categories": categories}
+    except Exception as e:
+        logger.error(f"Error fetching market categories: {str(e)}")
+        raise HTTPException(status_code=500, detail=f"Failed to fetch categories: {str(e)}")
+
+@router.get("/markets/trending")
+async def get_trending_markets(limit: int = Query(default=20, le=100)):
+    """Get trending markets based on volume"""
+    try:
+        client = get_kalshi_client()
+        results = client.get_trending_markets(limit)
+        return {"markets": results}
+    except Exception as e:
+        logger.error(f"Error fetching trending markets: {str(e)}")
+        raise HTTPException(status_code=500, detail=f"Failed to fetch trending markets: {str(e)}")
+
+@router.get("/markets/formatted")
+async def get_formatted_markets(
+    limit: int = Query(default=20, le=100),
+    category: Optional[str] = Query(default=None)
+):
+    """Get markets formatted for the UI mockup"""
+    try:
+        client = get_kalshi_client()
+        
+        # Get markets from Kalshi
+        markets_data = client.get_markets(limit=limit)
+        
+        # Format for UI mockup
+        formatted_markets = []
+        for market in markets_data.get('markets', []):
+            # Get additional market data
+            ticker = market.get('ticker')
+            orderbook = None
+            try:
+                orderbook = client.get_orderbook(ticker, depth=1)
+            except:
+                pass
+            
+            formatted_market = {
+                'ticker': ticker,
+                'title': market.get('title', ''),
+                'category': market.get('category', 'General'),
+                'yes_price': 72,  # Default values - would come from orderbook
+                'no_price': 28,
+                'volume': market.get('volume', 0),
+                'trader_count': market.get('open_interest', 0),
+                'resolve_time': market.get('close_time'),
+                'status': market.get('status', 'open'),
+                'yesLowPrice': 100,  # Mock data for price ranges
+                'yesHighPrice': 139,
+                'noLowPrice': 100,
+                'noHighPrice': 357
+            }
+            
+            # Update with real orderbook data if available
+            if orderbook and 'orderbook' in orderbook:
+                yes_bids = orderbook['orderbook'].get('yes', [])
+                no_bids = orderbook['orderbook'].get('no', [])
+                
+                if yes_bids:
+                    formatted_market['yes_price'] = yes_bids[0].get('price', 72)
+                if no_bids:
+                    formatted_market['no_price'] = no_bids[0].get('price', 28)
+            
+            formatted_markets.append(formatted_market)
+        
+        return {'markets': formatted_markets}
+    except Exception as e:
+        logger.error(f"Error fetching formatted markets: {str(e)}")
+        raise HTTPException(status_code=500, detail=f"Failed to fetch markets: {str(e)}")
+
 @router.get("/markets/{ticker}")
 async def get_market(ticker: str):
     """Get specific market by ticker"""
@@ -168,17 +254,6 @@ async def get_trades(
 
 # Utility Endpoints
 
-@router.get("/markets/categories")
-async def get_market_categories():
-    """Get available market categories"""
-    try:
-        client = get_kalshi_client()
-        categories = client.get_market_categories()
-        return {"categories": categories}
-    except Exception as e:
-        logger.error(f"Error fetching market categories: {str(e)}")
-        raise HTTPException(status_code=500, detail=f"Failed to fetch categories: {str(e)}")
-
 @router.post("/markets/search")
 async def search_markets(request: MarketSearchRequest):
     """Search markets by title or ticker"""
@@ -189,17 +264,6 @@ async def search_markets(request: MarketSearchRequest):
     except Exception as e:
         logger.error(f"Error searching markets: {str(e)}")
         raise HTTPException(status_code=500, detail=f"Failed to search markets: {str(e)}")
-
-@router.get("/markets/trending")
-async def get_trending_markets(limit: int = Query(default=20, le=100)):
-    """Get trending markets based on volume"""
-    try:
-        client = get_kalshi_client()
-        results = client.get_trending_markets(limit)
-        return {"markets": results}
-    except Exception as e:
-        logger.error(f"Error fetching trending markets: {str(e)}")
-        raise HTTPException(status_code=500, detail=f"Failed to fetch trending markets: {str(e)}")
 
 # Authenticated Endpoints (require API key and private key)
 
@@ -274,62 +338,6 @@ async def place_trade(request: TradeRequest):
     except Exception as e:
         logger.error(f"Error placing trade: {str(e)}")
         raise HTTPException(status_code=500, detail=f"Failed to place trade: {str(e)}")
-
-@router.get("/markets/formatted")
-async def get_formatted_markets(
-    limit: int = Query(default=20, le=100),
-    category: Optional[str] = Query(default=None)
-):
-    """Get markets formatted for the UI mockup"""
-    try:
-        client = get_kalshi_client()
-        
-        # Get markets from Kalshi
-        markets_data = client.get_markets(limit=limit)
-        
-        # Format for UI mockup
-        formatted_markets = []
-        for market in markets_data.get('markets', []):
-            # Get additional market data
-            ticker = market.get('ticker')
-            orderbook = None
-            try:
-                orderbook = client.get_orderbook(ticker, depth=1)
-            except:
-                pass
-            
-            formatted_market = {
-                'ticker': ticker,
-                'title': market.get('title', ''),
-                'category': market.get('category', 'General'),
-                'yes_price': 72,  # Default values - would come from orderbook
-                'no_price': 28,
-                'volume': market.get('volume', 0),
-                'trader_count': market.get('open_interest', 0),
-                'resolve_time': market.get('close_time'),
-                'status': market.get('status', 'open'),
-                'yesLowPrice': 100,  # Mock data for price ranges
-                'yesHighPrice': 139,
-                'noLowPrice': 100,
-                'noHighPrice': 357
-            }
-            
-            # Update with real orderbook data if available
-            if orderbook and 'orderbook' in orderbook:
-                yes_bids = orderbook['orderbook'].get('yes', [])
-                no_bids = orderbook['orderbook'].get('no', [])
-                
-                if yes_bids:
-                    formatted_market['yes_price'] = yes_bids[0].get('price', 72)
-                if no_bids:
-                    formatted_market['no_price'] = no_bids[0].get('price', 28)
-            
-            formatted_markets.append(formatted_market)
-        
-        return {'markets': formatted_markets}
-    except Exception as e:
-        logger.error(f"Error fetching formatted markets: {str(e)}")
-        raise HTTPException(status_code=500, detail=f"Failed to fetch markets: {str(e)}")
 
 @router.post("/portfolio/orders")
 async def create_order(request: OrderRequest):
