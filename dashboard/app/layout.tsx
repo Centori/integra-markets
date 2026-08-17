@@ -35,7 +35,11 @@ export default async function RootLayout({ children }: { children: React.ReactNo
             <nav className="text-sm text-text-secondary flex gap-4 items-center">
               <a href="/api-tier" className="hover:text-text-primary">Pricing</a>
               <a href="/mcp" className="hover:text-text-primary">MCP</a>
-              <a href="https://integra.mintlify.app" className="hover:text-text-primary">Docs</a>
+              {/* Was https://integra.mintlify.app, which 404s — and this nav is
+                  in the global layout, so every page including the public
+                  /api-tier pricing page showed a dead "Docs" link to someone
+                  deciding whether to pay. Now served on our own domain. */}
+              <a href="/docs" className="hover:text-text-primary">Docs</a>
               {loggedIn ? (
                 <a
                   href="/account"
