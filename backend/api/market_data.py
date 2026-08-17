@@ -5,7 +5,15 @@ Market data routes using Alpha Vantage API
 from typing import Dict, Optional, List
 from fastapi import APIRouter, HTTPException, Depends
 from pydantic import BaseModel
-from backend.alpha_vantage_client import AlphaVantageClient
+# `backend.` prefixed import. The app runs with backend/ as its root
+# (main.py does `from api.x import`, `from services.x import`), and
+# alpha_vantage_client.py sits at that root — there is no nested backend/
+# package to import through. So this raised ImportError in production, and
+# because main.py wraps every router import in a bare
+# `except ImportError: <name>_available = False` with no logging, the entire
+# /api/market-data/* surface was silently absent from the deployed app. It
+# never appeared in /openapi.json and every call 404'd.
+from alpha_vantage_client import AlphaVantageClient
 
 router = APIRouter(prefix="/api/market-data", tags=["market-data"])
 

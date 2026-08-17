@@ -112,6 +112,12 @@ except ImportError:
     v1_public_available = False
 
 try:
+    from api.market_sentiment import router as market_sentiment_router
+    market_sentiment_available = True
+except ImportError:
+    market_sentiment_available = False
+
+try:
     from api.kalshi import router as kalshi_router
     kalshi_available = True
 except ImportError:
@@ -213,6 +219,52 @@ if stripe_available:
     app.include_router(stripe_router)
 if v1_public_available:
     app.include_router(v1_public_router)
+if market_sentiment_available:
+    app.include_router(market_sentiment_router)
+
+# Every router above is imported under `except ImportError: <n>_available =
+# False`, which means a typo'd import silently deletes an entire API surface
+# from the deployed app. That is how `/api/market-data/*` went missing: it
+# imported `backend.alpha_vantage_client`, which cannot resolve when backend/
+# is the root, so the router vanished, never appeared in /openapi.json, and
+# every mobile market-data call 404'd — with nothing in the logs.
+#
+# Log the roll call at startup so the next one is visible in ten seconds
+# instead of being inferred from client 404s.
+_ROUTER_STATUS = {
+    "notifications": notifications_available,
+    "market_data": market_data_available,
+    "news": news_available,
+    "api_keys": api_keys_available,
+    "feedback": feedback_available,
+    "metrics": metrics_available,
+    "news_user": news_user_available,
+    "sentiment_history": sentiment_history_available,
+    "agent_ask": agent_ask_available,
+    "divergence": divergence_available,
+    "news_feed": news_feed_available,
+    "summarize": summarize_available,
+    "kalshi": kalshi_available,
+    "subscriptions": subscriptions_available,
+    "stripe": stripe_available,
+    "v1_public": v1_public_available,
+    "market_sentiment": market_sentiment_available,
+}
+_missing = sorted(name for name, ok in _ROUTER_STATUS.items() if not ok)
+if _missing:
+    print(f"WARNING: routers failed to import and are NOT mounted: {', '.join(_missing)}")
+else:
+    print(f"routers mounted: {len(_ROUTER_STATUS)}/{len(_ROUTER_STATUS)}")
+
+
+@app.get("/health/routers")
+def router_health():
+    """Which routers mounted. Surfaces a silently-dropped API surface."""
+    return {
+        "mounted": sorted(n for n, ok in _ROUTER_STATUS.items() if ok),
+        "missing": _missing,
+        "all_mounted": not _missing,
+    }
 
 # CORS — explicit allow-list of origins that may call the API from a
 # browser. allow_origins=["*"] + allow_credentials=True is invalid per
