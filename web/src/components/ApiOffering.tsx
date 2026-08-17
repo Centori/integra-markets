@@ -1,17 +1,21 @@
 'use client';
 
-import Link from 'next/link';
-import { useEffect, useState } from 'react';
 import { motion } from 'framer-motion';
-import { Terminal, Database, Webhook, KeyRound, Check } from 'lucide-react';
-import { createClient } from '@/lib/supabase';
+import { Terminal, Database, Webhook, KeyRound } from 'lucide-react';
 
-// The API console lives in the dashboard app (separate Vercel project,
-// same Supabase project) on its own subdomain. www only owns the marketing
-// surface, so every API CTA hands off here.
-const DASHBOARD = 'https://dashboard.integramarkets.app';
-const PRICING_URL = `${DASHBOARD}/api-tier`;
-const CONSOLE_URL = `${DASHBOARD}/account/api`;
+// Capability section for the landing page. Tells developers what the API does;
+// it deliberately does NOT price it.
+//
+// The three pricing tiers (Trial / API / API + Archive) and their CTA buttons
+// used to sit below these cards. Plan selection now lives only in the signed-in
+// console at dashboard.integramarkets.app/api-tier, so the marketing page
+// explains the product and the dashboard sells the plan.
+//
+// Dropping the tiers also removed this component's only reason to touch
+// Supabase: the CTAs branched on whether a session existed, to choose between
+// the public pricing page and the API console. With them gone there is no auth
+// check, no client state and no session round-trip on the home page — it is
+// purely presentational. 'use client' remains only because framer-motion needs it.
 
 const capabilities = [
     {
@@ -36,58 +40,7 @@ const capabilities = [
     }
 ];
 
-const tiers = [
-    {
-        name: 'Trial',
-        tagline: '30 days, free',
-        features: ['Full API access', '30-day data window', 'Read-only — no exports'],
-        cta: 'Start free trial',
-        plan: 'api_trial',
-        highlighted: false
-    },
-    {
-        name: 'API',
-        tagline: 'For production use',
-        features: ['Everything in Trial', 'Exports (CSV / Excel)', '30-day rolling window', 'Includes Integra Pro on mobile'],
-        cta: 'Get API access',
-        plan: 'api_basic',
-        highlighted: true
-    },
-    {
-        name: 'API + Archive',
-        tagline: 'For research & backtesting',
-        features: ['Everything in API', 'Full historical archive', 'Unlimited lookback', 'Priority support'],
-        cta: 'Talk to us',
-        plan: 'api_history',
-        highlighted: false
-    }
-];
-
 export default function ApiOffering() {
-    const [signedIn, setSignedIn] = useState<boolean | null>(null);
-
-    useEffect(() => {
-        let active = true;
-        (async () => {
-            try {
-                const supabase = createClient();
-                const { data: { session } } = await supabase.auth.getSession();
-                if (active) setSignedIn(!!session);
-            } catch {
-                if (active) setSignedIn(false);
-            }
-        })();
-        return () => { active = false; };
-    }, []);
-
-    // Signed in  -> straight to the API console (it gates on its own session).
-    // Signed out -> the dashboard's PUBLIC pricing page, which carries its own
-    //               "Sign in" and Stripe checkout. www's /signup does not yet
-    //               honour a ?next= param, so routing through it would silently
-    //               drop the destination — send people somewhere that works.
-    const ctaHref = (tier: string) =>
-        signedIn ? `${CONSOLE_URL}?plan=${tier}` : `${PRICING_URL}?plan=${tier}`;
-
     return (
         <section id="api" className="py-32 bg-gradient-to-b from-black to-[#0a0a0a] relative">
             <div className="max-w-7xl mx-auto px-6 relative z-10">
@@ -110,7 +63,10 @@ export default function ApiOffering() {
                     </p>
                 </motion.div>
 
-                <div className="grid md:grid-cols-2 lg:grid-cols-4 gap-6 mb-20">
+                {/* No bottom margin: the pricing grid that used to follow these
+                    cards is gone, so the section's own py-32 provides the spacing
+                    before How It Works. */}
+                <div className="grid md:grid-cols-2 lg:grid-cols-4 gap-6">
                     {capabilities.map((c, i) => (
                         <motion.div
                             key={c.title}
@@ -128,53 +84,6 @@ export default function ApiOffering() {
                         </motion.div>
                     ))}
                 </div>
-
-                <div className="grid md:grid-cols-3 gap-6 max-w-5xl mx-auto">
-                    {tiers.map((t, i) => (
-                        <motion.div
-                            key={t.name}
-                            initial={{ opacity: 0, y: 20 }}
-                            whileInView={{ opacity: 1, y: 0 }}
-                            viewport={{ once: true }}
-                            transition={{ duration: 0.5, delay: i * 0.1 }}
-                            className={`relative rounded-[12px] p-8 border transition-colors duration-300 ${
-                                t.highlighted
-                                    ? 'border-[#4ECCA3]/40 bg-[#0c1512]'
-                                    : 'border-white/5 bg-[#0a0a0a] hover:border-white/10'
-                            }`}
-                        >
-                            {t.highlighted && (
-                                <span className="absolute -top-3 left-8 bg-[#4ECCA3] text-black text-[10px] font-bold uppercase tracking-wider px-3 py-1 rounded-full">
-                                    Most popular
-                                </span>
-                            )}
-                            <h3 className="text-[22px] font-light text-white">{t.name}</h3>
-                            <p className="text-[13px] text-zinc-500 mb-6 font-light">{t.tagline}</p>
-                            <ul className="space-y-3 mb-8">
-                                {t.features.map((f) => (
-                                    <li key={f} className="flex items-start gap-2.5">
-                                        <Check size={16} strokeWidth={1.5} className="text-[#4ECCA3] mt-[3px] flex-none" />
-                                        <span className="text-[14px] text-zinc-400 font-light leading-relaxed">{f}</span>
-                                    </li>
-                                ))}
-                            </ul>
-                            <Link
-                                href={ctaHref(t.plan)}
-                                className={`flex items-center justify-center h-11 rounded-[8px] text-[14px] font-medium transition-colors ${
-                                    t.highlighted
-                                        ? 'bg-[#4ECCA3] hover:bg-[#45b393] text-black'
-                                        : 'border border-white/15 text-zinc-300 hover:border-[#4ECCA3]/40 hover:text-white'
-                                }`}
-                            >
-                                {signedIn && t.plan !== 'api_history' ? 'Open API console' : t.cta}
-                            </Link>
-                        </motion.div>
-                    ))}
-                </div>
-
-                <p className="text-center text-[13px] text-zinc-600 mt-10 font-light">
-                    Pricing shown at checkout. Mobile subscriptions are billed through the App Store.
-                </p>
             </div>
         </section>
     );

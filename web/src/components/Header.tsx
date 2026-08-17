@@ -63,10 +63,9 @@ export default function Header() {
                     <Link href="/#features" className="text-[14px] font-light text-zinc-400 hover:text-white transition-colors">
                         Features
                     </Link>
-                    {/* No "API" anchor: the #api section it scrolled to has been
-                        removed from the landing page, and a nav link to a
-                        missing anchor silently does nothing. API pricing now
-                        lives only in the dashboard console. */}
+                    <Link href="/#api" className="text-[14px] font-light text-zinc-400 hover:text-white transition-colors">
+                        API
+                    </Link>
                     <Link href="/#how-it-works" className="text-[14px] font-light text-zinc-400 hover:text-white transition-colors">
                         How It Works
                     </Link>
