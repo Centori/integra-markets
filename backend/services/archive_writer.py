@@ -18,6 +18,8 @@ import logging
 from datetime import datetime, timezone
 from typing import Any, Dict, Iterable, List, Optional
 
+from services.feed_dates import parse_published_iso
+
 logger = logging.getLogger(__name__)
 
 # Bump this whenever the scoring pipeline changes (constants, lexicon,
@@ -32,15 +34,15 @@ def _url_hash(url: str) -> str:
 
 
 def _to_iso(value: Any) -> Optional[str]:
-    if value is None:
-        return None
-    if isinstance(value, str):
-        return value
-    if isinstance(value, datetime):
-        if value.tzinfo is None:
-            value = value.replace(tzinfo=timezone.utc)
-        return value.isoformat()
-    return None
+    """Normalise any publication-date form to an ISO 8601 UTC string, or None.
+
+    Previously strings were passed through untouched, so a raw RSS date like
+    'Fri, 31 Jul 2026  09:00:00 EST' was handed to Postgres verbatim for a
+    timestamptz column. Routing everything through the one parser means the
+    column only ever receives ISO 8601, and unreadable dates surface as None
+    instead of as a fabricated timestamp.
+    """
+    return parse_published_iso(value)
 
 
 def _normalize_sentiment(label: Any) -> Optional[str]:
@@ -80,10 +82,8 @@ def persist_articles(
 
         url_hash = _url_hash(url)
         published = _to_iso(article.get("time_published") or article.get("published"))
-        if not published:
-            published = datetime.now(timezone.utc).isoformat()
 
-        docs_to_insert.append({
+        doc = {
             "source": article.get("source") or "unknown",
             "source_type": "news",
             "url": url,
@@ -98,9 +98,20 @@ def persist_articles(
                 "enhanced": article.get("enhanced", False),
                 "word_count": article.get("word_count"),
                 "enhancement_method": article.get("enhancement_method"),
+                # Recorded so an unreadable upstream date is visible in the
+                # data rather than indistinguishable from a real one.
+                "published_estimated": published is None,
             },
-            "published_at": published,
-        })
+        }
+        # Only set published_at when we actually know it. Omitting the key
+        # means PostgREST's ON CONFLICT DO UPDATE leaves the column alone on
+        # re-ingestion, so a date-less article gets now() once at first sight
+        # (via the column default) and then ages normally, instead of being
+        # re-stamped to the current time on every ten-minute tick and living
+        # permanently at the top of the feed.
+        if published:
+            doc["published_at"] = published
+        docs_to_insert.append(doc)
 
         sentiment = _normalize_sentiment(article.get("sentiment"))
         if sentiment is None:
@@ -121,16 +132,35 @@ def persist_articles(
         return {"documents": 0, "scores": 0}
 
     # Step 1: upsert documents, returning their ids.
-    try:
-        doc_response = (
-            supabase.table("raw_documents")
-            .upsert(docs_to_insert, on_conflict="source,url_hash")
-            .execute()
+    #
+    # Two batches, because PostgREST rejects a batch whose objects do not all
+    # carry the same keys ("All object keys must match"). Rows with a known
+    # publication date send published_at; rows without omit it so the column
+    # default fills it on insert and re-ingestion does not overwrite it.
+    dated = [d for d in docs_to_insert if "published_at" in d]
+    undated = [d for d in docs_to_insert if "published_at" not in d]
+    if undated:
+        logger.info(
+            "archive_writer: %d/%d articles had no readable publication date; "
+            "their published_at is left to the column default",
+            len(undated), len(docs_to_insert),
         )
-        doc_rows = doc_response.data or []
-    except Exception as exc:  # noqa: BLE001
-        logger.warning("archive_writer: raw_documents upsert failed: %s", exc)
-        return {"documents": 0, "scores": 0, "error": str(exc)}
+
+    doc_rows: List[Dict[str, Any]] = []
+    for batch in (dated, undated):
+        if not batch:
+            continue
+        try:
+            doc_response = (
+                supabase.table("raw_documents")
+                .upsert(batch, on_conflict="source,url_hash")
+                .execute()
+            )
+            doc_rows.extend(doc_response.data or [])
+        except Exception as exc:  # noqa: BLE001
+            logger.warning("archive_writer: raw_documents upsert failed: %s", exc)
+            if batch is dated:
+                return {"documents": 0, "scores": 0, "error": str(exc)}
 
     # Step 2: build sentiment rows keyed by the document ids returned above.
     score_rows: List[Dict[str, Any]] = []

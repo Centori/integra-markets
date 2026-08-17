@@ -20,6 +20,8 @@ from typing import Dict, List, Optional, Set
 from dataclasses import dataclass
 from datetime import datetime, timedelta
 
+from services.feed_dates import parse_published
+
 @dataclass
 class SourceStatus:
     """Tracks the status of a news source"""
@@ -516,34 +518,22 @@ class NewsDataSources:
             logger.error(f"Error fetching Trading Economics news: {e}")
             source_tracker.update_status('Trading Economics', success=False, error=str(e))
             return []
-    def _parse_date(self, date_string: str) -> datetime:
-        """Parse various date formats to datetime object"""
-        try:
-            if not date_string:
-                return datetime.now(timezone.utc)
+    def _parse_date(self, date_string: str) -> Optional[datetime]:
+        """Parse a feed publication date to aware UTC, or None if unreadable.
 
-            # Try parsing different date formats
-            formats = [
-                '%a, %d %b %Y %H:%M:%S %Z',  # RFC 2822
-                '%a, %d %b %Y %H:%M:%S %z',  # RFC 2822 with timezone
-                '%Y-%m-%dT%H:%M:%S%z',       # ISO 8601
-                '%Y-%m-%d %H:%M:%S',         # Simple format
-            ]
-            
-            for fmt in formats:
-                try:
-                    parsed = datetime.strptime(date_string, fmt)
-                    if parsed.tzinfo is None:
-                        return parsed.replace(tzinfo=timezone.utc)
-                    return parsed.astimezone(timezone.utc)
-                except ValueError:
-                    continue
-                    
-            # If all formats fail, return current time
-            return datetime.now(timezone.utc)
-            
-        except Exception:
-            return datetime.now(timezone.utc)
+        This used to try four rigid strptime formats and then fall back to
+        `datetime.now()`. Two of the four never matched a real feed, and the
+        fallback was silent, so unparseable dates became "just published".
+        EIA's Today in Energy ships 'Fri, 31 Jul 2026  09:00:00 EST' — double
+        space, alphabetic zone — and every one of its articles landed stamped
+        with the ingest time.
+
+        Because `raw_documents` is upserted every ten minutes, such a row had
+        its date rewritten to now() on each tick and pinned itself to the top
+        of the recency-ordered feed indefinitely. Returning None instead lets
+        the caller decide, and see, that the date is unknown.
+        """
+        return parse_published(date_string)
 
     async def fetch_investing_news(self) -> List[Dict]:
         """Fetch news from Investing.com RSS feeds"""
