@@ -363,10 +363,24 @@ export function setupNotificationListeners(onNotificationReceived, onNotificatio
   // Listener for notifications received while app is running
   notificationListener = Notifications.addNotificationReceivedListener(notification => {
     console.log('Notification received:', notification);
-    
-    // Show alert for immediate feedback
-    Alert.alert(notification.request.content.title, notification.request.content.body);
-    
+
+    // NO Alert.alert here. This used to fire
+    //   Alert.alert(notification.request.content.title,
+    //               notification.request.content.body)
+    // for every notification that arrived while the app was open — a MODAL
+    // that blocks the whole UI until "OK" is tapped. With news alerts running,
+    // the user had to dismiss a "Breaking News / OK" dialog before they could
+    // read any card, repeatedly.
+    //
+    // iOS already presents an unobtrusive banner for a foreground notification
+    // (see the notification handler's shouldShowAlert), so this added nothing
+    // but an interruption. No production social or news app blocks the feed on
+    // an acknowledgement to deliver a headline.
+    //
+    // The notification still reaches the app: `onNotificationReceived` is
+    // invoked below so callers can refresh the feed or surface an in-app
+    // indicator, and tapping the OS banner still routes through
+    // `addNotificationResponseReceivedListener`.
     if (onNotificationReceived) {
       onNotificationReceived(notification);
     }
@@ -444,14 +458,14 @@ export async function sendMarketAlert(commodity, change, price) {
  */
 export async function sendBreakingNewsAlert(headline, source) {
   const settings = await getNotificationSettings();
-  
+
   if (!settings.breakingNews || !settings.pushNotifications) {
     return;
   }
 
   const title = 'Breaking News';
   const body = headline;
-  
+
   try {
     // Send notification
     const notificationId = await scheduleLocalNotification(title, body, {
@@ -744,8 +758,32 @@ export async function validatePermissionConsistency() {
   }
 }
 
+/**
+ * Open this app's page in the OS Settings app so the user can flip
+ * notification permissions back on. iOS and Android both support the
+ * app-scoped settings deep link via Linking.openSettings().
+ *
+ * Callers treat this as best-effort: if the OS refuses (rare, but the
+ * promise can reject on older Androids) we surface a short explanation
+ * rather than letting the rejection go unhandled.
+ */
+export async function openSystemSettings() {
+  try {
+    await Linking.openSettings();
+    return true;
+  } catch (error) {
+    console.error('Error opening system settings:', error);
+    Alert.alert(
+      'Could not open Settings',
+      'Open the Settings app, then find Integra Markets to change notification permissions.'
+    );
+    return false;
+  }
+}
+
 export default {
   registerForPushNotificationsAsync,
+  openSystemSettings,
   getNotificationSettings,
   saveNotificationSettings,
   getStoredPushToken,

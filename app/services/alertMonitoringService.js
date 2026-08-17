@@ -1,5 +1,6 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import { sendMarketAlert, sendNewsAlert } from './notificationService';
+import { sendMarketAlert, sendBreakingNewsAlert } from './notificationService';
+import { selectNotifiable } from './notificationDedup';
 import { addAlert } from './alertService';
 
 // API configuration
@@ -77,7 +78,14 @@ async function fetchRealNewsData() {
         headline: article.title,
         source: article.source,
         impact: article.sentiment === 'bullish' || article.sentiment === 'bearish' ? 'high' : 'medium',
-        category: article.category || 'general'
+        category: article.category || 'general',
+        // Carried through so notifications can be de-duplicated and
+        // watermarked. Without a stable identity and a publish time, the only
+        // thing to key on is the headline, and there is no way to tell a new
+        // article from one we already announced — which is how the same
+        // stories were re-notified every 30 seconds.
+        url: article.link || article.url || '',
+        published: article.published || '',
       }));
     }
   } catch (error) {
@@ -217,21 +225,30 @@ class AlertMonitoringService {
     try {
       // Fetch real news data
       const newsData = await fetchRealNewsData();
-      
+
       // Check for high-impact news
       const highImpactNews = newsData.filter(news => news.impact === 'high');
-      
-      for (const news of highImpactNews.slice(0, 3)) { // Limit to 3 alerts per check
-        await sendNewsAlert(
-          'Breaking News',
-          news.headline,
-          {
-            source: news.source,
-            impact: news.impact,
-            category: news.category,
-            severity: news.impact === 'high' ? 'high' : 'medium'
-          }
+
+      // This loop used to fire `highImpactNews.slice(0, 3)` notifications on
+      // EVERY tick — every 30 seconds, for the same articles, with no memory of
+      // what had already been announced. It was silent only because
+      // /api/news/latest returned no `sentiment` field, so `impact` was always
+      // 'medium' and this list was always empty; once that endpoint started
+      // returning real sentiment the loop produced ~360 duplicate pushes an
+      // hour. selectNotifiable supplies the missing state: a publish-time
+      // watermark, a persisted seen-set, and per-tick/hourly caps that collapse
+      // a burst into one digest.
+      const { notify, digest } = await selectNotifiable(highImpactNews);
+
+      if (digest > 0) {
+        await sendBreakingNewsAlert(
+          `${digest} new market headlines`,
+          'Integra'
         );
+      } else {
+        for (const news of notify) {
+          await sendBreakingNewsAlert(news.headline, news.source);
+        }
       }
     } catch (error) {
       console.error('Error checking news alerts:', error);
