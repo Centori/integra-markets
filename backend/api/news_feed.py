@@ -53,6 +53,31 @@ class NewsFeedRequest(BaseModel):
 DEFAULT_COMMODITIES = ["oil", "gold", "wheat"]
 DEFAULT_REGIONS = ["US", "EU", "Asia"]
 
+# Tiers allowed to receive divergence / prediction-market fields. This MUST
+# match the client's gate in app/services/entitlementGate.ts:
+#
+#     divergence_alerts:      ['free_trial', 'basic_markets'],
+#     polymarket_kalshi_view: ['free_trial', 'basic_markets'],
+#     divergence_filter:      ['free_trial', 'basic_markets'],
+#
+# The strip below previously read `tier != "basic_markets"`, which removed the
+# fields for free_trial — every user today — while the client had already opened
+# the Divergence filter and Markets view to free_trial for evaluation. The
+# effect was visible in the app: MOCK_DIVERGENCE_CARD in App.js is injected only
+# while no live article carries divergenceStatus == 'DIVERGENCE', so it could
+# never be displaced and the demo card was permanent — even though production
+# divergence_monitor logs show fed_rates and iran_middle_east clearing the
+# 20-point threshold against Polymarket.
+#
+# Module-level and an explicit allow-list rather than a `!=` against one tier,
+# so tests/test_divergence_tier_gate.py can assert it against the client's gate.
+#
+# PUNCH-LIST BEFORE CHARGING (SYSTEM_MAP.md): remove 'free_trial' here AND from
+# those three lines in entitlementGate.ts together. They were opened as a pair
+# for the same evaluation window and must close as a pair — the cross-surface
+# test fails if either side moves alone.
+DIVERGENCE_TIERS = ("free_trial", "basic_markets")
+
 
 def _stored_preferences(supabase, user_id: str) -> Optional[Dict[str, Any]]:
     """Fetch the user's saved alert_preferences row (mobile writes this table
@@ -226,9 +251,9 @@ async def get_news_feed(
     except Exception as exc:  # noqa: BLE001
         logger.debug("news_enricher skipped in /feed: %s", exc)
 
-    # For non-basic_markets tiers, strip divergence fields from the response
-    # so paid features never leak into free responses.
-    if tier != "basic_markets":
+    # Strip paid prediction-market fields for tiers outside DIVERGENCE_TIERS
+    # (defined at module level, alongside the reasoning and the punch-list note).
+    if tier not in DIVERGENCE_TIERS:
         for art in articles:
             for k in (
                 "divergenceStatus", "divergenceProvider", "divergenceDelta", "divergenceTopic",
