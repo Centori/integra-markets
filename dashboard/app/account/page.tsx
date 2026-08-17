@@ -27,7 +27,10 @@ export default async function AccountPage() {
     : null;
 
   return (
-    <div className="mx-auto max-w-3xl space-y-8 py-8">
+    // No mx-auto / max-w here: account/layout.tsx owns the width now and this
+    // sits inside its content column. Centring again would float the content
+    // away from the rail on wide screens.
+    <div className="space-y-8">
       <div className="flex items-start justify-between gap-4">
         <div>
           <h1 className="text-2xl font-semibold">Account</h1>

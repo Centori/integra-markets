@@ -38,7 +38,8 @@ export default async function AccountApiPage({
   }
 
   return (
-    <div className="mx-auto max-w-3xl space-y-10 py-8">
+    // Width is owned by account/layout.tsx's content column.
+    <div className="space-y-10">
       <div>
         <h1 className="text-2xl font-semibold">API &amp; integrations</h1>
         <p className="text-text-secondary mt-1 text-sm">
