@@ -74,6 +74,31 @@ def _to_signed(prob: Optional[float]) -> Optional[float]:
     return round(2.0 * prob - 1.0, 4)
 
 
+def _sentiment_to_signed(score: Optional[float]) -> Optional[float]:
+    """Convert a 0..1 sentiment score (0.5 = neutral) to the same -1..+1 scale.
+
+    The delta was previously computed as `sentiment_avg - poly_signed`, mixing
+    two different scales: `entity_mentions.score` runs 0..1 with 0.5 meaning
+    neutral, while `_to_signed` had already mapped the market probability onto
+    -1..+1 with 0.0 meaning neutral. Subtracting one from the other adds a
+    constant +0.5 offset to every reading, against a 0.20 threshold:
+
+        perfectly neutral news (0.50) vs a neutral market (prob 0.50 -> 0.00)
+            delta = 0.50 - 0.00 = +0.50   -> "DIVERGENCE"   (wrong)
+
+    So aligned inputs were reported as divergence — and, worse, genuine
+    divergence in the other direction was cancelled out by the same offset:
+
+        neutral news (0.50) vs a strongly bullish market (0.75 -> +0.50)
+            delta = 0.50 - 0.50 =  0.00   -> "ALIGNED"      (wrong)
+
+    Both sides must be on the same scale before they are compared.
+    """
+    if score is None:
+        return None
+    return round(2.0 * score - 1.0, 4)
+
+
 def _aggregate_market_prob(markets: List[Dict[str, Any]]) -> Optional[float]:
     """Volume-weighted average yes_price across the matched markets.
 
@@ -158,15 +183,18 @@ def compute(
     kalshi_prob = _aggregate_market_prob(kalshi_matched)
     kalshi_signed = _to_signed(kalshi_prob)
 
-    # 4. Deltas.
+    # 4. Deltas — both sides on the signed -1..+1 scale. `sentiment_avg` stays
+    # 0..1 on the reading itself, because that is what clients display as a
+    # percentage; only the comparison is done in signed space.
+    sentiment_signed = _sentiment_to_signed(sentiment_avg)
     delta_poly = (
-        round(sentiment_avg - poly_signed, 4)
-        if sentiment_avg is not None and poly_signed is not None
+        round(sentiment_signed - poly_signed, 4)
+        if sentiment_signed is not None and poly_signed is not None
         else None
     )
     delta_kalshi = (
-        round(sentiment_avg - kalshi_signed, 4)
-        if sentiment_avg is not None and kalshi_signed is not None
+        round(sentiment_signed - kalshi_signed, 4)
+        if sentiment_signed is not None and kalshi_signed is not None
         else None
     )
 
