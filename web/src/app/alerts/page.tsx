@@ -273,7 +273,7 @@ export default function AlertsPage() {
                 return;
             }
 
-            const apiUrl = process.env.NEXT_PUBLIC_API_URL || 'https://integra-markets-9zz1.onrender.com';
+            const apiUrl = process.env.NEXT_PUBLIC_API_URL || 'https://api.integramarkets.app';
             const response = await fetch(`${apiUrl}/api/news/latest?t=${Date.now()}`, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },

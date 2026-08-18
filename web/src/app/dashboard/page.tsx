@@ -51,51 +51,68 @@ export default function Dashboard() {
 
     const fetchNews = async (commodities: string[] | null) => {
         try {
-            const apiUrl = process.env.NEXT_PUBLIC_API_URL || 'https://integra-markets-9zz1.onrender.com';
+            // Default to the live Railway backend. The previous default was
+            // https://integra-markets-9zz1.onrender.com — the retired Render
+            // deployment. It still answers 200 on `/`, so it never failed
+            // loudly; it just served a different, frozen API. That is why
+            // backend work landed on mobile and never appeared on web.
+            const apiUrl = process.env.NEXT_PUBLIC_API_URL || 'https://api.integramarkets.app';
 
-            let newsData = { articles: [] };
-            const cacheBuster = `?t=${Date.now()}`;
+            let newsData: { articles?: NewsItem[] } = { articles: [] };
 
-            // Create AbortController for timeout
             const controller = new AbortController();
-            const timeoutId = setTimeout(() => controller.abort(), 30000); // 30 second timeout
+            const timeoutId = setTimeout(() => controller.abort(), 30000);
 
             try {
                 console.log('Fetching news with commodities:', commodities);
-                // Try POST /api/news/latest first (same as mobile)
-                const response = await fetch(`${apiUrl}/api/news/latest${cacheBuster}`, {
+                // POST /api/news/feed — the same endpoint mobile uses, and the
+                // one that carries the ordering, de-duplication, real summaries
+                // and divergence enrichment. It returns { articles: [...] }.
+                //
+                // Previously this called POST /api/news/latest, which is GET-only
+                // and answered 405, so the web silently fell through to
+                // GET /api/news/analysis — a legacy Render route that does not
+                // exist on the current backend at all.
+                const response = await fetch(`${apiUrl}/api/news/feed`, {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ commodities: commodities, hours: 24 }),
+                    body: JSON.stringify({
+                        commodities: commodities ?? undefined,
+                        hours_back: 24,
+                        max_articles: 30,
+                    }),
                     signal: controller.signal,
                 });
 
                 if (response.ok) {
                     newsData = await response.json();
-                    console.log('Got news from POST /news/latest:', newsData.articles?.[0]);
+                    console.log('Got news from POST /api/news/feed:', newsData.articles?.[0]);
                 }
             } catch (e) {
                 if ((e as Error).name === 'AbortError') {
                     console.log('Request timed out');
                 } else {
-                    console.log('POST /news/latest failed, trying GET /news/analysis');
+                    console.log('POST /api/news/feed failed, trying GET /api/news/latest');
                 }
             } finally {
                 clearTimeout(timeoutId);
             }
 
-            // Fallback to GET /api/news/analysis
+            // Fallback: GET /api/news/latest returns a bare array of the same
+            // articles, from the same store, so a feed hiccup degrades to the
+            // notification corpus rather than to nothing.
             if (!newsData.articles || newsData.articles.length === 0) {
                 const controller2 = new AbortController();
                 const timeoutId2 = setTimeout(() => controller2.abort(), 30000);
 
                 try {
-                    const response = await fetch(`${apiUrl}/api/news/analysis?hours=24&t=${Date.now()}`, {
+                    const response = await fetch(`${apiUrl}/api/news/latest?t=${Date.now()}`, {
                         signal: controller2.signal,
                     });
                     if (response.ok) {
-                        newsData = await response.json();
-                        console.log('Got news from GET /news/analysis:', newsData.articles?.[0]);
+                        const raw = await response.json();
+                        newsData = Array.isArray(raw) ? { articles: raw } : raw;
+                        console.log('Got news from GET /api/news/latest:', newsData.articles?.[0]);
                     }
                 } finally {
                     clearTimeout(timeoutId2);

@@ -276,7 +276,7 @@ export default function AIAnalysisModal({ isOpen, onClose, article, onBookmark, 
         const text = `${article.title} ${article.summary || ''}`.slice(0, 2000);
         
         try {
-            const apiUrl = process.env.NEXT_PUBLIC_API_URL || 'https://integra-markets-9zz1.onrender.com';
+            const apiUrl = process.env.NEXT_PUBLIC_API_URL || 'https://api.integramarkets.app';
             const response = await fetch(`${apiUrl}/api/sentiment`, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
