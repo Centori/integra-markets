@@ -4,6 +4,7 @@ import { useState } from 'react';
 import { TrendingUp, TrendingDown, ArrowRight, ExternalLink, Share2, Bookmark, Sparkles, Clock } from 'lucide-react';
 import Image from 'next/image';
 import IntegraWordmark from '@/components/brand/IntegraWordmark';
+import DivergenceBadge from '@/components/dashboard/DivergenceBadge';
 
 export interface NewsItem {
     title: string;
@@ -18,6 +19,12 @@ export interface NewsItem {
     image_url?: string;
     banner_image?: string;
     keywords?: Array<{ word: string; sentiment?: string; score?: number }>;
+    // The feed has been enriching articles with prediction-market divergence all
+    // along; these were simply never declared, so web dropped the signal.
+    divergenceStatus?: string;
+    divergenceDelta?: number;
+    divergenceProvider?: string;
+    divergenceTopic?: string;
 }
 
 interface NewsCardProps {
@@ -244,6 +251,8 @@ export default function NewsCard({ item, featured = false, onAIClick, isBookmark
                         </button>
                     </div>
                 </div>
+
+                <DivergenceBadge item={item} />
             </div>
         </article>
     );
