@@ -55,7 +55,11 @@ export default function ProfileScreen({ userProfile, alertPreferences, onBack, o
   const paywall = usePaywall();
   const [showAlertPreferences, setShowAlertPreferences] = useState(false);
   const [showAllBookmarks, setShowAllBookmarks] = useState(false);
-  const [loadingProfile, setLoadingProfile] = useState(true);
+  // Only block the tab behind a spinner when we have NOTHING to show yet. If
+  // App.js already handed us a userProfile prop, render it immediately and
+  // refresh in the background — a slow/hung auth call must never be able to
+  // freeze the whole tab (including the Logout button).
+  const [loadingProfile, setLoadingProfile] = useState(!userProfile);
   const [profileError, setProfileError] = useState(null);
   const [resolvedProfile, setResolvedProfile] = useState(userProfile || null);
   const [showDeleteModal, setShowDeleteModal] = useState(false);
@@ -69,11 +73,17 @@ export default function ProfileScreen({ userProfile, alertPreferences, onBack, o
 
   useEffect(() => {
     let mounted = true;
+    // Never let a hung network call keep the tab spinning forever. Race the
+    // fetch against a timeout that resolves to `undefined` so we fall through
+    // to the prop instead of awaiting indefinitely.
+    const withTimeout = (p, ms) =>
+      Promise.race([p, new Promise((res) => setTimeout(() => res(undefined), ms))]);
     const loadProfile = async () => {
       try {
-        setLoadingProfile(true);
+        // Only show the blocking spinner if we have no prop to render.
+        if (!userProfile) setLoadingProfile(true);
         setProfileError(null);
-        const profile = await userService.getCurrentUser();
+        const profile = await withTimeout(userService.getCurrentUser(), 8000);
         if (mounted) {
           if (profile) {
             setResolvedProfile(profile);
@@ -105,8 +115,12 @@ export default function ProfileScreen({ userProfile, alertPreferences, onBack, o
 // Remove demo defaults; derive from resolvedProfile
   const effectiveUserProfile = resolvedProfile || null;
 
+  // Reflect the user's ACTUAL saved preferences (passed from App.js). Fall back
+  // to empty — NOT a fabricated 3-commodity list — so a user with nothing set
+  // sees "0 selected" instead of a misleading "3" that doesn't match the Alerts
+  // screen. App.js loads alertPreferences on auth, so this is populated in use.
   const defaultAlertPreferences = alertPreferences || {
-    commodities: ['Crude Oil', 'Gold', 'Natural Gas'],
+    commodities: [],
     frequency: 'daily',
     notifications: true
   };

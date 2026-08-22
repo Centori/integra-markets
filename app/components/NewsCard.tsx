@@ -9,6 +9,7 @@ import * as Haptics from 'expo-haptics';
 import { SingleStar } from './CustomStarIcon';
 import PolymarketIcon from './PolymarketIcon';
 import KalshiIcon from './KalshiIcon';
+import IntegraWordmark from './brand/IntegraWordmark';
 import { useBookmarks } from '../providers/BookmarkProvider';
 import { getPreferredSourceUrl } from '../utils/polymarketLinks';
 import { cleanSummaryText } from '../utils/cleanSummary';
@@ -344,11 +345,17 @@ export default function NewsCard({ item, onAIClick }: NewsCardProps) {
             style={StyleSheet.absoluteFill}
           />
         )}
-        <Image
-          source={item.image_url ? { uri: item.image_url } : require('../../assets/NewLogoInt.png.png')}
-          style={[styles.cardImage, !item.image_url && styles.cardImageFallback]}
-          resizeMode={item.image_url ? 'cover' : 'contain'}
-        />
+        {item.image_url ? (
+          <Image
+            source={{ uri: item.image_url }}
+            style={styles.cardImage}
+            resizeMode="cover"
+          />
+        ) : (
+          // No source image → the "integra" wordmark (replaces the old square
+          // "i" icon) centered over the brand gradient. See assets/integra-wordmark.svg.
+          <IntegraWordmark size={46} />
+        )}
         {item.sentiment && (
           <View style={styles.imageSentimentBadge}>
             {renderSentimentIcon(item.sentiment)}

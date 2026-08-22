@@ -1,0 +1,7 @@
+<svg width="300" height="88" viewBox="0 0 300 88" xmlns="http://www.w3.org/2000/svg">
+  <!-- Integra brand wordmark. Green = #4ECCA3 (accentPositive). Rendered in the
+       system font; swap font-family / convert to paths if a custom brand face
+       is bundled later. Used as the news-card image fallback + reusable brand mark. -->
+  <text x="150" y="63" text-anchor="middle" font-family="System, -apple-system, 'Segoe UI', Roboto, sans-serif"
+        font-size="70" font-weight="700" letter-spacing="-3" fill="#4ECCA3">integra</text>
+</svg>

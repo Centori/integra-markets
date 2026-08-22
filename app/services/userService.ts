@@ -20,10 +20,16 @@ class UserService {
 
   async getCurrentUser(): Promise<UserProfile | null> {
     try {
-      // First check Supabase auth
-      const { data: { user }, error: authError } = await supabase.auth.getUser();
+      // Use getSession() (reads the persisted session from AsyncStorage) NOT
+      // getUser() (a network round-trip to the auth server with no timeout that
+      // can hang indefinitely on React Native). A hung getUser() was freezing
+      // the Profile tab on "Loading…" forever — the promise never settled, so
+      // the loading flag never cleared. App.js already established the session
+      // locally; a local read here is both correct and instant.
+      const { data: { session }, error: authError } = await supabase.auth.getSession();
+      const user = session?.user;
       if (authError || !user) {
-        console.error('Error fetching auth user:', authError);
+        console.error('Error fetching auth session:', authError);
         return null;
       }
 

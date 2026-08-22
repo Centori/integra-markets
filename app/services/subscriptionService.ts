@@ -44,6 +44,17 @@ function loadPurchases(): typeof import('react-native-purchases') | null {
   }
 }
 
+/**
+ * True when the native react-native-purchases SDK is actually linked into this
+ * binary. Lets the paywall distinguish "this build has no purchases SDK" (a real
+ * build problem — needs a new TestFlight build) from "the SDK is here but the
+ * plan/offering isn't live yet" (a RevenueCat / App Store Connect config gap —
+ * a rebuild won't help). iOS-only; false on every other platform.
+ */
+export function isPurchasesAvailable(): boolean {
+  return loadPurchases() != null;
+}
+
 export async function initSubscriptions(userId?: string): Promise<void> {
   if (_initialized) return;
   const Purchases = loadPurchases();
@@ -71,27 +82,76 @@ export async function initSubscriptions(userId?: string): Promise<void> {
 
 // Reads the user's current tier from RevenueCat (which is the source of
 // truth for what they've paid for). Called on app startup + after purchase.
-export async function fetchTier(): Promise<Tier> {
+// App-facing tier strength. Only mobile tiers rank here — an API-only tier
+// (api_basic/api_history) grants NO in-app features, so it maps to free_trial
+// for the app. A bundle that includes mobile makes the backend return
+// basic_markets directly.
+const APP_TIER_RANK: Record<string, number> = {
+  expired: 0,
+  free_trial: 0,
+  basic: 1,
+  basic_markets: 2,
+};
+
+function strongerTier(a: Tier, b: Tier): Tier {
+  return (APP_TIER_RANK[b] ?? 0) > (APP_TIER_RANK[a] ?? 0) ? b : a;
+}
+
+// RevenueCat (Apple IAP) — instant post-purchase, but knows nothing about web
+// (Stripe) purchases.
+async function fetchRevenueCatTier(): Promise<Tier> {
   const Purchases = loadPurchases();
   if (!Purchases || !_initialized) return 'free_trial';
   try {
     const info = await Purchases.default.getCustomerInfo();
     const active = info.entitlements.active;
-    if (active[ENTITLEMENT_IDS.basic_markets]) {
-      _cachedTier = 'basic_markets';
-    } else if (active[ENTITLEMENT_IDS.basic]) {
-      _cachedTier = 'basic';
-    } else if (info.firstSeen && !info.originalPurchaseDate) {
-      // Never purchased anything. Trial state is tracked server-side (Supabase).
-      _cachedTier = 'free_trial';
-    } else {
-      _cachedTier = 'expired';
-    }
-    return _cachedTier;
+    if (active[ENTITLEMENT_IDS.basic_markets]) return 'basic_markets';
+    if (active[ENTITLEMENT_IDS.basic]) return 'basic';
+    if (info.firstSeen && !info.originalPurchaseDate) return 'free_trial';
+    return 'expired';
   } catch (err) {
-    console.warn('[subscriptions] fetchTier failed:', err);
+    console.warn('[subscriptions] RevenueCat tier failed:', err);
     return _cachedTier;
   }
+}
+
+// Backend entitlement — the authoritative UNION of Apple (via the RevenueCat
+// webhook) AND web/Stripe purchases (via /link-web-tier). Lets a web API+archive
+// bundle unlock mobile Pro without a rebuild. Only mobile tiers upgrade the app.
+async function fetchBackendTier(): Promise<Tier> {
+  try {
+    const { supabase } = require('../utils/supabaseConfig');
+    const Constants = require('expo-constants').default;
+    const { data: { session } } = await supabase.auth.getSession();
+    const token = session?.access_token;
+    if (!token) return 'free_trial';
+    const base = Constants?.expoConfig?.extra?.apiUrl ?? 'https://api.integramarkets.app';
+    const res = await fetch(`${base}/api/subscriptions/entitlement`, {
+      headers: { Authorization: `Bearer ${token}` },
+    });
+    if (!res.ok) return 'free_trial';
+    const data = await res.json();
+    const t = data?.tier;
+    // Map the backend tier to what it grants IN THE APP. Both paid API tiers
+    // ($99 api_basic and the archive bundle api_history) include full mobile Pro
+    // — the Databento/Quandl model: paid tiers are comprehensive; only the
+    // 30-day trial is limited (via no-export). Only api_trial / free stay gated.
+    if (t === 'basic_markets' || t === 'api_basic' || t === 'api_history') return 'basic_markets';
+    if (t === 'basic') return 'basic';
+    return 'free_trial';
+  } catch (err) {
+    console.warn('[subscriptions] backend tier failed:', err);
+    return 'free_trial';
+  }
+}
+
+// The user's effective tier = the STRONGER of Apple IAP and the backend union.
+// Reading both covers (a) web purchases the app can't see locally and (b) the
+// brief RevenueCat-webhook lag right after an in-app purchase.
+export async function fetchTier(): Promise<Tier> {
+  const [rc, be] = await Promise.all([fetchRevenueCatTier(), fetchBackendTier()]);
+  _cachedTier = strongerTier(rc, be);
+  return _cachedTier;
 }
 
 // Fetches the RevenueCat "Offering" (bundle of packages) that the paywall

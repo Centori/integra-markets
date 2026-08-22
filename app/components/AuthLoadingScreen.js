@@ -158,7 +158,10 @@ const AuthLoadingScreen = ({ onAuthComplete, onSkip }) => {
             // Use the actual authService to authenticate with Supabase
             let result;
             if (isSignUp) {
-                result = await authService.signUpWithEmail(email.trim(), password, fullName.trim());
+                // Supabase GoTrue requires options.data to be a JSON OBJECT
+                // (it becomes user_metadata). Passing the bare fullName string
+                // caused "cannot unmarshal string into ... map[string]interface{}".
+                result = await authService.signUpWithEmail(email.trim(), password, { full_name: fullName.trim() });
             } else {
                 result = await authService.signInWithEmail(email.trim(), password);
             }

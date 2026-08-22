@@ -102,10 +102,15 @@ export class AuthService {
     userData?: Record<string, unknown>,
   ): Promise<AuthOutcome> {
     try {
+      // GoTrue's `data` (→ user_metadata) MUST be a JSON object. Guard against a
+      // non-object (e.g. a bare string) slipping through, which fails server-side
+      // with "cannot unmarshal string into ... map[string]interface{}".
+      const metadata =
+        userData && typeof userData === 'object' && !Array.isArray(userData) ? userData : undefined;
       const { data, error } = await supabase.auth.signUp({
         email,
         password,
-        options: userData ? { data: userData } : undefined,
+        options: metadata ? { data: metadata } : undefined,
       });
       if (error) throw error;
       // When the project requires email confirmation, Supabase returns a user

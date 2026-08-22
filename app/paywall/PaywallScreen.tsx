@@ -33,6 +33,7 @@ import {
   fetchCurrentOffering,
   purchasePackage,
   restorePurchases,
+  isPurchasesAvailable,
 } from '../services/subscriptionService';
 import type { Tier } from '../services/entitlementGate';
 
@@ -136,10 +137,11 @@ export default function PaywallScreen({ onClose }: Props) {
 
   const handleSubscribe = async () => {
     if (!offering || !proPackage) {
-      Alert.alert(
-        'Subscriptions unavailable',
-        'This build wasn’t compiled with the subscriptions SDK, or this plan isn’t available yet. Update to the latest TestFlight build.',
-      );
+      // Distinguish the two very different causes so the message is actionable.
+      const message = isPurchasesAvailable()
+        ? 'Subscriptions aren’t live yet — the Pro plan is still being set up on the store side. Please check back soon.'
+        : 'This build wasn’t compiled with the subscriptions SDK. Please update to the latest TestFlight build.';
+      Alert.alert('Subscriptions unavailable', message);
       return;
     }
     setLoading(true);

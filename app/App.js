@@ -19,7 +19,7 @@ import {
 } from 'react-native';
 import { MaterialIcons, MaterialCommunityIcons } from '@expo/vector-icons';
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import { registerForPushNotificationsAsync, setupNotificationListeners, ensurePushEnabled, openSystemSettings, checkNotificationPermissions, getNotificationSettings } from './services/notificationService';
+import { registerForPushNotificationsAsync, setupNotificationListeners, openSystemSettings, checkNotificationPermissions, getNotificationSettings } from './services/notificationService';
 
 // Ensure dev tools are disabled in production
 if (!__DEV__) {
@@ -51,6 +51,8 @@ import AIAnalysisOverlay from './components/AIAnalysisOverlay';
 import { bootstrapEntitlements } from './hooks/useEntitlement';
 import { PaywallProvider } from './paywall/PaywallProvider';
 import ProfileScreen from './components/ProfileScreen';
+import PendingDeletionBanner from './components/PendingDeletionBanner';
+import { getPendingDeletion } from './services/accountService';
 import { BookmarkProvider } from './providers/BookmarkProvider';
 import PrivacyPolicyModal from './components/PrivacyPolicyModal';
 import TermsOfServiceModal from './components/TermsOfServiceModal';
@@ -181,6 +183,9 @@ const App = () => {
   const [showEditProfileFromProfile, setShowEditProfileFromProfile] = useState(false);
   const [showEditAlertsFromProfile, setShowEditAlertsFromProfile] = useState(false);
   const [alertPreferences, setAlertPreferences] = useState(null);
+  // ISO expires_at of a pending account deletion, or null. Drives the
+  // restore banner (Apple 5.1.1(v): deletion must be visible + cancellable).
+  const [pendingDeletionExpiresAt, setPendingDeletionExpiresAt] = useState(null);
   const [refreshing, setRefreshing] = useState(false);
   const [loadingMore, setLoadingMore] = useState(false);
 
@@ -266,6 +271,11 @@ const App = () => {
   };
 
   const saveFeedCache = async (items) => {
+    // NEVER persist an empty feed — a transient empty/failed fetch must not
+    // poison the last-good cache (that was the "no cards until multiple
+    // refreshes" bug: an empty write blanked the cache, so the next cold start
+    // hydrated nothing).
+    if (!Array.isArray(items) || items.length === 0) return;
     try {
       await AsyncStorage.setItem(FEED_CACHE_KEY, JSON.stringify({ items, savedAt: Date.now() }));
     } catch { }
@@ -464,14 +474,28 @@ const App = () => {
           severity: a.severity,
           // Image URL for card display
           image_url: a.image_url,
+          // Prediction-market divergence (news vs market). These are enriched by
+          // the backend feed (Pro-gated there) — must be passed through explicitly
+          // or the live divergence cards render nothing (only the mock did before).
+          divergenceStatus: a.divergenceStatus,
+          divergenceProvider: a.divergenceProvider,
+          divergenceDelta: a.divergenceDelta,
+          divergenceTopic: a.divergenceTopic,
+          // Cross-market: Kalshi vs Polymarket disagree with each other.
+          crossMarketStatus: a.crossMarketStatus,
+          crossMarketDelta: a.crossMarketDelta,
+          crossMarketTopic: a.crossMarketTopic,
+          polymarketImplied: a.polymarketImplied,
+          kalshiImplied: a.kalshiImplied,
           timestamp: parseAlphaTime(a.published || a.time_published)?.getTime() || Date.now(),
         };
       });
 
       if (mapped.length === 0) {
-        setAllNews([]);
-        setLiveNews([]);
-        await saveFeedCache([]);
+        // Transient empty/failed upstream — do NOT blank the UI or poison the
+        // cache. Restore the last-good cached feed so the user keeps seeing
+        // cards instead of an empty screen until a later refresh succeeds.
+        await loadCachedFeed();
         return;
       }
 
@@ -601,6 +625,26 @@ const App = () => {
       }
     }, 3000);
   }, []);
+
+  // Load the user's real alert preferences once authenticated, so ProfileScreen
+  // and the Alerts tab reflect the ACTUAL saved settings (commodities, etc.)
+  // instead of ProfileScreen's hardcoded 3-item default.
+  useEffect(() => {
+    if (userData && userData.id) {
+      loadAlertPreferences().catch((e) =>
+        console.warn('[App] loadAlertPreferences on auth failed:', e),
+      );
+      // Surface any pending account deletion so the restore banner shows
+      // after re-login / app relaunch, not only right after the request.
+      getPendingDeletion()
+        .then((res) => {
+          if (res.ok) setPendingDeletionExpiresAt(res.data?.expires_at ?? null);
+        })
+        .catch((e) => console.warn('[App] getPendingDeletion failed:', e));
+    } else {
+      setPendingDeletionExpiresAt(null);
+    }
+  }, [userData?.id]);
 
   // Re-register push token when user data becomes available (user logged in)
   useEffect(() => {
@@ -934,11 +978,20 @@ const App = () => {
       console.log('Returning user — skipping onboarding');
       // Persist so subsequent sign-ins are instant even before the profile loads.
       await AsyncStorage.setItem('onboarding_completed', 'true');
+      // A populated Supabase profile means this user already completed the full
+      // onboarding flow (which includes the alerts step) on a prior session or
+      // device. Mirror the session-restore path (App.js:842-847, which sets BOTH
+      // flags) so a returning user is NEVER re-prompted for alerts just because
+      // the local alerts_completed flag was cleared by logout/reinstall/new
+      // device. Only force the alerts step for a user who is flagged onboarded
+      // locally but has no server profile to confirm they've been through it.
       const alertsCompleted = await AsyncStorage.getItem('alerts_completed');
-      if (alertsCompleted !== 'true') {
+      if (profileComplete || alertsCompleted === 'true') {
+        await AsyncStorage.setItem('alerts_completed', 'true');
+        // fully set up — continue straight into the app (all flags stay false)
+      } else {
         setShowAlertPreferences(true);
       }
-      // else: fully set up — show the main app (all flags remain false)
     } else {
       console.log('New user — showing onboarding');
       setShowOnboarding(true);
@@ -1370,9 +1423,29 @@ const App = () => {
   if (activeNav === 'Profile') {
     return (
       <>
+        {pendingDeletionExpiresAt && (
+          <PendingDeletionBanner
+            expiresAt={pendingDeletionExpiresAt}
+            onRestored={() => {
+              setPendingDeletionExpiresAt(null);
+              Alert.alert('Account restored', 'Your account is no longer scheduled for deletion.');
+            }}
+          />
+        )}
         <ProfileScreen
           onBack={() => setActiveNav('Today')}
           userProfile={userData}
+          alertPreferences={alertPreferences}
+          onAccountDeletionScheduled={(expiresAt) => {
+            setPendingDeletionExpiresAt(expiresAt);
+            const when = new Date(expiresAt).toLocaleDateString(undefined, {
+              year: 'numeric', month: 'long', day: 'numeric',
+            });
+            Alert.alert(
+              'Account scheduled for deletion',
+              `Your account and all associated data will be permanently deleted on ${when}. Sign in any time before then and tap Restore to cancel.`,
+            );
+          }}
           onLogout={handleLogout}
           onNavigateToSettings={(screen) => {
             if (screen === 'NotificationsSettings') handleNotificationSettings();
@@ -1522,6 +1595,16 @@ const App = () => {
         <View style={styles.header}>
           <Text style={styles.headerTitle}>Today</Text>
         </View>
+
+        {pendingDeletionExpiresAt && (
+          <PendingDeletionBanner
+            expiresAt={pendingDeletionExpiresAt}
+            onRestored={() => {
+              setPendingDeletionExpiresAt(null);
+              Alert.alert('Account restored', 'Your account is no longer scheduled for deletion.');
+            }}
+          />
+        )}
 
         {!notifEnabled && !bannerDismissed && (
           <View style={styles.banner}>

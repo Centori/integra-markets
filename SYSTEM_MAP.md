@@ -129,10 +129,64 @@ stubs → skipped → brand-mark fallback.** Concurrent, 4s timeout, fully isola
 | `/dashboard` | Today feed + bookmarks + analysis + poll | live |
 | `/alerts` | Alert preferences | live |
 | `/settings/{privacy,terms,about}` | Legal | live |
-| `/account`, `/account/api` | **API console + keys** | **404 — planned, not built** (web's intended lead) |
+| `/account`, `/account/api` | **API console + keys** | **not on www** — lives on `dashboard.integramarkets.app` (see below) |
+| `/#api` | API offering section (capabilities + 3 tiers) | live 2026-08-11 |
 
 Web calls the same Supabase tables as mobile (one identity/bookmarks/votes).
 Note: web bundle references the old Render backend `integra-markets-9zz1.onrender.com` for some calls.
+
+### Web deploy pipeline (fixed 2026-08-11 — read before touching www)
+
+| | Value |
+|---|---|
+| Domain owner | Vercel project **`integra-web`** (team `centori1-7236s-projects`) |
+| Source of truth | **`Centori/integra-markets`, branch `main`, directory `web/`** |
+| Build | `framework: nextjs`, `rootDirectory: web`, default build (`web/vercel.json`) |
+| Deploy trigger | **Merge to `main` → Vercel auto-builds → www updates.** Verified via PR #12. |
+
+**🔴 ROLLBACK POINT — `dpl_5B7auUCsYoLBpUGdvHtez8RV8gvH`**
+The last-known-good pre-2026-08-11 production deployment (2026-07-07, sha `73720372`).
+If www ever looks wrong: Vercel → `integra-web` → Deployments → find that id →
+**Instant Rollback / Promote to Production**. No rebuild, seconds to apply.
+CLI equivalent: `vercel rollback dpl_5B7auUCsYoLBpUGdvHtez8RV8gvH --scope centori1-7236s-projects`
+
+**Traps that already bit us here:**
+- **Deployed bundles are not in git.** Never reason about "what's live" from the repo —
+  pull Vercel deployment history. (Cost hours on 2026-07-07.)
+- **Don't move the www domain between projects or rebuild speculatively** — that caused a
+  `DEPLOYMENT_NOT_FOUND` outage. Prefer instant rollback/promote.
+- **`v0-recreate-ui-from-screenshot`** is git-linked to the same repo but renders the
+  **Expo react-native-web shell**, not the landing page. Pointing www at it would replace
+  the marketing site.
+- **`vercel deploy` from `web/` without linking first silently creates a stray project.**
+  Always `vercel link --project integra-web` first.
+- **`jeremiahMshelia/integra-markets` `render-deploy` `web/` is STALE** (was the source until
+  2026-08-11). Edits there no longer reach www.
+
+### Domain topology (settled 2026-08-11)
+
+| Domain | Vercel project | Source | Owns |
+|---|---|---|---|
+| `www.integramarkets.app` | `integra-web` | Centori main → `web/` | Marketing + `/login` `/signup` `/dashboard` `/alerts` `/terms` `/privacy` |
+| `dashboard.integramarkets.app` | `integra-dashboard` | Centori main → `dashboard/` | **API console**: `/api-tier` (public pricing + Stripe) · `/account/api` (keys, auth-gated) · `/mcp` |
+
+Both are git-linked to `Centori/integra-markets` `main` and auto-deploy on merge.
+
+**Why the API console is on a subdomain, not proxied under www:** the dashboard emits
+**relative `/_next/*` asset paths**, which collide with www's own Next build. The old root
+`vercel.json` proxy only worked because www was then a static Expo export with no `/_next`.
+Don't reintroduce those rewrites.
+
+**Auth notes:**
+- Supabase `uri_allow_list` = `integra://**` (mobile deep links), `https://www.integramarkets.app/**`,
+  `https://dashboard.integramarkets.app/**`. Keep `integra://**` — removing it breaks mobile
+  email confirmation.
+- www `/signup` **ignores a `?next=` param** (always lands on `/auth/callback`). Don't route
+  cross-app CTAs through it expecting a redirect — send users to the dashboard's public
+  `/api-tier`, which carries its own sign-in.
+- Build 87's paywall "Manage on web" opens `dashboard.integramarkets.app/api-tier`
+  (`app/paywall/PaywallScreen.tsx:94`). That URL 404'd until the subdomain was created
+  on 2026-08-11 — don't remove the domain.
 
 ---
 

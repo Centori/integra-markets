@@ -352,7 +352,10 @@ class NewsDataSources:
         """Fetch Energy Information Administration reports and data"""
         try:
             # EIA RSS feed for reports
-            url = "https://www.eia.gov/petroleum/weekly/includes/newsletter_rss.xml"
+            # The petroleum/weekly newsletter feed was retired and 404s (it was
+            # burning 3 retries per scheduler tick). Today in Energy is the
+            # live equivalent: 16 entries, most with full descriptions.
+            url = "https://www.eia.gov/rss/todayinenergy.xml"
             
             try:
                 content = await self._get_text_with_retry(url)

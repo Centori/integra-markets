@@ -58,6 +58,14 @@ const ShinyText = ({ text, disabled = false, speed = 3, style = {} }) => {
     );
 };
 
+// The progress bar is cosmetic — it does not track real bootstrap work, so
+// its duration is pure perceived latency. Kept just long enough to read as
+// branding rather than a flash: 25 ticks x 16ms + 200ms handoff = ~600ms
+// (was ~1.8s). Tune STEP/TICK_MS together; total = (100/STEP) * TICK_MS.
+const TICK_MS = 16; // one frame
+const STEP = 4;
+const HANDOFF_MS = 200;
+
 const IntegraLoadingPage = ({ onLoadingComplete }) => {
     const [progress, setProgress] = React.useState(0);
     const progressAnim = React.useRef(new Animated.Value(0)).current;
@@ -66,8 +74,8 @@ const IntegraLoadingPage = ({ onLoadingComplete }) => {
         const timer = setInterval(() => {
             // Updater stays pure — completion side effect lives in the
             // effect below (React may invoke updaters twice).
-            setProgress((prev) => (prev >= 100 ? 100 : prev + 2));
-        }, 30);
+            setProgress((prev) => (prev >= 100 ? 100 : prev + STEP));
+        }, TICK_MS);
 
         return () => clearInterval(timer);
     }, []);
@@ -75,7 +83,7 @@ const IntegraLoadingPage = ({ onLoadingComplete }) => {
     React.useEffect(() => {
         if (progress >= 100) {
             // Small delay for smooth transition
-            const t = setTimeout(() => onLoadingComplete?.(), 300);
+            const t = setTimeout(() => onLoadingComplete?.(), HANDOFF_MS);
             return () => clearTimeout(t);
         }
     }, [progress, onLoadingComplete]);
@@ -83,7 +91,7 @@ const IntegraLoadingPage = ({ onLoadingComplete }) => {
     React.useEffect(() => {
         Animated.timing(progressAnim, {
             toValue: progress,
-            duration: 50,
+            duration: TICK_MS,
             useNativeDriver: false,
         }).start();
     }, [progress]);
@@ -130,7 +138,8 @@ const IntegraLoadingPage = ({ onLoadingComplete }) => {
                         ]}
                     />
                 </View>
-                <Text style={styles.progressText}>{Math.round(progress)}%</Text>
+                {/* Numeric percentage removed per design — the animated bar alone
+                    communicates progress without the 0-100% countdown. */}
             </View>
         </View>
     );

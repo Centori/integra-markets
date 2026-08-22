@@ -104,6 +104,22 @@ function ProGate({ locked, onUpgrade, children }: { locked: boolean; onUpgrade: 
     );
 }
 
+// Assumed composition of the voting audience, shown as shares rather than
+// head counts.
+//
+// NOTE: these shares are a fixed editorial assumption, not measured data —
+// `sentiment_votes` carries no role column, so nothing here varies per
+// article. `profiles.role` already exists, so a `get_poll_results`
+// RPC that groups votes by it would make this section real; until then the
+// figures are presented as a general audience mix.
+const VOTER_MIX = [
+    { role: 'Physical traders', share: 30 },
+    { role: 'Financial traders', share: 38 },
+    { role: 'Analysts', share: 15 },
+    { role: 'Hedge funds', share: 10 },
+    { role: 'Risk managers', share: 7 },
+] as const;
+
 const AIAnalysisOverlay: React.FC<AIAnalysisOverlayProps> = ({ newsData: newsDataProp, news, isVisible, onClose }) => {
     // Support both prop names
     // Support both prop names and unwrap originalArticle if present (from Alerts)
@@ -148,6 +164,9 @@ const AIAnalysisOverlay: React.FC<AIAnalysisOverlayProps> = ({ newsData: newsDat
     const [showTour, setShowTour] = useState(false);
     const [tourStep, setTourStep] = useState(0);
     const [tourMode, setTourMode] = useState<'full' | 'single'>('full');
+    // Divergence "i" info — a styled card (same look as the tour/poll "about")
+    // instead of a generic OS Alert bubble.
+    const [showDivergenceModal, setShowDivergenceModal] = useState(false);
     const TOUR_STORAGE_KEY = '@integra_analysis_tour_completed';
 
     // Animated glowing border for the poll
@@ -890,19 +909,17 @@ const AIAnalysisOverlay: React.FC<AIAnalysisOverlayProps> = ({ newsData: newsDat
     // Plain-language methodology note for the divergence signal. Explains the
     // concept (news sentiment vs. market-implied probability) without exposing
     // the proprietary model — no lexicon, weights, thresholds, or lookback.
-    const showDivergenceInfo = () => {
-        Alert.alert(
-            'How divergence works',
-            'Integra compares its aggregated news-sentiment reading for a topic against the '
-            + 'probability implied by prediction markets (Polymarket / Kalshi) over the same period.\n\n'
-            + 'When the two disagree by more than a set margin, we flag it:\n'
-            + '• “underpricing” — the news is more bullish than the market’s price implies\n'
-            + '• “overpricing” — the news is more bearish than the market implies\n\n'
-            + 'The number is the size of that gap. It’s a directional research signal, not '
-            + 'investment advice — market-implied probabilities can move quickly.',
-            [{ text: 'Got it' }]
-        );
-    };
+    // Copy for the divergence info card (rendered in the styled modal below).
+    const DIVERGENCE_INFO_TITLE = 'How divergence works';
+    const DIVERGENCE_INFO_BODY =
+        'Integra compares its aggregated news-sentiment reading for a topic against the '
+        + 'probability implied by prediction markets (Polymarket / Kalshi) over the same period.\n\n'
+        + 'When the two disagree by more than a set margin, we flag it:\n'
+        + '• “underpricing” — the news is more bullish than the market’s price implies\n'
+        + '• “overpricing” — the news is more bearish than the market implies\n\n'
+        + 'The number is the size of that gap. It’s a directional research signal, not '
+        + 'investment advice — market-implied probabilities can move quickly.';
+    const showDivergenceInfo = () => setShowDivergenceModal(true);
 
     const copyToClipboard = async (text: string, sectionName: string) => {
         // expo-clipboard replaces RN-core `Clipboard`, which is undefined on RN 0.76.
@@ -1137,6 +1154,38 @@ const AIAnalysisOverlay: React.FC<AIAnalysisOverlayProps> = ({ newsData: newsDat
                                 </View>
                             )}
 
+                            {/* Cross-market: Kalshi vs Polymarket disagree with EACH
+                                OTHER on this topic — independent of news sentiment. */}
+                            {newsData?.crossMarketStatus === 'DIVERGENCE'
+                                && typeof newsData?.polymarketImplied === 'number'
+                                && typeof newsData?.kalshiImplied === 'number' && (
+                                <View style={styles.section}>
+                                    <View style={styles.sectionHeader}>
+                                        <View style={styles.sectionIndicator} />
+                                        <Text style={styles.sectionTitle}>Markets Split</Text>
+                                        <TouchableOpacity
+                                            onPress={showDivergenceInfo}
+                                            style={styles.divergenceInfoBtn}
+                                            hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+                                            accessibilityLabel="How divergence is calculated"
+                                        >
+                                            <MaterialIcons name="info-outline" size={15} color="#A0A0A0" />
+                                        </TouchableOpacity>
+                                    </View>
+                                    <View style={styles.divergenceRow}>
+                                        <PolymarketIcon size={20} rounded={false} style={undefined} />
+                                        <KalshiIcon size={20} rounded={false} style={undefined} />
+                                        <Text style={styles.divergenceOverlayText}>
+                                            Polymarket {Math.round((newsData.polymarketImplied + 1) / 2 * 100)}%
+                                            {' '}vs. Kalshi {Math.round((newsData.kalshiImplied + 1) / 2 * 100)}%
+                                            {typeof newsData.crossMarketDelta === 'number'
+                                                ? ` — ${Math.round(Math.abs(newsData.crossMarketDelta) * 100)}pt gap`
+                                                : ''}
+                                        </Text>
+                                    </View>
+                                </View>
+                            )}
+
                             {/* Pro-gated: deep analysis (drivers, market impact, poll) */}
                             <ProGate locked={!isPro} onUpgrade={() => paywall.open()}>
                             {/* Key Sentiment Drivers - Now with individual keywords */}
@@ -1280,25 +1329,24 @@ const AIAnalysisOverlay: React.FC<AIAnalysisOverlayProps> = ({ newsData: newsDat
                                             </View>
                                         ))}
 
-                                        {/* Who is voting? Section - Based on real total */}
-                                        <View style={styles.whoIsVotingSection}>
-                                            <View style={styles.whoIsVotingHeader}>
-                                                <Text style={styles.whoIsVotingTitle}>Who is voting?</Text>
-                                            </View>
-                                            {[
-                                                { role: 'Physical traders', count: Math.ceil(pollData.total * 0.30) },
-                                                { role: 'Financial traders', count: Math.ceil(pollData.total * 0.38) },
-                                                { role: 'Analysts', count: Math.ceil(pollData.total * 0.15) },
-                                                { role: 'Hedge funds', count: Math.ceil(pollData.total * 0.10) },
-                                                { role: 'Risk managers', count: Math.max(0, pollData.total - Math.ceil(pollData.total * 0.93)) },
-                                            ].map((voter, idx) => (
-                                                <View key={idx} style={styles.voterRow}>
-                                                    <Text style={styles.voterBullet}>•</Text>
-                                                    <Text style={styles.voterRole}>{voter.role}:</Text>
-                                                    <Text style={styles.voterCount}>{voter.count}</Text>
+                                        {/* Who is voting? — share of the electorate, not raw counts.
+                                            Hidden until at least one real vote exists, otherwise the
+                                            breakdown would render a full set of shares against zero
+                                            voters. */}
+                                        {pollData.total > 0 && (
+                                            <View style={styles.whoIsVotingSection}>
+                                                <View style={styles.whoIsVotingHeader}>
+                                                    <Text style={styles.whoIsVotingTitle}>Who is voting?</Text>
                                                 </View>
-                                            ))}
-                                        </View>
+                                                {VOTER_MIX.map((voter) => (
+                                                    <View key={voter.role} style={styles.voterRow}>
+                                                        <Text style={styles.voterBullet}>•</Text>
+                                                        <Text style={styles.voterRole}>{voter.role}:</Text>
+                                                        <Text style={styles.voterCount}>{voter.share}%</Text>
+                                                    </View>
+                                                ))}
+                                            </View>
+                                        )}
 
                                         {/* Total Votes Display */}
                                         <View style={styles.totalVotesContainer}>
@@ -1316,6 +1364,30 @@ const AIAnalysisOverlay: React.FC<AIAnalysisOverlayProps> = ({ newsData: newsDat
             </View>
 
             {/* Tour Guide Modal */}
+            {/* Divergence "i" info — styled card, same look as the tour / poll
+                "about", instead of a generic OS Alert bubble. */}
+            <Modal
+                animationType="fade"
+                transparent={true}
+                visible={showDivergenceModal}
+                onRequestClose={() => setShowDivergenceModal(false)}
+            >
+                <View style={styles.tourOverlay}>
+                    <View style={styles.tourCard}>
+                        <Text style={styles.tourTitle}>{DIVERGENCE_INFO_TITLE}</Text>
+                        <Text style={styles.tourContent}>{DIVERGENCE_INFO_BODY}</Text>
+                        <View style={styles.tourButtons}>
+                            <TouchableOpacity
+                                style={[styles.tourNextButton, { flex: 1, backgroundColor: '#4ECCA3' }]}
+                                onPress={() => setShowDivergenceModal(false)}
+                            >
+                                <Text style={styles.tourNextText}>Got it</Text>
+                            </TouchableOpacity>
+                        </View>
+                    </View>
+                </View>
+            </Modal>
+
             <Modal
                 animationType="fade"
                 transparent={true}
