@@ -5,6 +5,7 @@ import { X, LogOut, User, ChevronRight, Bookmark, Settings, Trash2, Camera } fro
 import { motion, AnimatePresence } from 'framer-motion';
 import Link from 'next/link';
 import { createClient } from '@/lib/supabase';
+import DeleteAccountModal from '@/components/account/DeleteAccountModal';
 
 interface BookmarkItem {
     id: string;
@@ -35,6 +36,8 @@ interface ProfileSidebarProps {
     user: { email?: string; name?: string; avatar_url?: string } | null;
     onLogout: () => void;
     onBookmarkClick?: (item: any) => void;
+    /** Fired once a deletion is scheduled, so the dashboard can raise the banner. */
+    onDeletionScheduled?: (expiresAt: string) => void;
 }
 
 const getSentimentColor = (sentiment: string): string => {
@@ -59,7 +62,7 @@ const MaterialSettings = ({ size = 18, className = "" }) => (
     </svg>
 );
 
-export default function ProfileSidebar({ isOpen, onClose, user, onLogout, onBookmarkClick }: ProfileSidebarProps) {
+export default function ProfileSidebar({ isOpen, onClose, user, onLogout, onBookmarkClick, onDeletionScheduled }: ProfileSidebarProps) {
     const [profile, setProfile] = useState<UserProfile | null>(null);
     const [avatarUrl, setAvatarUrl] = useState<string>('');
     const [bookmarks, setBookmarks] = useState<BookmarkItem[]>([]);
@@ -67,6 +70,7 @@ export default function ProfileSidebar({ isOpen, onClose, user, onLogout, onBook
     const [isUploading, setIsUploading] = useState(false);
     const [showAllBookmarks, setShowAllBookmarks] = useState(false);
     const [isLoading, setIsLoading] = useState(true);
+    const [deleteOpen, setDeleteOpen] = useState(false);
     const fileInputRef = useRef<HTMLInputElement>(null);
 
     useEffect(() => {
@@ -378,10 +382,32 @@ export default function ProfileSidebar({ isOpen, onClose, user, onLogout, onBook
                                 <Link href="/settings/privacy" className="flex items-center justify-between px-4 py-3 border-b border-[#333] hover:bg-white/5"><span className="text-white">Privacy Policy</span><ChevronRight size={18} className="text-zinc-600" /></Link>
                                 <Link href="/settings/terms" className="flex items-center justify-between px-4 py-3 border-b border-[#333] hover:bg-white/5"><span className="text-white">Terms of Service</span><ChevronRight size={18} className="text-zinc-600" /></Link>
                                 <Link href="/settings/about" className="flex items-center justify-between px-4 py-3 border-b border-[#333] hover:bg-white/5"><span className="text-white">About</span><ChevronRight size={18} className="text-zinc-600" /></Link>
-                                <button onClick={onLogout} className="w-full flex items-center justify-between px-4 py-3 hover:bg-[#F05454]/10"><div className="flex items-center gap-2"><LogOut size={18} className="text-[#F05454]" /><span className="text-[#F05454]">Log out</span></div><ChevronRight size={18} className="text-[#F05454]/50" /></button>
+                                <button onClick={onLogout} className="w-full flex items-center justify-between px-4 py-3 border-b border-[#333] hover:bg-[#F05454]/10"><div className="flex items-center gap-2"><LogOut size={18} className="text-[#F05454]" /><span className="text-[#F05454]">Log out</span></div><ChevronRight size={18} className="text-[#F05454]/50" /></button>
+                                {/* Deletion sits below sign-out, last in the list and
+                                    visually quietest, so the destructive action is never
+                                    the thing a thumb lands on by accident. Mobile shipped
+                                    this in build 88; web had no deletion path at all. */}
+                                <button
+                                    onClick={() => setDeleteOpen(true)}
+                                    className="w-full flex items-center justify-between px-4 py-3 hover:bg-white/5"
+                                >
+                                    <div className="flex items-center gap-2">
+                                        <Trash2 size={18} className="text-zinc-500" />
+                                        <span className="text-zinc-400">Delete account</span>
+                                    </div>
+                                    <ChevronRight size={18} className="text-zinc-700" />
+                                </button>
                             </div>
                         </div>
                     </motion.div>
+
+                    {deleteOpen && <DeleteAccountModal
+                        onClose={() => setDeleteOpen(false)}
+                        onScheduled={(expiresAt) => {
+                            onDeletionScheduled?.(expiresAt);
+                            onClose();
+                        }}
+                    />}
                 </>
             )}
         </AnimatePresence>

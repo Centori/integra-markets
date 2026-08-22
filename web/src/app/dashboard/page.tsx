@@ -11,6 +11,8 @@ import FilterTabs, { FilterType } from '@/components/dashboard/FilterTabs';
 import NewsCard, { NewsItem } from '@/components/dashboard/NewsCard';
 import AIAnalysisModal from '@/components/dashboard/AIAnalysisModal';
 import ProfileSidebar from '@/components/dashboard/ProfileSidebar';
+import PendingDeletionBanner from '@/components/account/PendingDeletionBanner';
+import { getPendingDeletion } from '@/lib/accountService';
 import OnboardingTooltip from '@/components/OnboardingTooltip';
 
 const filterTabs: FilterType[] = ['All', 'Bullish', 'Neutral', 'Bearish'];
@@ -30,6 +32,9 @@ export default function Dashboard() {
     const [selectedArticle, setSelectedArticle] = useState<NewsItem | null>(null);
     const [isAIModalOpen, setIsAIModalOpen] = useState(false);
     const [isProfileOpen, setIsProfileOpen] = useState(false);
+    // Pending account deletion, read from the same row mobile writes — a deletion
+    // scheduled on the phone must surface here too, and be cancellable here.
+    const [deletionExpiresAt, setDeletionExpiresAt] = useState<string | null>(null);
 
     // Single combined data loading effect (see checkAuthAndLoadData below)
 
@@ -196,6 +201,12 @@ export default function Dashboard() {
 
         // Load bookmarks
         loadBookmarks(user.id);
+
+        // Same account_deletion_requests row mobile writes, so a deletion
+        // scheduled on the phone raises the banner here too.
+        getPendingDeletion().then((res) => {
+            if (res.ok) setDeletionExpiresAt(res.data?.expires_at ?? null);
+        });
 
         // Single profile query: check onboarding + get market_focus
         let userCommodities = ['Oil', 'Gold', 'Gas'];
@@ -378,6 +389,13 @@ export default function Dashboard() {
             <DashboardHeader userEmail={user?.email} onProfileClick={() => setIsProfileOpen(true)} />
 
             <main className="max-w-7xl mx-auto px-4 sm:px-6 py-6 sm:py-8">
+                {deletionExpiresAt && (
+                    <PendingDeletionBanner
+                        expiresAt={deletionExpiresAt}
+                        onRestored={() => setDeletionExpiresAt(null)}
+                    />
+                )}
+
                 {/* Page Title & Controls */}
                 <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} className="mb-6 sm:mb-8">
                     {/* Title Section - Always left aligned */}
@@ -485,7 +503,7 @@ export default function Dashboard() {
                 isBookmarked={selectedArticle ? bookmarkedUrls.has(selectedArticle.url || selectedArticle.title) : false}
             />
 
-            <ProfileSidebar isOpen={isProfileOpen} onClose={() => setIsProfileOpen(false)} user={user} onLogout={handleLogout} onBookmarkClick={handleAIClick} />
+            <ProfileSidebar onDeletionScheduled={setDeletionExpiresAt} isOpen={isProfileOpen} onClose={() => setIsProfileOpen(false)} user={user} onLogout={handleLogout} onBookmarkClick={handleAIClick} />
 
             <OnboardingTooltip
                 storageKey="tooltip_newsfeed_v3"
