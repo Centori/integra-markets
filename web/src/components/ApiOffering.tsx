@@ -1,7 +1,7 @@
 'use client';
 
 import { motion } from 'framer-motion';
-import { Terminal, Database, Webhook, KeyRound } from 'lucide-react';
+import { Terminal, Database, Webhook, MessagesSquare } from 'lucide-react';
 
 // Capability section for the landing page. Tells developers what the API does;
 // it deliberately does NOT price it.
@@ -34,9 +34,15 @@ const capabilities = [
         description: 'Push divergence and threshold events straight into your own systems as they fire.'
     },
     {
-        icon: KeyRound,
-        title: 'Key Management',
-        description: 'Scoped keys with rotation and usage metrics, managed from your dashboard.'
+        // Replaces the old "Key Management" card. Key management is table stakes
+        // — it described plumbing, not a reason to buy, and it now lives in the
+        // signed-in profile anyway. The MCP connector is the differentiator: it
+        // is the only capability here that a non-developer can use, so the copy
+        // leads with the plain-English question and leaves MCP as the second
+        // clause for developers who are scanning for the protocol name.
+        icon: MessagesSquare,
+        title: 'Ask in Claude',
+        description: 'Ask "what changed in copper this week?" in plain English and get sourced analysis back. Connect it to Claude in one click — or wire it in yourself over MCP.'
     }
 ];
 

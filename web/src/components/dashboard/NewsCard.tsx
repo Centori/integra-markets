@@ -3,6 +3,7 @@
 import { useState } from 'react';
 import { TrendingUp, TrendingDown, ArrowRight, ExternalLink, Share2, Bookmark, Sparkles, Clock } from 'lucide-react';
 import Image from 'next/image';
+import IntegraWordmark from '@/components/brand/IntegraWordmark';
 
 export interface NewsItem {
     title: string;
@@ -157,12 +158,23 @@ export default function NewsCard({ item, featured = false, onAIClick, isBookmark
                         onError={() => setImageError(true)}
                     />
                 ) : (
-                    <div className="w-full h-full flex items-center justify-center relative bg-[#121212]">
-                        <img
-                            src="/NewLogoInt.png.png"
-                            alt="Integra Markets"
-                            className="w-28 h-28 object-contain opacity-70"
-                        />
+                    // No source image, or the source image failed to load → the
+                    // "integra" wordmark over the brand gradient. Mirrors mobile's
+                    // NewsCard fallback exactly (same gradient stops, same mark),
+                    // which replaced the old square "i" PNG this used to show.
+                    //
+                    // Web keeps its `imageError` path as well as mobile's
+                    // `!image_url` check: a URL that 404s is just as image-less as
+                    // no URL at all, and the old code already handled that.
+                    <div
+                        className="w-full h-full flex items-center justify-center relative"
+                        style={{
+                            // mobile: start {x:0.15,y:0.05} → end {x:0.9,y:1}
+                            backgroundImage:
+                                'linear-gradient(142deg, #21403A 0%, #16241F 55%, #101815 100%)',
+                        }}
+                    >
+                        <IntegraWordmark size={featured ? 46 : 34} />
                     </div>
                 )}
 
