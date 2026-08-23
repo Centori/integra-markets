@@ -239,9 +239,9 @@ export default function ProfileSidebar({ isOpen, onClose, user, onLogout, onBook
                     <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} onClick={onClose} className="fixed inset-0 bg-black/60 backdrop-blur-sm z-50" />
 
                     <motion.div
-                        initial={{ x: '100%' }} animate={{ x: 0 }} exit={{ x: '100%' }}
+                        initial={{ x: '-100%' }} animate={{ x: 0 }} exit={{ x: '-100%' }}
                         transition={{ type: 'spring', damping: 25, stiffness: 200 }}
-                        className="fixed top-0 right-0 h-full w-full max-w-md bg-[#121212] border-l border-[#333] z-50 overflow-y-auto"
+                        className="fixed top-0 left-0 h-full w-full max-w-md bg-[#121212] border-r border-[#333] z-50 overflow-y-auto"
                     >
                         <div className="flex items-center justify-between p-4 border-b border-[#333]">
                             <button onClick={onClose} className="p-2"><X size={20} className="text-zinc-400" /></button>
