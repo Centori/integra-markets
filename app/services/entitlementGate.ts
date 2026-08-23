@@ -2,7 +2,13 @@
 // Limits ship via OTA — changing a number here + `eas update` propagates
 // to users on next app launch. See CLAUDE.md → paywall section.
 
-export type Tier = 'free_trial' | 'basic' | 'basic_markets' | 'expired';
+// `free` is the post-trial resting state — what the App Store listing calls
+// FREE. A lapsed trial lands here, NOT on `expired`, whose limits are all zero
+// and would brick the app on day 31.
+// `expired` is reserved for a lapsed PAID subscription.
+// Strings match the backend's user_subscriptions.tier values exactly; display
+// names ("Free", "Pro") are a presentation concern, see labelForTier below.
+export type Tier = 'free' | 'free_trial' | 'basic' | 'basic_markets' | 'expired';
 
 export type AlertKind = 'news' | 'sentiment' | 'divergence';
 export type PushMode = 'batched' | 'realtime';
@@ -25,17 +31,37 @@ export type TierLimits = {
 const UNLIMITED = Number.POSITIVE_INFINITY;
 
 export const LIMITS: Record<Tier, TierLimits> = {
-  free_trial: {
+  // Post-trial resting state. Deliberately usable: the App Store listing
+  // promises FREE users "curated commodity news feed, AI sentiment on every
+  // story", so this tier has to deliver that.
+  free: {
     bookmarks: 5,
     alerts: 3,
     commodities: 2,
     customRssUrls: 0,
     aiOverlayPerDay: 5,
-    historyDays: 1,
+    historyDays: 7,
     articlesPerSession: 20,
     alertTypes: ['news'],
     pushMode: 'batched',
     pushPerDay: 5,
+  },
+  // The 30-day trial grants FULL Pro (== basic_markets). It previously granted
+  // LESS than `free` above — historyDays was 1 and push_alerts excluded
+  // free_trial entirely, so the window meant to prove value had the strongest
+  // retention mechanism switched off. Keep this identical to basic_markets;
+  // __tests__/trialSemantics.test.js asserts they never diverge.
+  free_trial: {
+    bookmarks: UNLIMITED,
+    alerts: UNLIMITED,
+    commodities: UNLIMITED,
+    customRssUrls: 10,
+    aiOverlayPerDay: UNLIMITED,
+    historyDays: UNLIMITED,
+    articlesPerSession: 100,
+    alertTypes: ['news', 'sentiment', 'divergence'],
+    pushMode: 'realtime',
+    pushPerDay: UNLIMITED,
   },
   basic: {
     bookmarks: 50,
@@ -87,19 +113,21 @@ export type Feature =
   | 'sentiment_poll_vote'
   | 'export_csv';
 
+// `free_trial` appears everywhere `basic_markets` does — the trial IS Pro.
+// `free` gets the reading experience the App Store listing promises, and
+// nothing that costs money to deliver.
 const FEATURE_ACCESS: Record<Feature, Tier[]> = {
-  news_feed: ['free_trial', 'basic', 'basic_markets'],
-  sentiment_analysis: ['free_trial', 'basic', 'basic_markets'],
-  ai_analysis_overlay: ['free_trial', 'basic', 'basic_markets'],
-  push_alerts: ['basic', 'basic_markets'],
-  // 'free_trial' added 2026-07-14 so trial users (currently everyone —
-  // react-native-purchases isn't linked yet, so all users resolve to
-  // free_trial) can see and evaluate the Markets features. Remove
-  // 'free_trial' from these three lines before charging for basic_markets.
+  news_feed: ['free', 'free_trial', 'basic', 'basic_markets'],
+  sentiment_analysis: ['free', 'free_trial', 'basic', 'basic_markets'],
+  ai_analysis_overlay: ['free', 'free_trial', 'basic', 'basic_markets'],
+  sentiment_poll_vote: ['free', 'free_trial', 'basic', 'basic_markets'],
+  // Was ['basic', 'basic_markets'] — free_trial was excluded, so push
+  // notifications were OFF for the entire trial. The strongest retention
+  // mechanism, disabled in exactly the window meant to prove value.
+  push_alerts: ['free_trial', 'basic', 'basic_markets'],
   divergence_alerts: ['free_trial', 'basic_markets'],
   polymarket_kalshi_view: ['free_trial', 'basic_markets'],
   divergence_filter: ['free_trial', 'basic_markets'],
-  sentiment_poll_vote: ['free_trial', 'basic', 'basic_markets'],
   export_csv: ['basic_markets'],
 };
 
@@ -114,6 +142,7 @@ export function limitsFor(tier: Tier): TierLimits {
 // Human-friendly label used in Paywall + UpgradePrompt copy.
 export function tierLabel(tier: Tier): string {
   switch (tier) {
+    case 'free': return 'Free';
     case 'free_trial': return 'Free Trial';
     case 'basic': return 'Basic';
     case 'basic_markets': return 'Basic + Markets';
@@ -125,7 +154,10 @@ export function tierLabel(tier: Tier): string {
 // Returns null if already on top tier.
 export function nextTierFor(current: Tier): Tier | null {
   switch (current) {
-    case 'free_trial': return 'basic';
+    // A trial user has been USING Pro for 30 days, so the honest upsell is the
+    // tier they already have, not a downgrade to basic.
+    case 'free_trial': return 'basic_markets';
+    case 'free': return 'basic';
     case 'expired': return 'basic';
     case 'basic': return 'basic_markets';
     case 'basic_markets': return null;

@@ -34,7 +34,10 @@ describe('subscriptionService is live, not stubbed', () => {
 
 test('App.js bootstraps entitlements on startup', () => {
   const app = read('app/App.js');
-  expect(app).toMatch(/import \{ bootstrapEntitlements \} from '\.\/hooks\/useEntitlement'/);
+  // Match the named import within the braces rather than the whole import
+  // line — the line legitimately grows when App.js also needs useEntitlement,
+  // and an exact-string assertion turns that into a false failure.
+  expect(app).toMatch(/import \{[^}]*\bbootstrapEntitlements\b[^}]*\} from '\.\/hooks\/useEntitlement'/);
   expect(app).toMatch(/bootstrapEntitlements\(userData\.id\)/);
 });
 
