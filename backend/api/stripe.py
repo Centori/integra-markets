@@ -178,6 +178,8 @@ async def stripe_webhook(
             "last_synced_at": _now_iso(),
         }
         supabase.table("user_subscriptions").upsert(row, on_conflict="user_id").execute()
+        from services.entitlement import invalidate
+        invalidate(user_id)
         return {"ok": True, "tier": purchased_tier, "event": event_type}
 
     if event_type in ("customer.subscription.updated", "customer.subscription.deleted"):
@@ -233,6 +235,8 @@ async def stripe_webhook(
             },
             on_conflict="user_id",
         ).execute()
+        from services.entitlement import invalidate
+        invalidate(user_id)
         return {"ok": True, "tier": new_tier, "event": event_type}
 
     # Anything else — log and ack so Stripe doesn't retry

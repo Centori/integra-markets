@@ -23,35 +23,36 @@ PUBLIC_PREFIX = "ik_live_"
 KEY_BODY_BYTES = 24  # 24 random bytes → ~32 urlsafe chars
 
 # --- Scope model -----------------------------------------------------------
-# Paid API tiers map to key scopes (mirrors the dashboard pricing):
-#   "history" → $99/mo API tier: historical endpoints, capped at 90 days depth.
-#   "archive" → $249/mo Archive tier: full historical depth. Implies "history".
-# A key with neither scope still reaches the base (real-time) endpoints; the
-# historical/archive data is the monetized surface and must be scope-gated.
-HISTORY_SCOPE = "history"
-ARCHIVE_SCOPE = "archive"
-HISTORY_DEPTH_CAP_DAYS = 90  # max look-back for a history-scoped (non-archive) key
-
-# A granted scope may implicitly confer others (archive is a superset).
-_SCOPE_IMPLIES: Dict[str, set] = {
-    ARCHIVE_SCOPE: {ARCHIVE_SCOPE, HISTORY_SCOPE},
-}
+# Scopes are DERIVED SERVER-SIDE from the caller's live subscription, in
+# services/entitlement.py. The `api_keys.scopes` column is a display cache for
+# the dashboard and is never an authorization input: a key minted while the
+# owner was subscribed must stop working when that subscription lapses, and
+# freezing scopes at mint time made that structurally impossible.
+from services.entitlement import (  # noqa: E402  (kept beside the scope model it replaces)
+    ARCHIVE_SCOPE,
+    HISTORY_DEPTH_CAP_DAYS,
+    HISTORY_SCOPE,
+    resolve as resolve_entitlement,
+)
 
 
 def effective_scopes(auth_row: Dict[str, Any]) -> set:
-    """Expand a key's stored scopes with everything they imply (archive ⊇ history)."""
-    granted = set(auth_row.get("scopes") or [])
-    expanded = set(granted)
-    for scope in granted:
-        expanded |= _SCOPE_IMPLIES.get(scope, set())
-    return expanded
+    """The caller's live scopes, resolved during verify_api_key.
+
+    Returns the empty set if no entitlement was attached, so a caller that
+    somehow bypasses verify_api_key is unprivileged rather than unrestricted.
+    """
+    ent = auth_row.get("_entitlement")
+    return set(ent.scopes) if ent is not None else set()
 
 
 def assert_history_depth(auth_row: Dict[str, Any], lookback_days: float) -> None:
-    """Raise 403 if a non-archive key requests more than the history depth cap.
+    """Raise 403 if the OLDEST point requested is beyond the key's depth cap.
 
-    A ``history``-scoped ($99) key may look back at most ``HISTORY_DEPTH_CAP_DAYS``;
-    deeper ranges require the ``archive`` ($249) scope. No-op for archive keys.
+    ``lookback_days`` must be the AGE of the earliest requested timestamp
+    (now - start), not the WIDTH of the window (end - start). Width let
+    ``from=2015-01-01&to=2015-03-01`` — 59 days wide — pass a 90-day cap and
+    reach eleven-year-old data.
     """
     if lookback_days > HISTORY_DEPTH_CAP_DAYS and ARCHIVE_SCOPE not in effective_scopes(auth_row):
         raise HTTPException(
@@ -125,8 +126,52 @@ async def verify_api_key(
     if row is None:
         raise HTTPException(status_code=401, detail="invalid API key")
 
+    # The key's own lifetime, independent of the subscription, so a beta key can
+    # carry a hard stop even if the tier outlives it.
+    expires_at = row.get("expires_at")
+    if expires_at and _is_past(expires_at):
+        raise HTTPException(
+            status_code=401,
+            detail="API key expired; generate a new one in the dashboard",
+        )
+
+    # Authorization from live subscription state, not from the stored row.
+    ent = resolve_entitlement(supabase, row.get("user_id"))
+    if ent.is_expired_tier or not ent.scopes:
+        raise HTTPException(
+            status_code=403,
+            detail=(
+                "no active API entitlement for this account. If your beta "
+                "window or subscription ended, renew at "
+                "https://dashboard.integramarkets.app/api-tier"
+            ),
+        )
+    row["_entitlement"] = ent
+    row["_tier"] = ent.tier
+
     _record_usage_async(supabase, row, request, int((time.monotonic() - started) * 1000))
     return row
+
+
+def _is_past(value: Any) -> bool:
+    """True if `value` is a timestamp in the past. Unparseable → True.
+
+    An expiry check that cannot read its own input must fail closed; treating a
+    malformed timestamp as "not expired" would make a corrupt row a permanent key.
+    """
+    import datetime as _dt
+
+    if isinstance(value, _dt.datetime):
+        ts = value
+    else:
+        try:
+            ts = _dt.datetime.fromisoformat(str(value).replace("Z", "+00:00"))
+        except ValueError:
+            logger.error("api key expires_at unparseable: %r", value)
+            return True
+    if ts.tzinfo is None:
+        ts = ts.replace(tzinfo=_dt.timezone.utc)
+    return ts < _dt.datetime.now(_dt.timezone.utc)
 
 
 def _lookup_row(supabase: Any, key: str) -> Optional[Dict[str, Any]]:

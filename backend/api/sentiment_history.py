@@ -158,9 +158,11 @@ async def sentiment_history(
     if start >= end:
         raise HTTPException(status_code=400, detail="'from' must be earlier than 'to'")
 
-    # Depth gate: history-scoped ($99) keys are capped at 90 days look-back;
-    # deeper queries require the archive ($249) scope.
-    assert_history_depth(auth, (end - start).total_seconds() / 86400.0)
+    # Depth gate measured from NOW to the OLDEST point requested. Measuring the
+    # WIDTH of [start, end] let a narrow window sitting far in the past through:
+    # from=2015-01-01&to=2015-03-01 is 59 days wide and passed a 90-day cap.
+    now = dt.datetime.now(dt.timezone.utc)
+    assert_history_depth(auth, (now - start).total_seconds() / 86400.0)
 
     try:
         rows = (

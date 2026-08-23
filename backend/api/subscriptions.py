@@ -146,6 +146,11 @@ async def revenuecat_webhook(
         logger.exception("revenuecat webhook upsert failed")
         raise HTTPException(status_code=500, detail=f"upsert failed: {exc}")
 
+    # Drop the cached entitlement so an upgrade or cancellation takes effect
+    # immediately rather than after ENTITLEMENT_TTL_SECONDS.
+    from services.entitlement import invalidate
+    invalidate(app_user_id)
+
     return {"ok": True, "tier": new_tier}
 
 
@@ -155,7 +160,10 @@ async def revenuecat_webhook(
 
 class LinkWebTierRequest(BaseModel):
     stripe_customer_id: str
-    tier: str = Field(pattern="^(api|api_basic|api_history|basic|basic_markets)$")
+    # `tier` removed. It used to come from the request body, which let any
+    # signed-in user self-grant any tier. Stripe is what sold the subscription,
+    # so the Stripe webhook is what sets the tier; this endpoint only
+    # establishes the link so that webhook can find the user.
 
 
 @router.post("/link-web-tier")
@@ -164,13 +172,37 @@ async def link_web_tier(
     auth: Dict[str, Any] = Depends(verify_supabase_jwt),
 ) -> dict:
     from services._supabase import get_supabase_client
+    from services.entitlement import invalidate
+
     supabase = get_supabase_client()
     if supabase is None:
         raise HTTPException(status_code=503, detail="supabase unavailable")
 
+    user_id = auth["user_id"]
+
+    # Refuse to bind a customer id already linked to a different account —
+    # otherwise anyone who learns a customer id inherits that subscription.
+    try:
+        existing = (
+            supabase.table("user_subscriptions")
+            .select("user_id")
+            .eq("stripe_customer_id", payload.stripe_customer_id)
+            .execute()
+            .data
+            or []
+        )
+    except Exception as exc:  # noqa: BLE001
+        logger.exception("link_web_tier lookup failed")
+        raise HTTPException(status_code=503, detail=f"lookup failed: {exc}")
+    if existing and existing[0]["user_id"] != user_id:
+        logger.error(
+            "link_web_tier: customer %s already linked to %s, refused for %s",
+            payload.stripe_customer_id, existing[0]["user_id"], user_id,
+        )
+        raise HTTPException(status_code=409, detail="customer already linked")
+
     row = {
-        "user_id": auth["user_id"],
-        "tier": payload.tier,
+        "user_id": user_id,
         "source": "stripe",
         "stripe_customer_id": payload.stripe_customer_id,
         "last_synced_at": _now_iso(),
@@ -180,6 +212,7 @@ async def link_web_tier(
     except Exception as exc:  # noqa: BLE001
         logger.exception("link_web_tier upsert failed")
         raise HTTPException(status_code=500, detail=f"upsert failed: {exc}")
+    invalidate(user_id)
     return {"ok": True}
 
 

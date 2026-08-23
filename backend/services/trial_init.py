@@ -19,7 +19,11 @@ from typing import Optional
 
 logger = logging.getLogger(__name__)
 
-FREE_TRIAL_DAYS = int(os.environ.get("INTEGRA_FREE_TRIAL_DAYS", "7"))
+# 30 days is the launch commitment. The default lives in CODE so the promise
+# does not depend on an env var being present in one particular Railway
+# environment — it was unset in production, silently making every trial 7 days.
+# The env var remains as an override for staging.
+FREE_TRIAL_DAYS = int(os.environ.get("INTEGRA_FREE_TRIAL_DAYS", "30"))
 
 
 def ensure_trial_started(supabase, user_id: str) -> None:

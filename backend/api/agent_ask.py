@@ -36,7 +36,8 @@ from pydantic import BaseModel, Field
 
 from services.agent_templates import describe as templates_describe, render as render_template
 from services.agent_tools import TOOL_SCHEMAS, call_tool
-from services.api_key_auth import verify_api_key
+from services.api_key_auth import require_scopes, verify_api_key
+from services.entitlement import HISTORY_SCOPE
 
 logger = logging.getLogger(__name__)
 
@@ -44,6 +45,12 @@ router = APIRouter(prefix="/v1/agent", tags=["agent"])
 
 DEFAULT_MAX_TOOL_CALLS = 6
 DEFAULT_MODEL = "llama-3.3-70b-versatile"
+
+# Hard server-side ceiling on the tool-calling loop. `max_tool_calls` is
+# client-supplied and its le=12 bound only limits ONE request — this is the only
+# endpoint whose cost is unbounded (each iteration is a Groq call), so the
+# ceiling belongs on the server where the client cannot raise it.
+MAX_TOOL_CALLS_CEILING = int(os.environ.get("INTEGRA_AGENT_MAX_TOOL_CALLS", "6"))
 
 
 class AskRequest(BaseModel):
@@ -91,7 +98,7 @@ async def list_templates(_auth: Dict[str, Any] = Depends(verify_api_key)) -> Dic
 @router.post("/ask", response_model=AskResponse)
 async def ask(
     req: AskRequest,
-    _auth: Dict[str, Any] = Depends(verify_api_key),
+    _auth: Dict[str, Any] = Depends(require_scopes(HISTORY_SCOPE)),
 ) -> AskResponse:
     try:
         from groq import Groq  # type: ignore
@@ -111,7 +118,8 @@ async def ask(
     # Iterative tool-calling loop. The model may ask for several tools
     # before producing its final answer; we cap at max_tool_calls to
     # bound latency and cost.
-    for _ in range(req.max_tool_calls):
+    budget = min(req.max_tool_calls, MAX_TOOL_CALLS_CEILING)
+    for _ in range(budget):
         try:
             response = client.chat.completions.create(
                 model=DEFAULT_MODEL,
