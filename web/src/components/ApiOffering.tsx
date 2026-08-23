@@ -1,7 +1,7 @@
 'use client';
 
 import { motion } from 'framer-motion';
-import { Terminal, Database, Webhook, KeyRound } from 'lucide-react';
+import { Terminal, Database, Webhook, MessagesSquare } from 'lucide-react';
 
 // Capability section for the landing page. Tells developers what the API does;
 // it deliberately does NOT price it.
@@ -31,12 +31,26 @@ const capabilities = [
     {
         icon: Webhook,
         title: 'Webhooks',
-        description: 'Push divergence and threshold events straight into your own systems as they fire.'
+        description: 'Push divergence and threshold events straight into your own systems as they fire.',
+        soon: true,
     },
     {
-        icon: KeyRound,
-        title: 'Key Management',
-        description: 'Scoped keys with rotation and usage metrics, managed from your dashboard.'
+        // Replaces the old "Key Management" card. Key management is table stakes
+        // — it described plumbing, not a reason to buy, and it now lives in the
+        // signed-in profile anyway. The MCP connector is the differentiator: it
+        // is the only capability here that a non-developer can use, so the copy
+        // leads with the plain-English question and leaves MCP as the second
+        // clause for developers who are scanning for the protocol name.
+        // `soon` marks a capability that is designed and partly built but not yet
+        // reachable by a customer. The MCP server exists and its four tools work,
+        // but it is stdio-only, unpublished, and has no hosted endpoint — so
+        // "connect in one click" would be a promise, not a description. Webhooks
+        // are in the same state. Saying so costs a little marketing lift and buys
+        // the thing that actually sells an API: developers trusting the page.
+        icon: MessagesSquare,
+        title: 'Ask in Claude',
+        description: 'Ask "what changed in copper this week?" in plain English and get sourced analysis back — an MCP connector that brings your feed into Claude.',
+        soon: true,
     }
 ];
 
@@ -79,7 +93,14 @@ export default function ApiOffering() {
                             <div className="text-[#4ECCA3] mb-6">
                                 <c.icon size={26} strokeWidth={1} />
                             </div>
-                            <h3 className="text-[18px] font-light text-white mb-3">{c.title}</h3>
+                            <div className="flex items-center gap-2.5 mb-3">
+                                <h3 className="text-[18px] font-light text-white">{c.title}</h3>
+                                {c.soon && (
+                                    <span className="text-[10px] uppercase tracking-[0.14em] text-[#4ECCA3] border border-[#4ECCA3]/30 rounded-full px-2 py-0.5">
+                                        Soon
+                                    </span>
+                                )}
+                            </div>
                             <p className="text-[14px] text-zinc-500 leading-relaxed font-light">{c.description}</p>
                         </motion.div>
                     ))}
