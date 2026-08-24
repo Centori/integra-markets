@@ -43,17 +43,37 @@ class TierLimits:
 
 
 LIMITS: dict[str, TierLimits] = {
-    "free_trial": TierLimits(
+    # Post-trial resting state — what the App Store listing calls FREE
+    # ("curated commodity news feed, AI sentiment on every story"). Deliberately
+    # usable. A lapsed trial resolves here, NOT to `expired`, which is all zeros
+    # and would brick the app on day 31.
+    "free": TierLimits(
         bookmarks=5,
         alerts=3,
         commodities=2,
         custom_rss_urls=0,
         ai_overlay_per_day=5,
-        history_days=1,
+        history_days=7,
         articles_per_session=20,
         alert_types=("news",),
         push_mode="batched",
         push_per_day=5,
+    ),
+    # The 30-day trial grants FULL Pro (== basic_markets). A trial of a lesser
+    # product does not convert, and push alerts in particular were excluded
+    # from the trial — disabling the strongest retention mechanism in exactly
+    # the window meant to prove value.
+    "free_trial": TierLimits(
+        bookmarks=UNLIMITED,
+        alerts=UNLIMITED,
+        commodities=UNLIMITED,
+        custom_rss_urls=10,
+        ai_overlay_per_day=UNLIMITED,
+        history_days=UNLIMITED,
+        articles_per_session=100,
+        alert_types=("news", "sentiment", "divergence"),
+        push_mode="realtime",
+        push_per_day=UNLIMITED,
     ),
     "basic": TierLimits(
         bookmarks=50,
@@ -156,8 +176,11 @@ def get_effective_tier(supabase, user_id: str) -> str:
     for trial + subscription expiration. Falls back to 'free_trial' if
     supabase is unavailable or the row doesn't exist.
     """
+    # Every fallback below is `free`, never `free_trial`: free_trial now grants
+    # full Pro, so failing open to it would hand Pro to every caller during a
+    # Supabase outage.
     if supabase is None:
-        return "free_trial"
+        return "free"
     try:
         result = supabase.rpc("effective_tier", {"p_user_id": user_id}).execute()
         tier = getattr(result, "data", None)
@@ -165,15 +188,18 @@ def get_effective_tier(supabase, user_id: str) -> str:
             return tier
         # Some client versions return a list of scalars
         if isinstance(tier, list) and tier:
-            return tier[0] if isinstance(tier[0], str) else "free_trial"
+            return tier[0] if isinstance(tier[0], str) else "free"
     except Exception as exc:  # noqa: BLE001
         logger.warning("tier_enforcement: effective_tier lookup failed: %s", exc)
-    return "free_trial"
+    return "free"
 
 
 def limits_for(tier: str) -> TierLimits:
     canonical = _TIER_ALIASES.get(tier, tier)
-    return LIMITS.get(canonical, LIMITS["free_trial"])
+    # Unknown tier → `free`, not `free_trial`. free_trial now grants full Pro,
+    # so falling back to it would hand Pro to anyone whose tier string we
+    # failed to recognise. The fallback must be the least-privileged usable tier.
+    return LIMITS.get(canonical, LIMITS["free"])
 
 
 def exports_allowed(tier: str) -> bool:

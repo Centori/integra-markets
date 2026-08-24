@@ -110,8 +110,12 @@ deployment/
 *.sh
 !start_backend.sh
 
-# Test files in root
-test_*.py
+# Ad-hoc test scripts in the repo ROOT only (test_groq_connection.py etc).
+# The leading slash matters: without it git matches at ANY depth, which
+# silently ignored every new file under backend/tests/. The 19 tracked test
+# files there predate the rule; anything added after it vanished from
+# `git add` without a word.
+/test_*.py
 -integra-markets/
 -integra-markets-backup/
 .vercel

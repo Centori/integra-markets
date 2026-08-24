@@ -20,6 +20,7 @@ from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel, Field
 
 from services.api_key_auth import generate_key
+from services.entitlement import resolve as resolve_entitlement
 from services.supabase_jwt import verify_supabase_jwt
 
 logger = logging.getLogger(__name__)
@@ -31,7 +32,10 @@ MAX_KEYS_PER_USER = 10
 
 class CreateKeyRequest(BaseModel):
     name: str = Field(..., min_length=1, max_length=80)
-    scopes: Optional[List[str]] = None
+    # `scopes` is deliberately absent. Scopes are derived from the caller's
+    # subscription (services/entitlement.scopes_for_tier). A field the server
+    # ignores is worse than no field: the dashboard keeps sending it and
+    # everyone assumes it works.
 
 
 class CreateKeyResponse(BaseModel):
@@ -39,6 +43,8 @@ class CreateKeyResponse(BaseModel):
     key: str  # The plaintext value; shown ONCE, never again.
     prefix: str
     name: str
+    scopes: List[str]
+    expires_at: Optional[str]
     created_at: str
 
 
@@ -64,6 +70,21 @@ async def create_key(
         raise HTTPException(status_code=503, detail="storage unavailable")
 
     _enforce_key_quota(supabase, user_id)
+
+    ent = resolve_entitlement(supabase, user_id)
+    if not ent.scopes:
+        raise HTTPException(
+            status_code=403,
+            detail=(
+                "this account has no API entitlement. Start the free beta or "
+                "subscribe at https://dashboard.integramarkets.app/api-tier"
+            ),
+        )
+
+    # Beta keys carry a hard stop matching the beta window, so the window closes
+    # even if nothing ever rewrites the subscription row.
+    expires_at = _trial_key_expiry(supabase, user_id) if ent.tier == "api_trial" else None
+
     full_key, prefix, key_hash = generate_key()
 
     try:
@@ -74,7 +95,8 @@ async def create_key(
                 "name": payload.name,
                 "key_prefix": prefix,
                 "key_hash": key_hash,
-                "scopes": payload.scopes or [],
+                "scopes": sorted(ent.scopes),  # display cache only
+                "expires_at": expires_at,
             })
             .execute()
             .data
@@ -91,8 +113,37 @@ async def create_key(
         key=full_key,
         prefix=prefix,
         name=row["name"],
+        scopes=sorted(ent.scopes),
+        expires_at=row.get("expires_at"),
         created_at=row["created_at"],
     )
+
+
+def _trial_key_expiry(supabase: Any, user_id: str) -> Optional[str]:
+    """Beta keys expire when the beta does — never later.
+
+    If the subscription row is unreadable, fall back to a bounded window rather
+    than to no expiry: an unreadable row must not mint a permanent key.
+    """
+    import datetime as dt
+
+    fallback = (dt.datetime.now(dt.timezone.utc) + dt.timedelta(days=30)).isoformat()
+    try:
+        rows = (
+            supabase.table("user_subscriptions")
+            .select("trial_ends_at")
+            .eq("user_id", user_id)
+            .limit(1)
+            .execute()
+            .data
+            or []
+        )
+    except Exception as exc:  # noqa: BLE001
+        logger.warning("trial expiry lookup failed for %s: %s", user_id, exc)
+        return fallback
+    if rows and rows[0].get("trial_ends_at"):
+        return rows[0]["trial_ends_at"]
+    return fallback
 
 
 @router.get("", response_model=List[KeyRow])
