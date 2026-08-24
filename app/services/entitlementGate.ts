@@ -154,11 +154,17 @@ export function tierLabel(tier: Tier): string {
 // Returns null if already on top tier.
 export function nextTierFor(current: Tier): Tier | null {
   switch (current) {
-    // A trial user has been USING Pro for 30 days, so the honest upsell is the
-    // tier they already have, not a downgrade to basic.
+    // Everything upgrades to basic_markets ("Pro"), because that is the only
+    // thing anyone can actually buy. Verified against App Store Connect
+    // 2026-08-24 — the only APPROVED products are:
+    //   com.centori.integramarkets.pro.monthly          $34.99 / month
+    //   com.centori.integramarkets.basic_markets_annual $349.99 / year
+    // There is no `basic` product and PaywallScreen offers no Basic card, so
+    // returning 'basic' here pointed users at a tier with nothing behind it.
+    // `basic` survives as a tier string only for any legacy rows that hold it.
     case 'free_trial': return 'basic_markets';
-    case 'free': return 'basic';
-    case 'expired': return 'basic';
+    case 'free': return 'basic_markets';
+    case 'expired': return 'basic_markets';
     case 'basic': return 'basic_markets';
     case 'basic_markets': return null;
   }

@@ -43,6 +43,26 @@ describe('the trial grants full Pro', () => {
   });
 });
 
+describe('upgrade targets are actually purchasable', () => {
+  // Verified against App Store Connect 2026-08-24: the only APPROVED products
+  // are com.centori.integramarkets.pro.monthly ($34.99) and
+  // ...basic_markets_annual ($349.99). Both map to basic_markets. There is no
+  // `basic` product, and PaywallScreen renders no Basic card — so pointing an
+  // upgrade at `basic` is a dead end with nothing behind it.
+  const PURCHASABLE = ['basic_markets'];
+
+  it.each(['free', 'free_trial', 'expired', 'basic'])(
+    'nextTierFor(%s) is a tier with a product behind it',
+    (tier) => {
+      expect(PURCHASABLE).toContain(nextTierFor(tier));
+    },
+  );
+
+  it('offers nothing above the top tier', () => {
+    expect(nextTierFor('basic_markets')).toBeNull();
+  });
+});
+
 describe('free is a usable resting state, not a brick', () => {
   it('exists', () => {
     expect(LIMITS.free).toBeDefined();
