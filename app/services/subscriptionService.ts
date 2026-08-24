@@ -29,6 +29,16 @@ let _initialized = false;
 // before the first gate check. `free` is the least-privileged usable tier.
 let _cachedTier: Tier = 'free';
 
+export type TrialInfo = { isTrial: boolean; trialEndsAt: string | null; daysRemaining: number | null };
+
+// Last trial window seen from /entitlement. Null until the first successful
+// fetch — callers must treat null as "unknown", never as "no trial".
+let _trialInfo: TrialInfo | null = null;
+
+export function getTrialInfo(): TrialInfo | null {
+  return _trialInfo;
+}
+
 // react-native-purchases is now installed and linked into the native binary
 // (build 83+, via `npx expo install react-native-purchases`). The historical
 // SIGABRT came from lazy-requiring a MISSING module — Metro's guardedLoadModule
@@ -145,6 +155,14 @@ async function fetchBackendTier(): Promise<Tier> {
     // trial here re-granted one on every failed request.
     if (!res.ok) return _cachedTier;
     const data = await res.json();
+    // Capture the trial clock the backend now returns. Stored rather than
+    // returned because fetchBackendTier's contract is a Tier; the reminder
+    // scheduler reads it via getTrialInfo() after fetchTier() resolves.
+    _trialInfo = {
+      isTrial: data?.is_trial === true,
+      trialEndsAt: typeof data?.trial_ends_at === 'string' ? data.trial_ends_at : null,
+      daysRemaining: typeof data?.days_remaining === 'number' ? data.days_remaining : null,
+    };
     const t = data?.tier;
     // Map the backend tier to what it grants IN THE APP. Both paid API tiers
     // ($99 api_basic and the archive bundle api_history) include full mobile Pro
@@ -172,6 +190,23 @@ async function fetchBackendTier(): Promise<Tier> {
 export async function fetchTier(): Promise<Tier> {
   const [rc, be] = await Promise.all([fetchRevenueCatTier(), fetchBackendTier()]);
   _cachedTier = strongerTier(rc, be);
+
+  // Keep trial reminders in step with the clock. Idempotent — it no-ops unless
+  // the trial end date changed, so calling it on every launch is safe. Never
+  // allowed to break tier resolution, which gates the whole app.
+  try {
+    const { syncTrialReminders } = require('./trialReminders');
+    const info = _trialInfo;
+    // A paid tier means any trial is over regardless of what the clock says.
+    const stillTrialing = info?.isTrial === true && _cachedTier === 'free_trial';
+    await syncTrialReminders({
+      isTrial: stillTrialing,
+      trialEndsAt: stillTrialing ? info?.trialEndsAt ?? null : null,
+    });
+  } catch (err) {
+    console.warn('[subscriptions] trial reminder sync failed:', err);
+  }
+
   return _cachedTier;
 }
 
