@@ -93,6 +93,12 @@ const PRO_FALLBACK: Record<Billing, { price: string; unit: string; note: string;
 
 const DASHBOARD_API_URL = 'https://dashboard.integramarkets.app/api-tier';
 
+// Must match the URLs in the App Store listing's SUBSCRIPTION DETAILS block and
+// in App Store Connect's privacy-policy / license-agreement fields. A reviewer
+// compares them; a mismatch reads as two different policies.
+const TERMS_URL = 'https://www.integramarkets.app/terms';
+const PRIVACY_URL = 'https://www.integramarkets.app/privacy';
+
 function FeatureRow({ label, included }: { label: string; included: boolean }) {
   return (
     <View style={styles.featureRow}>
@@ -304,10 +310,29 @@ export default function PaywallScreen({ onClose }: Props) {
           <Text style={styles.restoreLabel}>Manage or cancel subscription</Text>
         </TouchableOpacity>
 
+        {/* Guideline 3.1.2 requires the PURCHASE SCREEN itself to carry the
+            renewal terms plus FUNCTIONAL links to the EULA and privacy policy.
+            This previously read "See Terms & Privacy in Settings" — a text
+            reference, not a link, which is a routine rejection cause. The App
+            Store description already carries the same disclosure block; the
+            binary has to as well. */}
         <Text style={styles.legalese}>
-          Subscriptions auto-renew unless canceled 24h before the period ends. Manage or cancel
-          in Settings → Apple ID → Subscriptions. See Terms &amp; Privacy in Settings.
+          Integra Pro is an auto-renewable subscription. Payment is charged to your Apple ID at
+          confirmation of purchase. It renews automatically at the same price unless auto-renew
+          is turned off at least 24 hours before the end of the current period, and your account
+          is charged for renewal within 24 hours prior to the end of that period. Manage or cancel
+          anytime in Settings → Apple ID → Subscriptions.
         </Text>
+
+        <View style={styles.legalLinkRow}>
+          <TouchableOpacity onPress={() => Linking.openURL(TERMS_URL).catch(() => {})}>
+            <Text style={styles.legalLink}>Terms of Use</Text>
+          </TouchableOpacity>
+          <Text style={styles.legalSep}>·</Text>
+          <TouchableOpacity onPress={() => Linking.openURL(PRIVACY_URL).catch(() => {})}>
+            <Text style={styles.legalLink}>Privacy Policy</Text>
+          </TouchableOpacity>
+        </View>
       </ScrollView>
     </SafeAreaView>
   );
@@ -445,4 +470,22 @@ const styles = StyleSheet.create({
     textAlign: 'center',
     paddingHorizontal: 8,
   },
+  // Guideline 3.1.2 links. Deliberately more legible than the disclosure text
+  // above (accent colour, 12pt) — a reviewer has to be able to find and tap
+  // them, and a link rendered at textFaint/11pt reads as decoration.
+  legalLinkRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 8,
+    paddingTop: 10,
+    paddingBottom: 24,
+  },
+  legalLink: {
+    color: COLORS.accent,
+    fontSize: 12,
+    fontWeight: '600',
+    textDecorationLine: 'underline',
+  },
+  legalSep: { color: COLORS.textFaint, fontSize: 12 },
 });
