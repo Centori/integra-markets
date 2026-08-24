@@ -52,6 +52,18 @@ import { bootstrapEntitlements, useEntitlement } from './hooks/useEntitlement';
 import { PaywallProvider, usePaywall } from './paywall/PaywallProvider';
 import { canAccess } from './services/entitlementGate';
 import PredictionMarketsScreen from './screens/PredictionMarketsScreen';
+
+// Markets tab — BUILT AND WIRED, but off for launch. The prediction-market
+// screen is complete and reachable; the launch surface is deliberately simpler,
+// with Polymarket/Kalshi divergence surfaced on the news card instead of behind
+// its own tab.
+//
+// A flag rather than a deletion, for three reasons:
+//   * flipping it back is one `eas update`, not a rebuild and a review
+//   * the screen stays imported, so __tests__/unit/entryChain.test.js keeps
+//     guarding it against being stranded again (see MainApp.js)
+//   * the code cannot rot silently — tsc and the bundler still see it
+const MARKETS_TAB_ENABLED = false;
 import ProfileScreen from './components/ProfileScreen';
 import PendingDeletionBanner from './components/PendingDeletionBanner';
 import { getPendingDeletion } from './services/accountService';
@@ -1346,10 +1358,8 @@ const App = () => {
         </Text>
       </TouchableOpacity>
 
-      {/* Markets. This tab existed only in the root-level MainApp.js, which is
-          NOT in the entry chain (index.ts -> app/App.js), so PredictionMarketsScreen
-          has never rendered in a shipped build despite being fully implemented.
-          Same class of bug as the PaywallProvider outage in build 83. */}
+      {/* Markets — hidden for launch, see MARKETS_TAB_ENABLED. */}
+      {MARKETS_TAB_ENABLED && (
       <TouchableOpacity
         style={styles.navItem}
         onPress={() => {
@@ -1371,6 +1381,7 @@ const App = () => {
           Markets
         </Text>
       </TouchableOpacity>
+      )}
 
       <TouchableOpacity
         style={styles.navItem}
@@ -1615,7 +1626,7 @@ const App = () => {
   }
 
   // Render alerts screen
-  if (activeNav === 'Markets') {
+  if (MARKETS_TAB_ENABLED && activeNav === 'Markets') {
     // Defence in depth: the nav gate above should prevent reaching here
     // without entitlement, but a stale `activeNav` (tier changed while the
     // tab was open — trial expiry, cancellation) must not leave the screen
