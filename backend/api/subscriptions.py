@@ -49,6 +49,11 @@ async def get_entitlement(auth: Dict[str, Any] = Depends(verify_supabase_jwt)) -
     # Return only what the client cares about (numbers, not internals).
     return {
         "tier": tier,
+        # The trial clock. Previously the client had no way to know a trial was
+        # running or when it ended, so it could not warn anyone — the app simply
+        # became less capable on day 31 with no explanation, which reads as a
+        # bug rather than as a prompt to subscribe.
+        **_trial_window(supabase, user_id, tier),
         "limits": {
             "bookmarks": _finite(lim.bookmarks),
             "alerts": _finite(lim.alerts),
@@ -61,6 +66,58 @@ async def get_entitlement(auth: Dict[str, Any] = Depends(verify_supabase_jwt)) -
             "push_mode": lim.push_mode,
             "push_per_day": _finite(lim.push_per_day),
         },
+    }
+
+
+TRIAL_TIERS = ("free_trial", "api_trial")
+
+
+def _trial_window(supabase: Any, user_id: str, tier: str) -> Dict[str, Any]:
+    """The trial clock, for clients that need to warn before it runs out.
+
+    `days_remaining` is rounded UP, so a trial with six hours left reports 1
+    rather than 0 — "1 day left" is actionable, "0 days left" on a trial that
+    is still running is not.
+
+    Returns nulls rather than raising: a failure to read the clock must never
+    break the entitlement call, which is what gates the whole app on launch.
+    """
+    empty = {"is_trial": False, "trial_ends_at": None, "days_remaining": None}
+    if tier not in TRIAL_TIERS or supabase is None:
+        return empty
+    try:
+        rows = (
+            supabase.table("user_subscriptions")
+            .select("trial_ends_at")
+            .eq("user_id", user_id)
+            .limit(1)
+            .execute()
+            .data
+            or []
+        )
+    except Exception as exc:  # noqa: BLE001
+        logger.warning("trial window lookup failed for %s: %s", user_id, exc)
+        return empty
+    if not rows or not rows[0].get("trial_ends_at"):
+        return empty
+
+    import datetime as _dt
+    import math as _math
+
+    raw = rows[0]["trial_ends_at"]
+    try:
+        ends = _dt.datetime.fromisoformat(str(raw).replace("Z", "+00:00"))
+    except ValueError:
+        logger.warning("unparseable trial_ends_at %r for %s", raw, user_id)
+        return empty
+    if ends.tzinfo is None:
+        ends = ends.replace(tzinfo=_dt.timezone.utc)
+
+    seconds_left = (ends - _dt.datetime.now(_dt.timezone.utc)).total_seconds()
+    return {
+        "is_trial": True,
+        "trial_ends_at": ends.isoformat(),
+        "days_remaining": max(0, _math.ceil(seconds_left / 86400.0)),
     }
 
 
