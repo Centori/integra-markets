@@ -48,8 +48,10 @@ import EditAlertsModal from './components/EditAlertsModal';
 import AlertsScreen from './components/AlertsScreen';
 import NewsCard from './components/NewsCard';
 import AIAnalysisOverlay from './components/AIAnalysisOverlay';
-import { bootstrapEntitlements } from './hooks/useEntitlement';
-import { PaywallProvider } from './paywall/PaywallProvider';
+import { bootstrapEntitlements, useEntitlement } from './hooks/useEntitlement';
+import { PaywallProvider, usePaywall } from './paywall/PaywallProvider';
+import { canAccess } from './services/entitlementGate';
+import PredictionMarketsScreen from './screens/PredictionMarketsScreen';
 import ProfileScreen from './components/ProfileScreen';
 import PendingDeletionBanner from './components/PendingDeletionBanner';
 import { getPendingDeletion } from './services/accountService';
@@ -166,6 +168,10 @@ const App = () => {
   const [showAlertPreferences, setShowAlertPreferences] = useState(false);
   const [isEditingAlerts, setIsEditingAlerts] = useState(false); // true when editing from Alerts screen
   const [activeNav, setActiveNav] = useState('Today');
+  // Entitlement + paywall, for the Markets tab gate. App renders inside
+  // <PaywallProvider> (see WrappedApp), so usePaywall is safe here.
+  const { tier } = useEntitlement();
+  const paywall = usePaywall();
   const [activeFilter, setActiveFilter] = useState('All');
   const [userData, setUserData] = useState(null);
   const [selectedArticle, setSelectedArticle] = useState(null);
@@ -705,35 +711,67 @@ const App = () => {
         (notification) => {
           console.log('Notification received:', notification?.request?.content?.title);
         },
-        (response) => {
-          try {
-            console.log('Notification tapped:', response?.notification?.request?.content?.title);
-            const content = response?.notification?.request?.content;
-            const data = content?.data;
-            
-            if (data?.article_url) {
-              // Construct a synthetic article from push payload to avoid closure traps
-              // (allNews is likely empty in this scope because it's set on mount)
-              const syntheticArticle = {
-                title: content?.title || 'Market Alert',
-                summary: content?.body || '',
-                url: data.article_url,
-                sourceUrl: data.article_url,
-                source: data.source || 'News',
-                sentiment: data.sentiment || 'NEUTRAL',
-                commodity: data.commodity || '',
-                _fromNotification: true, // prevents poll from auto-restoring a previous vote
-              };
-              setSelectedArticle(syntheticArticle);
-              setShowAIAnalysis(true);
-            }
-          } catch (error) {
-            console.error('Error handling notification tap:', error);
+        handleNotificationTap
+      );
+
+      // COLD START. The OS delivers the tap that LAUNCHED the process via
+      // getLastNotificationResponseAsync — not through the response listener
+      // above, which only fires while the app is already running. This call
+      // existed only in the root-level MainApp.js, which is not in the entry
+      // chain, so tapping a push with the app killed opened Today and dropped
+      // the article. Warm taps always worked, which is why it survived: in
+      // development the app is always already running.
+      try {
+        const Notifications = require('expo-notifications');
+        const last = await Notifications.getLastNotificationResponseAsync();
+        // getLastNotificationResponseAsync returns the last response for the
+        // life of the install, not an unconsumed one — without the identifier
+        // guard it re-opens the same article on every subsequent launch.
+        const identifier = last?.notification?.request?.identifier;
+        if (identifier) {
+          const consumed = await AsyncStorage.getItem('@last_consumed_notification');
+          if (consumed !== identifier) {
+            await AsyncStorage.setItem('@last_consumed_notification', identifier);
+            handleNotificationTap(last);
           }
         }
-      );
+      } catch (error) {
+        // Must never block startup.
+        console.warn('[notifications] cold-start lookup failed:', error);
+      }
     } catch (error) {
       console.error('Error initializing notifications:', error);
+    }
+  };
+
+  // Shared by the warm listener and the cold-start path. Extracted from the
+  // inline arrow it used to be: two copies of this would drift, and the drift
+  // would be invisible because only one of them runs on cold start.
+  const handleNotificationTap = (response) => {
+    try {
+      console.log('Notification tapped:', response?.notification?.request?.content?.title);
+      const content = response?.notification?.request?.content;
+      const data = content?.data;
+
+      if (data?.article_url) {
+        // Construct a synthetic article from push payload to avoid closure traps
+        // (allNews is likely empty in this scope because it's set on mount)
+        const syntheticArticle = {
+          title: content?.title || 'Market Alert',
+          summary: content?.body || '',
+          url: data.article_url,
+          sourceUrl: data.article_url,
+          source: data.source || 'News',
+          sentiment: data.sentiment || 'NEUTRAL',
+          commodity: data.commodity || '',
+          _fromNotification: true, // prevents poll from auto-restoring a previous vote
+        };
+        setActiveNav('Today');
+        setSelectedArticle(syntheticArticle);
+        setShowAIAnalysis(true);
+      }
+    } catch (error) {
+      console.error('Error handling notification tap:', error);
     }
   };
 
@@ -1308,6 +1346,32 @@ const App = () => {
         </Text>
       </TouchableOpacity>
 
+      {/* Markets. This tab existed only in the root-level MainApp.js, which is
+          NOT in the entry chain (index.ts -> app/App.js), so PredictionMarketsScreen
+          has never rendered in a shipped build despite being fully implemented.
+          Same class of bug as the PaywallProvider outage in build 83. */}
+      <TouchableOpacity
+        style={styles.navItem}
+        onPress={() => {
+          // Gate BEFORE navigating. Entering a screen and then being told you
+          // cannot be there reads as a bug, not as a paywall.
+          if (!canAccess('polymarket_kalshi_view', tier)) {
+            paywall.open('polymarket_kalshi_view');
+            return;
+          }
+          setActiveNav('Markets');
+        }}
+      >
+        <MaterialIcons
+          name="trending-up"
+          size={24}
+          color={activeNav === 'Markets' ? colors.accentPositive : colors.textSecondary}
+        />
+        <Text style={[styles.navLabel, activeNav === 'Markets' && styles.activeNavLabel]}>
+          Markets
+        </Text>
+      </TouchableOpacity>
+
       <TouchableOpacity
         style={styles.navItem}
         onPress={() => setActiveNav('Alerts')}
@@ -1551,6 +1615,23 @@ const App = () => {
   }
 
   // Render alerts screen
+  if (activeNav === 'Markets') {
+    // Defence in depth: the nav gate above should prevent reaching here
+    // without entitlement, but a stale `activeNav` (tier changed while the
+    // tab was open — trial expiry, cancellation) must not leave the screen
+    // mounted. Fall back to Today rather than rendering a paid surface.
+    if (!canAccess('polymarket_kalshi_view', tier)) {
+      setActiveNav('Today');
+      return null;
+    }
+    return (
+      <View style={styles.container}>
+        <PredictionMarketsScreen />
+        {renderBottomNav()}
+      </View>
+    );
+  }
+
   if (activeNav === 'Alerts') {
     return (
       <View style={styles.container}>

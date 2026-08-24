@@ -24,7 +24,10 @@ const ENTITLEMENT_IDS = {
 } as const;
 
 let _initialized = false;
-let _cachedTier: Tier = 'free_trial';
+// Seeded to `free`, not `free_trial`. free_trial now grants full Pro, so
+// seeding there would hand Pro to any cold start that cannot reach the network
+// before the first gate check. `free` is the least-privileged usable tier.
+let _cachedTier: Tier = 'free';
 
 // react-native-purchases is now installed and linked into the native binary
 // (build 83+, via `npx expo install react-native-purchases`). The historical
@@ -86,11 +89,15 @@ export async function initSubscriptions(userId?: string): Promise<void> {
 // (api_basic/api_history) grants NO in-app features, so it maps to free_trial
 // for the app. A bundle that includes mobile makes the backend return
 // basic_markets directly.
+// Distinct ranks matter. `expired` and `free_trial` were both 0, and
+// strongerTier compares with `>`, so the winner depended on ARGUMENT ORDER
+// rather than on entitlement.
 const APP_TIER_RANK: Record<string, number> = {
   expired: 0,
-  free_trial: 0,
-  basic: 1,
-  basic_markets: 2,
+  free: 1,
+  free_trial: 2,   // an unexpired trial grants Pro; it must outrank `free`
+  basic: 3,
+  basic_markets: 4,
 };
 
 function strongerTier(a: Tier, b: Tier): Tier {
@@ -107,7 +114,12 @@ async function fetchRevenueCatTier(): Promise<Tier> {
     const active = info.entitlements.active;
     if (active[ENTITLEMENT_IDS.basic_markets]) return 'basic_markets';
     if (active[ENTITLEMENT_IDS.basic]) return 'basic';
-    if (info.firstSeen && !info.originalPurchaseDate) return 'free_trial';
+    // RevenueCat knows about PURCHASES. It does not know when our server-side
+    // trial started or ends. The previous line here —
+    //   if (info.firstSeen && !info.originalPurchaseDate) return 'free_trial';
+    // — was true FOREVER for anyone who never bought, so this leg reported an
+    // active trial indefinitely. The backend owns trial_ends_at; this leg can
+    // only ever UPGRADE (see strongerTier in fetchTier).
     return 'expired';
   } catch (err) {
     console.warn('[subscriptions] RevenueCat tier failed:', err);
@@ -129,7 +141,9 @@ async function fetchBackendTier(): Promise<Tier> {
     const res = await fetch(`${base}/api/subscriptions/entitlement`, {
       headers: { Authorization: `Bearer ${token}` },
     });
-    if (!res.ok) return 'free_trial';
+    // A non-OK response is not evidence of entitlement. Returning a fresh
+    // trial here re-granted one on every failed request.
+    if (!res.ok) return _cachedTier;
     const data = await res.json();
     const t = data?.tier;
     // Map the backend tier to what it grants IN THE APP. Both paid API tiers
@@ -138,10 +152,17 @@ async function fetchBackendTier(): Promise<Tier> {
     // 30-day trial is limited (via no-export). Only api_trial / free stay gated.
     if (t === 'basic_markets' || t === 'api_basic' || t === 'api_history') return 'basic_markets';
     if (t === 'basic') return 'basic';
-    return 'free_trial';
+    if (t === 'free_trial') return 'free_trial';
+    // 'expired' and 'free' MUST survive this mapping. Collapsing every
+    // unrecognised value to 'free_trial' meant that when the backend correctly
+    // reported an ended trial, the app rewrote it to an active one — on every
+    // single launch, forever. This was why the trial could never end.
+    if (t === 'expired') return 'expired';
+    return 'free';
   } catch (err) {
     console.warn('[subscriptions] backend tier failed:', err);
-    return 'free_trial';
+    // Offline launch must not mint a trial. Keep the last known tier.
+    return _cachedTier;
   }
 }
 
