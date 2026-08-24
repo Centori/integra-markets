@@ -2,7 +2,7 @@
   "expo": {
     "name": "Integra Markets",
     "slug": "integra",
-    "version": "1.0.1",
+    "version": "1.0.2",
     "scheme": "integra",
     "orientation": "portrait",
     "icon": "./assets/NewLogoInt.png.png",
@@ -28,7 +28,7 @@
     ],
     "ios": {
       "bundleIdentifier": "com.centori.integramarkets",
-      "buildNumber": "89",
+      "buildNumber": "90",
       "deploymentTarget": "13.0",
       "supportsTablet": true,
       "requireFullScreen": false,
