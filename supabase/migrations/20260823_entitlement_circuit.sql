@@ -20,7 +20,42 @@
 --
 -- Safe to run more than once.
 
+-- ⚠️ PREREQUISITES — verified missing in production on 2026-08-24.
+--
+-- `user_subscriptions`, `api_keys` and `api_key_usage` did NOT exist in the
+-- production database. Probing the PostgREST schema cache returned 404 for all
+-- three while entity_mentions / raw_documents / historical_events returned 200,
+-- so migrations were applied per-feature by hand and the monetization ones were
+-- never run. Consequences while that was true:
+--   * POST /api/keys 500s — no API key has ever existed
+--   * effective_tier() does not exist, so get_effective_tier() throws, is
+--     caught, and every user resolves to the fallback tier forever
+--   * every RevenueCat webhook 500s, so no subscription was ever recorded
+--
+-- RUN THESE FIRST, IN THIS ORDER:
+--   1. 20260528_api_keys.sql
+--   2. 20260702_user_subscriptions.sql
+--   3. this file
+--
+-- The preflight below fails loudly rather than letting a half-applied state
+-- through — a migration that silently skips its own work is worse than one
+-- that refuses to start.
+
 begin;
+
+do $$
+begin
+    if to_regclass('public.user_subscriptions') is null then
+        raise exception
+            'PREREQUISITE MISSING: public.user_subscriptions does not exist. '
+            'Run supabase/migrations/20260702_user_subscriptions.sql first.';
+    end if;
+    if to_regclass('public.api_keys') is null then
+        raise exception
+            'PREREQUISITE MISSING: public.api_keys does not exist. '
+            'Run supabase/migrations/20260528_api_keys.sql first.';
+    end if;
+end $$;
 
 -- ---------------------------------------------------------------------------
 -- 1. Widen the tier vocabulary.
