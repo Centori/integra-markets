@@ -29,6 +29,7 @@ import {
 } from 'react-native';
 import { Feather } from '@expo/vector-icons';
 import { useEntitlement } from '../hooks/useEntitlement';
+import { findPackageFor, type Billing } from './packageMatch';
 import {
   fetchCurrentOffering,
   purchasePackage,
@@ -44,7 +45,6 @@ type Props = {
   highlightTier?: Tier;
 };
 
-type Billing = 'monthly' | 'annual';
 
 const COLORS = {
   bg: '#121212',
@@ -116,7 +116,11 @@ export default function PaywallScreen({ onClose }: Props) {
   const { tier, refresh } = useEntitlement();
   const [loading, setLoading] = useState(false);
   const [offering, setOffering] = useState<any | null>(null);
-  const [billing, setBilling] = useState<Billing>('annual');
+  // Default to MONTHLY. Opening pre-switched to the annual plan means the
+  // first price a user sees is not the one the store listing and the
+  // "MOST POPULAR" card imply, and it preselects the larger commitment on
+  // their behalf. Let them choose annual.
+  const [billing, setBilling] = useState<Billing>('monthly');
 
   useEffect(() => {
     (async () => {
@@ -132,14 +136,29 @@ export default function PaywallScreen({ onClose }: Props) {
   const isPaid = tier === 'basic' || tier === 'basic_markets';
   const currentLabel = isPaid ? 'Pro' : tier === 'expired' ? 'Expired' : 'Free';
 
-  // Resolve the Pro price for the selected billing period, preferring live RC.
+  // Resolve the Pro package for the selected billing period.
+  //
+  // This used to match on `p.product.identifier.includes(rcId)` with rcIds of
+  // 'basic_markets_monthly' / 'basic_markets_annual'. The two App Store product
+  // IDs are named inconsistently:
+  //
+  //   com.centori.integramarkets.basic_markets_annual   ← contains the rcId ✓
+  //   com.centori.integramarkets.pro.monthly            ← does NOT ✗
+  //
+  // So annual matched and monthly never did. Monthly therefore fell through to
+  // the hardcoded USD fallback (showing "$35" to a customer in Nigeria whose
+  // real price is ₦59,900) and `handleSubscribe` hit `!proPackage`, producing
+  // "Subscriptions unavailable" for anyone on the monthly tab.
+  //
+  // Match on RevenueCat's own duration metadata instead. Naming conventions
+  // drift; the package type and the ISO-8601 subscription period do not.
   const proFallback = PRO_FALLBACK[billing];
-  const proPackage = offering?.availablePackages?.find(
-    (p: any) =>
-      p.identifier === proFallback.rcId || p.product?.identifier?.includes(proFallback.rcId),
-  );
+  const proPackage = findPackageFor(offering, billing);
   const proPrice = proPackage?.product?.priceString ?? proFallback.price;
   const proUnit = proPackage ? (billing === 'annual' ? '/yr' : '/mo') : proFallback.unit;
+  // True when we are showing a hardcoded USD guess rather than the real
+  // localized store price. Never let that masquerade as the price to pay.
+  const priceIsEstimate = !proPackage;
 
   const handleSubscribe = async () => {
     if (!offering || !proPackage) {
@@ -258,10 +277,18 @@ export default function PaywallScreen({ onClose }: Props) {
           </View>
           <Text style={styles.cardName}>Pro</Text>
           <View style={styles.priceRow}>
-            <Text style={styles.price}>{proPrice}</Text>
+            {/* "≈" whenever this is the hardcoded USD constant rather than the
+                live localized store price. A customer in Nigeria pays ₦59,900,
+                not $35 — rendering the guess as a definite figure is a price
+                misstatement, and Apple treats those seriously. */}
+            <Text style={styles.price}>{priceIsEstimate ? `≈ ${proPrice}` : proPrice}</Text>
             <Text style={styles.priceUnit}>{proUnit}</Text>
           </View>
-          <Text style={styles.priceNote}>{proFallback.note}</Text>
+          <Text style={styles.priceNote}>
+            {priceIsEstimate
+              ? 'Confirming price for your region — the exact amount is shown on Apple’s purchase sheet.'
+              : proFallback.note}
+          </Text>
           <TouchableOpacity
             style={[styles.cta, isPaid && styles.ctaDisabled]}
             onPress={handleSubscribe}
