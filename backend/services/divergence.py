@@ -34,7 +34,17 @@ from services.topic_taxonomy import TOPICS, matching_markets
 logger = logging.getLogger(__name__)
 
 
-DEFAULT_THRESHOLD = 0.20         # 20-point divergence
+# Divergence threshold, in hundredths of the SIGNED -1..+1 axis that both
+# sides are mapped onto by `2x - 1`. "20-point" therefore means 0.20 *signed*,
+# which is a 0.60-vs-0.50 lean on the underlying 0..1 scales -- see
+# tests/test_divergence_scale.py, which pins that boundary case deliberately.
+#
+# Stated explicitly because "point" is ambiguous here and the ambiguity has
+# already cost one inverted-signal incident: 0.20 signed is *10* percentage
+# points of implied probability, not 20. If you want to retune sensitivity,
+# change the number knowingly -- do not "fix" the unit.
+DEFAULT_THRESHOLD = 0.20         # 20 signed-points == 10 probability points
+
 DEFAULT_LOOKBACK_HOURS = 24      # window for averaging news sentiment
 MAX_MARKETS_PER_PROVIDER = 5     # cap returned related markets
 
