@@ -31,7 +31,14 @@ import urllib.parse
 import urllib.request
 from typing import Any, Iterable, Optional
 
-from .common import batch_upsert, get_supabase, setup_logging, write_cursor
+from .common import (
+    batch_upsert,
+    get_supabase,
+    parse_iso_date,
+    read_cursor,
+    setup_logging,
+    write_cursor,
+)
 
 logger = logging.getLogger("backfill.wayback")
 
@@ -255,17 +262,74 @@ def backfill(
     until: dt.date,
     only: Optional[list[str]] = None,
     cap_per_host: int = 2000,
+    max_days: int | None = None,
 ) -> int:
-    """Walk each configured host's Wayback archive. Idempotent via url_hash."""
+    """Walk each configured host's Wayback archive. Idempotent via url_hash.
+
+    Resumes per host from `backfill_cursors` and bounds one invocation to
+    `max_days` of archive, so repeated scheduled runs walk the full range
+    without any single run taking hours.
+
+    This function previously did neither, in a combination that was worse than
+    doing nothing:
+
+      * it never called read_cursor, so every run restarted from --since;
+      * it wrote the cursor as `until` — the END of the requested range —
+        regardless of how far it actually got, and `cap_per_host` means it
+        usually stopped well short;
+      * write_cursor sat outside the `except`, so a host that raised still
+        recorded "completed through until".
+
+    So the cursor filled with rows that overstated progress while the walk
+    restarted from the beginning each time. Scheduling that would have looked
+    like progress in `backfill_cursors` while the oldest-document date never
+    moved.
+    """
     total = 0
     for host_config in _HOSTS:
-        if only and host_config["host"] not in only:
+        host = host_config["host"]
+        if only and host not in only:
             continue
+
+        # Resume: the cursor is the date through which this host is complete.
+        host_since = since
+        cursor_iso = read_cursor(supabase, SOURCE, host)
+        if cursor_iso:
+            try:
+                cursor_date = parse_iso_date(cursor_iso)
+            except (TypeError, ValueError):
+                logger.warning("wayback %s: unreadable cursor %r, ignoring", host, cursor_iso)
+            else:
+                if cursor_date > host_since:
+                    logger.info("wayback %s: resuming from cursor %s", host, cursor_date)
+                    host_since = cursor_date
+
+        if host_since >= until:
+            logger.info("wayback %s: already complete through %s", host, host_since)
+            continue
+
+        # Bound this invocation. The cursor advances only to what we attempted,
+        # so the next run picks up exactly here.
+        host_until = until
+        if max_days is not None:
+            host_until = min(until, host_since + dt.timedelta(days=max_days))
+
         try:
-            total += _backfill_host(supabase, host_config, since=since, until=until, cap=cap_per_host)
+            ingested = _backfill_host(
+                supabase, host_config, since=host_since, until=host_until, cap=cap_per_host
+            )
         except Exception as exc:  # noqa: BLE001
-            logger.error("wayback %s failed: %s", host_config["host"], exc)
-        write_cursor(supabase, SOURCE, host_config["host"], until.isoformat(), total)
+            # Deliberately do NOT advance the cursor: a failed window must be
+            # retried, not skipped.
+            logger.error("wayback %s failed for %s → %s: %s", host, host_since, host_until, exc)
+            continue
+
+        total += ingested
+        write_cursor(supabase, SOURCE, host, host_until.isoformat(), ingested)
+        logger.info(
+            "wayback %s: window %s → %s done (%d docs), cursor advanced",
+            host, host_since, host_until, ingested,
+        )
     return total
 
 
@@ -275,6 +339,14 @@ def main() -> None:
     ap.add_argument("--until", required=True, help="ISO date, exclusive")
     ap.add_argument("--only", nargs="+", help="Restrict to specific hosts (e.g. oilprice.com)")
     ap.add_argument("--cap-per-host", type=int, default=2000, help="Max snapshots per host per run")
+    ap.add_argument(
+        "--max-days",
+        type=int,
+        default=None,
+        help="Bound this invocation to N days of archive per host. The cursor "
+             "advances only over what was attempted, so a bounded run is a "
+             "checkpoint: schedule it repeatedly and it walks the full range.",
+    )
     ap.add_argument("--verbose", action="store_true")
     args = ap.parse_args()
 
@@ -285,6 +357,7 @@ def main() -> None:
         until=dt.date.fromisoformat(args.until),
         only=args.only,
         cap_per_host=args.cap_per_host,
+        max_days=args.max_days,
     )
     print(f"wayback: {total} headlines ingested")
 

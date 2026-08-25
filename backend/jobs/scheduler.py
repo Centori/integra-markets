@@ -79,6 +79,25 @@ def start_all() -> None:
     t3.start()
     _threads["pipeline_health"] = t3
 
+    # Archive backfill every hour. The archive only ever grew forward — every
+    # backfill source was a manual CLI and `backfill_cursors` held no rows at
+    # all — so this is the first thing that walks history backwards.
+    #
+    # Hourly, not 10-minutely, and only a few days of archive per tick: the
+    # budget is deliberately small because this runs inside the API process,
+    # which answers a 300s Railway healthcheck. Slow is fine — the cursor makes
+    # every bounded run a checkpoint, so it walks years over weeks of
+    # wall-clock at negligible sustained load. Disable with
+    # INTEGRA_DISABLE_BACKFILL=true; it also self-skips if a tick overruns.
+    try:
+        from jobs import archive_backfill
+    except ImportError as exc:
+        logger.warning("scheduler: archive_backfill not importable: %s", exc)
+    else:
+        t4 = _SchedulerThread("archive_backfill", archive_backfill.run, interval_s=3600)
+        t4.start()
+        _threads["archive_backfill"] = t4
+
 
 def stop_all() -> None:
     for t in _threads.values():
