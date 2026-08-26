@@ -2235,18 +2235,50 @@ def build_headline_sentiment_overview(
         "source_url": canonical_event_url
     }
 
+_DRIVER_TERMS = [
+    # commodities first, so they lead the truncated list
+    "oil", "gas", "wheat", "corn", "gold", "silver", "copper", "coffee",
+    "sugar", "bitcoin", "btc",
+    # market drivers
+    "price", "production", "supply", "demand", "forecast", "harvest",
+    "export", "import", "inflation", "fed", "yield", "weather",
+]
+
+# Word-boundary matchers, built once. Unanchored `term in text_lower` matched
+# far more than it should, and these are what the app labels "Key Sentiment
+# Drivers": "gas" fired on Vegas and gasket, "oil" on spoiled and turmoil,
+# "corn" on cornerstone, "fed" on federal and offered, "import" on important
+# — which appears in a large share of financial copy.
+#
+# `\w*` still allows inflections ("prices", "exports", "forecasting"), it just
+# stops a term matching from the middle of another word.
+_DRIVER_PATTERNS = {
+    term: re.compile(r"\b" + re.escape(term) + r"\w*\b", re.IGNORECASE)
+    for term in _DRIVER_TERMS
+}
+
+# Expansions that \w* admits but which are a different word in practice.
+_DRIVER_FALSE_FORMS = {
+    "fed": {"federal", "federally", "fedora", "federation"},
+    "import": {"important", "importantly", "importance"},
+    "gas": {"gasket", "gaskets"},
+    "corn": {"cornerstone", "corner", "cornered"},
+}
+
+
 def extract_keywords(text: str) -> List[str]:
-    """Extract relevant keywords from text"""
-    # Common commodity and market keywords
-    keywords = []
-    commodity_terms = ["oil", "gas", "wheat", "corn", "gold", "silver", "copper", "coffee", "sugar", "bitcoin", "btc"]
-    market_terms = ["price", "production", "supply", "demand", "forecast", "harvest", "export", "import", "inflation", "fed", "yield", "weather"]
-    
-    text_lower = text.lower()
-    for term in commodity_terms + market_terms:
-        if term in text_lower:
+    """Extract relevant market drivers from text.
+
+    At most five terms, ordered by _DRIVER_TERMS so commodities lead.
+    Word-boundary anchored — see the note above _DRIVER_PATTERNS.
+    """
+    if not text:
+        return []
+    keywords: List[str] = []
+    for term in _DRIVER_TERMS:
+        bad = _DRIVER_FALSE_FORMS.get(term, frozenset())
+        if any(h.lower() not in bad for h in _DRIVER_PATTERNS[term].findall(text)):
             keywords.append(term)
-    
     return keywords[:5]  # Return top 5 keywords
 
 def extract_trigger_keywords_with_relevance(text: str, commodity: Optional[str] = None) -> List[Dict[str, Any]]:
