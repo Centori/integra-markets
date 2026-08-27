@@ -53,7 +53,7 @@ def start_all() -> None:
     if _threads:
         return
     try:
-        from jobs import divergence_monitor, news_fetcher, pipeline_health
+        from jobs import archive_scorer, divergence_monitor, news_fetcher, pipeline_health
     except ImportError as exc:
         logger.warning("scheduler: jobs not importable: %s", exc)
         return
@@ -78,6 +78,19 @@ def start_all() -> None:
     t3 = _SchedulerThread("pipeline_health", pipeline_health.run, interval_s=900)
     t3.start()
     _threads["pipeline_health"] = t3
+
+    # Archive scorer every 10 min. The backfill sources write raw_documents but
+    # nothing ever turned them into entity_mentions, so 11,385 collected
+    # documents — 9,176 of them published before 2025 — were invisible to every
+    # sentiment-history endpoint. This job drains that backlog oldest-first and
+    # then keeps pace with whatever wayback adds.
+    #
+    # Runs at the same cadence as news_fetcher rather than faster: it is
+    # CPU-bound and shares a container with the API, and the backlog is
+    # measured in hours, not minutes.
+    t4 = _SchedulerThread("archive_scorer", archive_scorer.run, interval_s=600)
+    t4.start()
+    _threads["archive_scorer"] = t4
 
 
 def stop_all() -> None:

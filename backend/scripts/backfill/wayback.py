@@ -31,7 +31,14 @@ import urllib.parse
 import urllib.request
 from typing import Any, Iterable, Optional
 
-from .common import batch_upsert, get_supabase, setup_logging, write_cursor
+from .common import (
+    batch_upsert,
+    get_supabase,
+    parse_iso_date,
+    read_cursor,
+    setup_logging,
+    write_cursor,
+)
 
 logger = logging.getLogger("backfill.wayback")
 
@@ -255,17 +262,78 @@ def backfill(
     until: dt.date,
     only: Optional[list[str]] = None,
     cap_per_host: int = 2000,
+    max_days: int | None = None,
 ) -> int:
-    """Walk each configured host's Wayback archive. Idempotent via url_hash."""
+    """Walk each configured host's Wayback archive. Idempotent via url_hash.
+
+    Resumes per host from `backfill_cursors`, exactly as gdelt does.
+
+    What this used to do, and why it mattered
+    ----------------------------------------
+    This module imported `write_cursor` but never `read_cursor`. Every run
+    therefore re-enumerated the FULL range (2020-01-01 → 2026-07-01) for all
+    six hosts, hit `--cap` on each, and re-upserted documents that already
+    existed. Two consequences, both silent:
+
+      * It looked productive. `rows_ingested` climbed into the thousands per
+        host while `raw_documents` barely grew — 446 new documents in a week,
+        of which 2 were historical.
+      * It starved gdelt. Completed runs sat ~3h15m apart because wayback ate
+        the rest of the budget, dragging the GDELT walk out to ~Oct 2027.
+
+    Additionally `backfill()` took no `max_days`, so run_all's
+    `inspect.signature` budget check silently skipped this source — the one
+    source that most needed bounding.
+    """
     total = 0
     for host_config in _HOSTS:
-        if only and host_config["host"] not in only:
+        host = host_config["host"]
+        if only and host not in only:
             continue
+
+        # Resume where this host left off. Each host gets its own cursor row
+        # because they are enumerated independently and fail independently.
+        host_since = since
+        cursor_iso = read_cursor(supabase, SOURCE, host)
+        if cursor_iso:
+            try:
+                cursor_date = parse_iso_date(cursor_iso)
+            except ValueError:
+                logger.warning("wayback %s: unparseable cursor %r, restarting from %s",
+                               host, cursor_iso, since)
+                cursor_date = None
+            if cursor_date and cursor_date > host_since:
+                if cursor_date >= until:
+                    logger.info("wayback %s: cursor %s already at/past --until %s, nothing to do",
+                                host, cursor_date, until)
+                    continue
+                logger.info("wayback %s: resuming from cursor %s", host, cursor_date)
+                host_since = cursor_date
+
+        # Bound one invocation so a single host cannot consume the whole run.
+        # One host previously burned 1h50m in a single pass.
+        host_until = until
+        if max_days is not None:
+            budgeted = host_since + dt.timedelta(days=max_days)
+            if budgeted < host_until:
+                host_until = budgeted
+
         try:
-            total += _backfill_host(supabase, host_config, since=since, until=until, cap=cap_per_host)
+            fetched = _backfill_host(
+                supabase, host_config, since=host_since, until=host_until, cap=cap_per_host
+            )
         except Exception as exc:  # noqa: BLE001
-            logger.error("wayback %s failed: %s", host_config["host"], exc)
-        write_cursor(supabase, SOURCE, host_config["host"], until.isoformat(), total)
+            # Do NOT advance the cursor on failure — otherwise a transient
+            # error permanently skips that slice of the archive.
+            logger.error("wayback %s failed, cursor left at %s: %s", host, host_since, exc)
+            continue
+
+        total += fetched
+        # Advance to where this pass actually reached, not to `until`. Writing
+        # `until` was what marked every host "complete" while the walk had
+        # barely started — all six cursors read 2026-07-01 the whole time.
+        write_cursor(supabase, SOURCE, host, host_until.isoformat(), fetched)
+
     return total
 
 
@@ -275,6 +343,8 @@ def main() -> None:
     ap.add_argument("--until", required=True, help="ISO date, exclusive")
     ap.add_argument("--only", nargs="+", help="Restrict to specific hosts (e.g. oilprice.com)")
     ap.add_argument("--cap-per-host", type=int, default=2000, help="Max snapshots per host per run")
+    ap.add_argument("--max-days", type=int, default=None,
+                    help="Bound one invocation to this many days per host (checkpointed)")
     ap.add_argument("--verbose", action="store_true")
     args = ap.parse_args()
 
@@ -285,6 +355,7 @@ def main() -> None:
         until=dt.date.fromisoformat(args.until),
         only=args.only,
         cap_per_host=args.cap_per_host,
+        max_days=args.max_days,
     )
     print(f"wayback: {total} headlines ingested")
 

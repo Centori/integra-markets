@@ -84,10 +84,10 @@ async def sentiment(
     try:
         rows = (
             supabase.table("entity_mentions")
-            .select("document_id, sentiment, score, extracted_at, source, headline, url")
+            .select("document_id, sentiment, score, published_at, source, headline, url")
             .eq("entity", commodity_lc)
-            .gte("extracted_at", since)
-            .order("extracted_at", desc=True)
+            .gte("published_at", since)
+            .order("published_at", desc=True)
             .limit(1000)
             .execute()
         ).data or []
@@ -157,9 +157,9 @@ async def narratives(
     try:
         rows = (
             supabase.table("entity_mentions")
-            .select("headline, score, extracted_at, source")
+            .select("headline, score, published_at, source")
             .eq("entity", commodity_lc)
-            .gte("extracted_at", since)
+            .gte("published_at", since)
             .limit(500)
             .execute()
         ).data or []
@@ -215,7 +215,7 @@ def _cluster_headlines(rows: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
         bucket["headlines"].append(headline)
         if r.get("score") is not None:
             bucket["scores"].append(r["score"])
-        seen_at = r.get("extracted_at")
+        seen_at = r.get("published_at")
         if seen_at and (bucket["first_seen"] is None or seen_at < bucket["first_seen"]):
             bucket["first_seen"] = seen_at
 
@@ -270,10 +270,10 @@ async def brief(
             supabase.table("entity_mentions")
             .select("score")
             .eq("entity", commodity_lc)
-            .gte("extracted_at", start)
+            .gte("published_at", start)
         )
         if end:
-            q = q.lte("extracted_at", end)
+            q = q.lte("published_at", end)
         try:
             data = q.limit(2000).execute().data or []
         except Exception as exc:  # noqa: BLE001
@@ -293,9 +293,9 @@ async def brief(
     try:
         narrative_rows = (
             supabase.table("entity_mentions")
-            .select("headline, score, extracted_at, source")
+            .select("headline, score, published_at, source")
             .eq("entity", commodity_lc)
-            .gte("extracted_at", since_7d)
+            .gte("published_at", since_7d)
             .limit(500)
             .execute()
         ).data or []

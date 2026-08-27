@@ -127,6 +127,14 @@ def _aggregate_sentiment(supabase, topic_key: str, lookback_hours: int) -> tuple
     Reads from the `entity_mentions` table (populated by archive_writer)
     where the topic_key is recorded under entity_type="topic".
     Returns (avg_score, sample_size).
+
+    ⚠️ The window MUST be over `published_at`, never `extracted_at`.
+    `extracted_at` is when we scored a row. The archive scorer backfills
+    documents going back to 2020 and stamps them with today's scoring time,
+    so an `extracted_at` window would pull five-year-old articles into
+    "sentiment over the last 24 hours" and silently corrupt every divergence
+    reading against live market odds. Publication date is also simply the
+    correct question to ask: we want recent news, not recently-touched rows.
     """
     if supabase is None:
         return None, 0
@@ -137,7 +145,7 @@ def _aggregate_sentiment(supabase, topic_key: str, lookback_hours: int) -> tuple
             .select("score")
             .eq("entity", topic_key)
             .eq("entity_type", "topic")
-            .gte("extracted_at", since)
+            .gte("published_at", since)
             .limit(2000)
             .execute()
         ).data or []
