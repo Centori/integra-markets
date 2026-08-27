@@ -129,10 +129,10 @@ def _tool_get_sentiment_now(commodity: str) -> Dict[str, Any]:
     since = (dt.datetime.now(dt.timezone.utc) - dt.timedelta(hours=24)).isoformat()
     rows = (
         supabase.table("entity_mentions")
-        .select("score, sentiment, extracted_at")
+        .select("score, sentiment, published_at")
         .eq("entity", commodity_lc)
-        .gte("extracted_at", since)
-        .order("extracted_at", desc=True)
+        .gte("published_at", since)
+        .order("published_at", desc=True)
         .limit(500)
         .execute()
     ).data or []
@@ -143,7 +143,7 @@ def _tool_get_sentiment_now(commodity: str) -> Dict[str, Any]:
         "commodity": commodity_lc,
         "latest_sentiment": rows[0].get("sentiment"),
         "latest_score": rows[0].get("score"),
-        "observed_at": rows[0].get("extracted_at"),
+        "observed_at": rows[0].get("published_at"),
         "rolling_24h_avg": round(statistics.fmean(scores), 4) if scores else None,
         "sample_size": len(scores),
     }
@@ -155,10 +155,10 @@ def _tool_get_recent_history(commodity: str, days: int = 7, limit: int = 25) -> 
     since = (dt.datetime.now(dt.timezone.utc) - dt.timedelta(days=days)).isoformat()
     rows = (
         supabase.table("entity_mentions")
-        .select("document_id, sentiment, score, confidence, extracted_at")
+        .select("document_id, sentiment, score, confidence, published_at")
         .eq("entity", commodity_lc)
-        .gte("extracted_at", since)
-        .order("extracted_at", desc=True)
+        .gte("published_at", since)
+        .order("published_at", desc=True)
         .limit(min(limit, 100))
         .execute()
     ).data or []
@@ -171,15 +171,15 @@ def _tool_get_daily_aggregates(commodity: str, days: int = 30) -> Dict[str, Any]
     since = (dt.datetime.now(dt.timezone.utc) - dt.timedelta(days=days)).isoformat()
     rows = (
         supabase.table("entity_mentions")
-        .select("sentiment, score, extracted_at")
+        .select("sentiment, score, published_at")
         .eq("entity", commodity_lc)
-        .gte("extracted_at", since)
+        .gte("published_at", since)
         .limit(50000)
         .execute()
     ).data or []
     buckets: Dict[str, List[Dict[str, Any]]] = {}
     for r in rows:
-        observed = r.get("extracted_at")
+        observed = r.get("published_at")
         if not observed:
             continue
         try:

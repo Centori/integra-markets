@@ -78,7 +78,11 @@ def _install(monkeypatch, client):
 
 
 def _mentions(*scores):
-    return [{"score": s, "sentiment": "neutral", "extracted_at": _iso(1)} for s in scores]
+    # published_at, not extracted_at: the time axis is publication date. See
+    # migration 20260827_entity_mentions_published_at — scoring 2020 articles
+    # stamps extracted_at with today, so an extracted_at window would pull
+    # five-year-old news into "sentiment right now".
+    return [{"score": s, "sentiment": "neutral", "published_at": _iso(1)} for s in scores]
 
 
 class TestAlwaysAnswers200:

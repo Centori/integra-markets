@@ -110,10 +110,10 @@ async def sentiment_now(
     try:
         rows = (
             supabase.table("entity_mentions")
-            .select("score, sentiment, extracted_at")
+            .select("score, sentiment, published_at")
             .eq("entity", commodity_lc)
-            .gte("extracted_at", since)
-            .order("extracted_at", desc=True)
+            .gte("published_at", since)
+            .order("published_at", desc=True)
             .limit(500)
             .execute()
         ).data or []
@@ -132,7 +132,7 @@ async def sentiment_now(
         "latest": {
             "sentiment": latest.get("sentiment"),
             "score": latest.get("score"),
-            "observed_at": latest.get("extracted_at"),
+            "observed_at": latest.get("published_at"),
         },
         "rolling_24h": {
             "avg_score": avg,
@@ -167,11 +167,11 @@ async def sentiment_history(
     try:
         rows = (
             supabase.table("entity_mentions")
-            .select("document_id, sentiment, score, confidence, extracted_at")
+            .select("document_id, sentiment, score, confidence, published_at")
             .eq("entity", commodity_lc)
-            .gte("extracted_at", start.isoformat())
-            .lte("extracted_at", end.isoformat())
-            .order("extracted_at", desc=True)
+            .gte("published_at", start.isoformat())
+            .lte("published_at", end.isoformat())
+            .order("published_at", desc=True)
             .limit(limit)
             .execute()
         ).data or []
@@ -207,10 +207,10 @@ async def sentiment_daily(
     try:
         rows = (
             supabase.table("entity_mentions")
-            .select("sentiment, score, extracted_at")
+            .select("sentiment, score, published_at")
             .eq("entity", commodity_lc)
-            .gte("extracted_at", start.isoformat())
-            .lte("extracted_at", end.isoformat())
+            .gte("published_at", start.isoformat())
+            .lte("published_at", end.isoformat())
             .limit(50000)
             .execute()
         ).data or []
@@ -221,7 +221,7 @@ async def sentiment_daily(
     # Bucket by UTC date.
     buckets: Dict[str, List[Dict[str, Any]]] = {}
     for r in rows:
-        observed = r.get("extracted_at")
+        observed = r.get("published_at")
         if not observed:
             continue
         try:

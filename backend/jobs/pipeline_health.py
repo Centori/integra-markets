@@ -58,6 +58,9 @@ def run() -> Dict[str, Any]:
         ("entity_mentions_fresh", _check_entity_mentions),
         ("raw_documents_fresh", _check_raw_documents),
         ("feed_quality", _check_feed_quality),
+        ("archive_backfill_progress", _check_backfill_progress),
+        ("archive_scoring_progress", _check_scoring_progress),
+        ("archive_depth", _check_archive_depth),
     ):
         try:
             ok, detail = fn()
@@ -179,3 +182,140 @@ def _check_feed_quality():
             f"real-summary ratio"
         )
     return ok, detail
+
+
+# =====================================================================
+# Archive / backfill checks
+#
+# The live-pipeline checks above ask "is fresh data arriving". These ask
+# "is the HISTORICAL archive actually being built" — a different question
+# that had no coverage at all, and which failed silently for months:
+#
+#   * wayback re-walked 2020→2026 every run without reading its cursor,
+#     re-upserting documents that already existed. Its rows_ingested
+#     counters climbed into the thousands while raw_documents gained 446
+#     documents in a week, of which 2 were historical.
+#   * GDELT's cursor crawled at 5 days of range per day of wall-clock,
+#     putting completion in late 2027, and nothing reported that.
+#   * 11,385 collected documents had never been scored into
+#     entity_mentions, so a six-year archive answered every history query
+#     with two months of data.
+#
+# Each of those looked healthy from the outside. These checks make them
+# say so out loud.
+# =====================================================================
+
+# GDELT walks 3 days of range per run on a 15-minute cron. If its cursor
+# hasn't moved in this long, the walk has stopped.
+BACKFILL_CURSOR_MAX_AGE_H = float(os.getenv("HEALTH_BACKFILL_CURSOR_MAX_AGE_H", "6"))
+
+# The scoring backlog must be draining. Alert if it's been static across
+# this many consecutive checks' worth of time without reaching zero.
+SCORING_BACKLOG_MAX_AGE_H = float(os.getenv("HEALTH_SCORING_MAX_AGE_H", "3"))
+
+# How many days of scored history the archive should span. This is the
+# check that would have caught the original defect: storage was six years
+# wide while every query returned two months.
+ARCHIVE_MIN_SPAN_DAYS = int(os.getenv("HEALTH_ARCHIVE_MIN_SPAN_DAYS", "180"))
+
+
+def _check_backfill_progress():
+    """Are the backfill cursors still advancing?
+
+    Reports every source's cursor so a single stalled source is visible
+    rather than averaged away. Fails if the most recently touched cursor
+    is older than the threshold — meaning the runner itself has stopped.
+    """
+    rows = (
+        _supabase()
+        .table("backfill_cursors")
+        .select("source, cursor_kind, cursor_value, last_run_at")
+        .order("last_run_at", desc=True)
+        .limit(50)
+        .execute()
+    ).data or []
+
+    if not rows:
+        return False, {"reason": "no backfill cursors — runner has never checkpointed"}
+
+    newest = rows[0].get("last_run_at")
+    age_h = _age_minutes(newest) / 60.0
+    detail = {
+        "newest_run": newest,
+        "age_hours": round(age_h, 2),
+        "max_age_hours": BACKFILL_CURSOR_MAX_AGE_H,
+        "cursors": {f"{r['source']}:{r['cursor_kind']}": r.get("cursor_value") for r in rows},
+    }
+    return age_h <= BACKFILL_CURSOR_MAX_AGE_H, detail
+
+
+def _check_scoring_progress():
+    """Is the archive scorer draining its backlog?
+
+    An empty backlog is the healthy steady state. A non-empty backlog is
+    only healthy if entity_mentions is still gaining rows — otherwise the
+    scorer is running and achieving nothing, which is exactly how the
+    unscorable-document stall would have presented.
+    """
+    client = _supabase()
+    try:
+        backlog = client.rpc("unscored_document_count", {}).execute().data
+    except Exception as exc:  # noqa: BLE001
+        return False, {"error": f"unscored_document_count rpc failed: {exc}",
+                       "hint": "migration 20260827_raw_documents_scored_at not applied?"}
+
+    backlog = int(backlog or 0)
+    if backlog == 0:
+        return True, {"backlog": 0, "state": "drained"}
+
+    # Backlog is non-empty — require recent scoring activity.
+    newest_scored = _latest_timestamp("entity_mentions", "extracted_at")
+    if not newest_scored:
+        return False, {"backlog": backlog, "reason": "backlog non-empty and nothing ever scored"}
+
+    age_h = _age_minutes(newest_scored) / 60.0
+    return age_h <= SCORING_BACKLOG_MAX_AGE_H, {
+        "backlog": backlog,
+        "last_scored": newest_scored,
+        "age_hours": round(age_h, 2),
+        "max_age_hours": SCORING_BACKLOG_MAX_AGE_H,
+    }
+
+
+def _check_archive_depth():
+    """Does the scored archive actually span a useful history?
+
+    Queries the same axis the history endpoints use (published_at). If a
+    future change re-points those queries at extracted_at, or the trigger
+    is dropped, this collapses to a couple of days and says so — instead
+    of the archive quietly becoming unsellable again.
+    """
+    client = _supabase()
+    oldest = (
+        client.table("entity_mentions")
+        .select("published_at")
+        .order("published_at", desc=False)
+        .limit(1)
+        .execute()
+    ).data or []
+    newest = (
+        client.table("entity_mentions")
+        .select("published_at")
+        .order("published_at", desc=True)
+        .limit(1)
+        .execute()
+    ).data or []
+
+    if not oldest or not newest:
+        return False, {"reason": "entity_mentions empty"}
+
+    o = datetime.fromisoformat(str(oldest[0]["published_at"]).replace("Z", "+00:00"))
+    n = datetime.fromisoformat(str(newest[0]["published_at"]).replace("Z", "+00:00"))
+    span_days = (n - o).days
+
+    return span_days >= ARCHIVE_MIN_SPAN_DAYS, {
+        "oldest": oldest[0]["published_at"],
+        "newest": newest[0]["published_at"],
+        "span_days": span_days,
+        "min_span_days": ARCHIVE_MIN_SPAN_DAYS,
+    }

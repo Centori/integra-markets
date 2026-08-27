@@ -75,11 +75,11 @@ def _rows_for(supabase, entity: str, since: str) -> List[Dict[str, Any]]:
     try:
         return (
             supabase.table("entity_mentions")
-            .select("score,sentiment,extracted_at")
+            .select("score,sentiment,published_at")
             .eq("entity_type", "commodity")
             .eq("entity", entity)
-            .gte("extracted_at", since)
-            .order("extracted_at", desc=True)
+            .gte("published_at", since)
+            .order("published_at", desc=True)
             .limit(500)
             .execute()
         ).data or []
