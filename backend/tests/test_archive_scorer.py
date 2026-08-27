@@ -32,7 +32,11 @@ class FakeTable:
 
 
 class FakeSupabase:
-    """Records what the job wrote and which RPCs it called."""
+    """Records what the job wrote and which RPCs it called.
+
+    `unscored` may be a list (served once, then empty) or a list-of-batches
+    to simulate a multi-batch drain.
+    """
 
     def __init__(self, unscored, rpc_fail=None):
         self.unscored = unscored
@@ -48,7 +52,10 @@ class FakeSupabase:
         if name in self._rpc_fail:
             raise RuntimeError(f"{name} exploded")
         if name == "unscored_documents":
-            return FakeExec(self.unscored)
+            if self.unscored and isinstance(self.unscored[0], list):
+                return FakeExec(self.unscored.pop(0) if self.unscored else [])
+            batch, self.unscored = self.unscored, []
+            return FakeExec(batch)
         if name == "mark_documents_scored":
             return FakeExec(len(params.get("p_ids") or []))
         return FakeExec(None)
@@ -208,3 +215,34 @@ class TestFailsLoudly:
         monkeypatch.setitem(sys.modules, "services.archive_writer", fake_writer)
         result = archive_scorer.run()
         assert result["ok"] is False
+
+
+class TestDrainLoop:
+    """Throughput: the bottleneck was idle time, not per-document work."""
+
+    def test_multiple_batches_drain_in_one_tick(self, patched):
+        """A tick keeps pulling until the backlog empties or time runs out.
+
+        The original design did one batch per 600s tick — 1,200 docs/hour,
+        ~9.5 hours for the real backlog, over 98% of it spent sleeping.
+        """
+        client = patched(FakeSupabase([[_doc("a")], [_doc("b")], [_doc("c")], []]))
+        result = archive_scorer.run()
+
+        assert result["ok"] is True
+        assert result["batches"] == 3, "tick stopped after one batch"
+        assert result["scored"] == 3
+        assert len(client.written["entity_mentions"]) == 6  # commodity+topic each
+
+    def test_time_budget_is_respected(self, patched, monkeypatch):
+        """A huge backlog must not hold the tick open indefinitely."""
+        monkeypatch.setattr(archive_scorer, "DRAIN_BUDGET_S", 0)
+        client = patched(FakeSupabase([[_doc("a")], [_doc("b")], []]))
+        result = archive_scorer.run()
+        assert result["batches"] == 1, "budget of 0 should stop after the first batch"
+
+    def test_empty_backlog_costs_one_query(self, patched):
+        client = patched(FakeSupabase([]))
+        result = archive_scorer.run()
+        assert result["backlog_empty"] is True
+        assert len([c for c in client.rpc_calls if c[0] == "unscored_documents"]) == 1
