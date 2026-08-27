@@ -159,6 +159,41 @@ _META_DESCRIPTION = re.compile(
 )
 
 
+# Titles that are site furniture, not articles. When a snapshot captured a
+# login wall, a nav link or the site's own masthead, <title> yields one of
+# these — and it was stored, sentiment-scored and counted as archive depth.
+# 2,239 such documents were purged on 2026-08-27, led by:
+#     1,192 x "My account"   578 x the Hellenic masthead   333 x "MINING.COM"
+#
+# Matched exactly (after normalising case/whitespace), never by length: real
+# headlines in this archive include "$100 Oil By Christmas?" (22 chars) and
+# "Aker Bags Equinor Deal" (22), so a length cutoff would discard journalism
+# to remove nav text.
+_BOILERPLATE_TITLES = frozenset({
+    "my account", "mining.com", "sign in", "log in", "comments on: rss",
+    "please wait while your request is being verified...",
+    "one moment, please...", "subscribe", "newsletter", "home", "search",
+    "menu", "rss", "access denied", "just a moment...",
+})
+
+_BOILERPLATE_PREFIXES = (
+    "hellenic shipping news worldwide",
+    "you searched for ",
+)
+
+
+def _is_boilerplate(headline: Optional[str]) -> bool:
+    """True when a 'headline' is site furniture rather than an article."""
+    if not headline:
+        return True
+    norm = " ".join(headline.split()).strip().lower()
+    if not norm:
+        return True
+    if norm in _BOILERPLATE_TITLES:
+        return True
+    return any(norm.startswith(p) for p in _BOILERPLATE_PREFIXES)
+
+
 def _extract_headline_and_summary(html: str) -> tuple[Optional[str], Optional[str]]:
     if not html:
         return None, None
@@ -169,6 +204,12 @@ def _extract_headline_and_summary(html: str) -> tuple[Optional[str], Optional[st
             headline = _clean_text(m.group(1))
             if headline:
                 break
+
+    # Reject furniture here rather than downstream: a snapshot of a login wall
+    # is not a document, and letting it through costs a row, a sentiment score
+    # and a slot in every "archive size" number we quote.
+    if _is_boilerplate(headline):
+        return None, None
 
     summary: Optional[str] = None
     m = _META_DESCRIPTION.search(html)
