@@ -25,8 +25,10 @@ export type SocialAccount = {
 
 // ⚠️ THE ONLY LINES THAT NEED EDITING WHEN AN ACCOUNT IS CREATED OR RENAMED.
 export const SOCIAL_ACCOUNTS: SocialAccount[] = [
-  { platform: 'x', label: 'X', handle: null },
-  { platform: 'instagram', label: 'Instagram', handle: null },
+  { platform: 'x', label: 'X', handle: 'integra_Markets' },
+  { platform: 'instagram', label: 'Instagram', handle: 'integramarkets' },
+  // No LinkedIn company page yet — null keeps the icon off the page entirely
+  // rather than shipping a link to nowhere. Fill in the slug to light it up.
   { platform: 'linkedin', label: 'LinkedIn', handle: null },
 ];
 
