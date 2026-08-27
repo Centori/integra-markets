@@ -66,14 +66,25 @@ def patched(monkeypatch):
         fake_writer = types.ModuleType("services.archive_writer")
         fake_writer.ACTIVE_MODEL_NAME = "test_model"
         fake_writer.ACTIVE_MODEL_VERSION = "2026-08-27"
+        # Mirrors services.archive_writer.normalize_sentiment exactly. Kept
+        # faithful (not a pass-through stub) so the uppercase regression below
+        # is actually exercised rather than assumed away.
+        fake_writer.normalize_sentiment = lambda label: (
+            str(label).lower()
+            if label and str(label).lower() in ("bullish", "bearish", "neutral")
+            else None
+        )
         monkeypatch.setitem(sys.modules, "services.archive_writer", fake_writer)
 
+        # UPPERCASE on purpose — this is what analyze_market_sentiment really
+        # returns. The first version of these fakes returned lowercase, which
+        # is why they passed while production scored nothing.
         fake_nlp = types.ModuleType("main_simple_nlp")
         fake_nlp.analyze_market_sentiment = lambda text, commodity, scores=None: {
-            "sentiment": "bullish", "confidence": 0.8
+            "sentiment": "BULLISH", "confidence": 0.8
         }
         fake_nlp.basic_sentiment_analysis = lambda text, commodity: {
-            "sentiment": "bullish", "confidence": 0.8
+            "sentiment": "BULLISH", "confidence": 0.8
         }
         fake_nlp.normalize_commodity = lambda _a, _b: "oil"
         fake_nlp.vader_analyzer = None
@@ -122,6 +133,36 @@ class TestForwardProgress:
         patched(FakeSupabase([]))
         result = archive_scorer.run()
         assert result["ok"] is True and result["backlog_empty"] is True
+
+
+class TestLabelNormalisation:
+    """The regression that shipped: uppercase labels silently discarded."""
+
+    def test_uppercase_labels_are_scored_not_discarded(self, patched):
+        """A perfectly good document must not come back as 'unscorable'.
+
+        The scorers return "BULLISH"; the DB CHECK wants "bullish". The job
+        compared against the lowercase tuple without normalising, so every
+        score it computed was thrown away while it reported ok.
+        """
+        client = patched(FakeSupabase([_doc("a")]))
+        result = archive_scorer.run()
+
+        assert result["unscorable"] == 0, "a scorable document was discarded"
+        assert result["scored"] == 1
+        assert all(
+            r["sentiment"] == "bullish"
+            for r in client.written["entity_mentions"]
+        ), "sentiment must be lowercased to satisfy the CHECK constraint"
+
+    def test_unrecognised_label_is_still_rejected(self, patched, monkeypatch):
+        """Normalising must not turn into accepting anything."""
+        client = patched(FakeSupabase([_doc("a")]))
+        sys.modules["main_simple_nlp"].basic_sentiment_analysis = (
+            lambda text, commodity: {"sentiment": "SPICY", "confidence": 0.9}
+        )
+        result = archive_scorer.run()
+        assert result["unscorable"] == 1 and result["scored"] == 0
 
 
 class TestPublicationDateAxis:

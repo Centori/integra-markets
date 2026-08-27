@@ -59,17 +59,25 @@ def _load_scoring_fns():
 
 
 def _score_text(fns, text: str) -> Tuple[Optional[str], Optional[float], Optional[str]]:
-    """Return (sentiment, confidence, commodity) for one document."""
+    """Return (sentiment, confidence, commodity) for one document.
+
+    The label MUST go through archive_writer.normalize_sentiment. The scorers
+    return UPPERCASE ("BULLISH"); both sentiment_scores and entity_mentions
+    CHECK for the lowercase form. This function originally reimplemented the
+    membership test without lowercasing, so every score it computed was
+    discarded as "unscorable" — 200 documents were marked processed having
+    produced nothing, and the job reported ok while scoring zero.
+    """
+    from services.archive_writer import normalize_sentiment
+
     analyze, basic, normalize_commodity, vader = fns
     commodity = normalize_commodity(None, text)
     if vader:
         result = analyze(text, commodity, scores=vader.polarity_scores(text))
     else:
         result = basic(text, commodity)
-    sentiment = result.get("sentiment")
+    sentiment = normalize_sentiment(result.get("sentiment"))
     confidence = result.get("confidence")
-    if sentiment not in ("bullish", "bearish", "neutral"):
-        sentiment = None
     return sentiment, (float(confidence) if confidence is not None else None), commodity
 
 

@@ -45,13 +45,25 @@ def _to_iso(value: Any) -> Optional[str]:
     return parse_published_iso(value)
 
 
-def _normalize_sentiment(label: Any) -> Optional[str]:
+def normalize_sentiment(label: Any) -> Optional[str]:
+    """Coerce a scorer's label to the lowercase form entity_mentions accepts.
+
+    `analyze_market_sentiment` returns UPPERCASE ("BULLISH"), while both
+    `sentiment_scores.sentiment` and `entity_mentions.sentiment` carry a CHECK
+    constraint for the lowercase form. Public because archive_scorer must
+    apply exactly the same rule — it originally reimplemented the membership
+    test without the .lower() and silently discarded every score it computed.
+    """
     if not label:
         return None
     s = str(label).lower()
     if s in ("bullish", "bearish", "neutral"):
         return s
     return None
+
+
+# Back-compat alias for in-module callers.
+_normalize_sentiment = normalize_sentiment
 
 
 def persist_articles(
