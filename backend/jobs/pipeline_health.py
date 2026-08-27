@@ -287,6 +287,18 @@ def _check_scoring_progress():
 
     detail: Dict[str, Any] = {"backlog": backlog, "marked_but_unscored": empty}
 
+    # Reported, never alerted on. A document can score perfectly and still
+    # match no commodity or topic — about 47% of the historical archive does
+    # exactly that. It is a taxonomy-coverage number, not a fault, and the
+    # first version of this check conflated the two and would have alerted
+    # permanently at 5,406 against a threshold of 500.
+    try:
+        detail["scored_without_entity"] = int(
+            client.rpc("scored_without_entity_count", {}).execute().data or 0
+        )
+    except Exception:  # noqa: BLE001 — optional metric
+        pass
+
     if empty is not None and empty > MARKED_UNSCORED_MAX:
         detail["reason"] = (
             f"{empty} documents marked processed produced no entity_mentions "
