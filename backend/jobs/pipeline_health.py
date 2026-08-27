@@ -218,6 +218,11 @@ SCORING_BACKLOG_MAX_AGE_H = float(os.getenv("HEALTH_SCORING_MAX_AGE_H", "3"))
 # wide while every query returned two months.
 ARCHIVE_MIN_SPAN_DAYS = int(os.getenv("HEALTH_ARCHIVE_MIN_SPAN_DAYS", "180"))
 
+# Documents marked processed that yielded no entity_mentions. A handful is
+# normal (genuinely empty documents); hundreds means the scorer is discarding
+# its own output. Tuned above the ~200 one bad batch produces.
+MARKED_UNSCORED_MAX = int(os.getenv("HEALTH_MARKED_UNSCORED_MAX", "500"))
+
 
 def _check_backfill_progress():
     """Are the backfill cursors still advancing?
@@ -265,21 +270,47 @@ def _check_scoring_progress():
                        "hint": "migration 20260827_raw_documents_scored_at not applied?"}
 
     backlog = int(backlog or 0)
+
+    # Documents the scorer marked processed that produced no entity rows.
+    #
+    # This is the check that catches "the job runs and achieves nothing".
+    # It exists because exactly that shipped: the scorer compared the
+    # scorers' UPPERCASE label against a lowercase tuple, discarded every
+    # score it computed, and marked 200 documents processed while reporting
+    # ok. Freshness alone could not see it — news_fetcher keeps
+    # entity_mentions fresh regardless of what the scorer does.
+    try:
+        empty = client.rpc("marked_but_unscored_count", {}).execute().data
+        empty = int(empty or 0)
+    except Exception:  # noqa: BLE001 — older DB without the helper
+        empty = None
+
+    detail: Dict[str, Any] = {"backlog": backlog, "marked_but_unscored": empty}
+
+    if empty is not None and empty > MARKED_UNSCORED_MAX:
+        detail["reason"] = (
+            f"{empty} documents marked processed produced no entity_mentions "
+            f"(> {MARKED_UNSCORED_MAX}) — the scorer is running but scoring nothing"
+        )
+        return False, detail
+
     if backlog == 0:
-        return True, {"backlog": 0, "state": "drained"}
+        detail["state"] = "drained"
+        return True, detail
 
     # Backlog is non-empty — require recent scoring activity.
     newest_scored = _latest_timestamp("entity_mentions", "extracted_at")
     if not newest_scored:
-        return False, {"backlog": backlog, "reason": "backlog non-empty and nothing ever scored"}
+        detail["reason"] = "backlog non-empty and nothing ever scored"
+        return False, detail
 
     age_h = _age_minutes(newest_scored) / 60.0
-    return age_h <= SCORING_BACKLOG_MAX_AGE_H, {
-        "backlog": backlog,
+    detail.update({
         "last_scored": newest_scored,
         "age_hours": round(age_h, 2),
         "max_age_hours": SCORING_BACKLOG_MAX_AGE_H,
-    }
+    })
+    return age_h <= SCORING_BACKLOG_MAX_AGE_H, detail
 
 
 def _check_archive_depth():
