@@ -28,14 +28,20 @@ from __future__ import annotations
 
 import logging
 import os
+import time
 from typing import Any, Dict, List, Optional, Tuple
 
 logger = logging.getLogger(__name__)
 
-# Documents per tick. The scorer is CPU-bound (VADER + keyword passes) and
-# shares a container with the API, so this is kept modest: at 200/tick on a
-# 10-minute interval the 11,385-document backlog clears in about 10 hours.
+# Documents per DB round trip. Not the per-tick total — run() drains as many
+# batches as fit in DRAIN_BUDGET_S. 200 keeps each upsert payload small enough
+# that a failure retries cheaply. The SQL function caps this at 1000.
 BATCH_SIZE = int(os.getenv("ARCHIVE_SCORER_BATCH", "200"))
+
+# Wall-clock seconds one tick may spend draining, on a 600s interval. 60s
+# leaves 90% of the interval to the API this job shares a container with,
+# and takes an 11k backlog from ~9.5 hours to well under an hour.
+DRAIN_BUDGET_S = int(os.getenv("ARCHIVE_SCORER_DRAIN_BUDGET_S", "60"))
 
 # Set ARCHIVE_SCORER_ENABLED=0 to park the job without a deploy.
 ENABLED = os.getenv("ARCHIVE_SCORER_ENABLED", "1") not in ("0", "false", "False")
@@ -82,7 +88,27 @@ def _score_text(fns, text: str) -> Tuple[Optional[str], Optional[float], Optiona
 
 
 def run() -> Dict[str, Any]:
-    """One tick. Returns a machine-readable summary; never raises."""
+    """One tick: drain batches until the time budget is spent.
+
+    Why a drain loop and not threads
+    --------------------------------
+    The first version did one 200-document batch per 600-second tick — 1,200
+    documents an hour, so ~9.5 hours for an 11,378-document backlog. But the
+    work in a batch is milliseconds per document (VADER plus a keyword pass)
+    followed by two batched upserts: a few seconds, then 595 seconds of
+    sleep. Over 98% of that 9.5 hours was the job doing nothing.
+
+    Threads would not have helped. VADER is pure-Python CPU work under the
+    GIL, so scoring does not parallelise; the DB round-trips are already
+    amortised at two per 200 documents; and this shares a container with the
+    API, so saturating cores would degrade the live feed to drain an archive
+    nobody is waiting on by the second.
+
+    Removing the idle time is the whole win. The loop keeps pulling batches
+    until DRAIN_BUDGET_S is spent, then yields the rest of the interval back.
+    It is self-tuning: a large backlog gets sustained work, and in the steady
+    state the first batch comes back empty and the tick costs one query.
+    """
     if not ENABLED:
         return {"ok": True, "skipped": "disabled"}
 
@@ -106,6 +132,50 @@ def run() -> Dict[str, Any]:
         logger.error("archive_scorer: scoring functions not importable: %s", exc)
         return {"ok": False, "error": f"scorers: {exc}"}
 
+    deadline = time.monotonic() + DRAIN_BUDGET_S
+    totals = {"scored": 0, "entities": 0, "unscorable": 0, "marked": 0, "batches": 0}
+    oldest_seen: Optional[str] = None
+    newest_seen: Optional[str] = None
+
+    while True:
+        batch = _score_batch(supabase, fns, ACTIVE_MODEL_NAME, ACTIVE_MODEL_VERSION)
+
+        if not batch.get("ok"):
+            batch.update({k: totals[k] for k in ("scored", "entities", "batches")})
+            return batch
+
+        if batch.get("backlog_empty"):
+            if totals["batches"] == 0:
+                return {"ok": True, **totals, "backlog_empty": True}
+            break
+
+        totals["scored"] += batch["scored"]
+        totals["entities"] += batch["entities"]
+        totals["unscorable"] += batch["unscorable"]
+        totals["marked"] += batch["marked"] or 0
+        totals["batches"] += 1
+        oldest_seen = oldest_seen or batch["oldest_published_at"]
+        newest_seen = batch["newest_published_at"]
+
+        if time.monotonic() >= deadline:
+            break
+
+    logger.info(
+        "archive_scorer: %d batches — scored %d docs (%d entity rows, %d unscorable) "
+        "covering %s → %s",
+        totals["batches"], totals["scored"], totals["entities"], totals["unscorable"],
+        oldest_seen, newest_seen,
+    )
+    return {
+        "ok": True,
+        **totals,
+        "oldest_published_at": oldest_seen,
+        "newest_published_at": newest_seen,
+    }
+
+
+def _score_batch(supabase, fns, ACTIVE_MODEL_NAME, ACTIVE_MODEL_VERSION) -> Dict[str, Any]:
+    """Score one batch. Returns the same shape run() used to return."""
     # 1. Pull the oldest unscored documents. The RPC does an anti-join, so a
     #    document inserted today with a 2020 publication date is picked up on
     #    the next tick rather than being stranded behind a cursor.
@@ -243,8 +313,8 @@ def run() -> Dict[str, Any]:
 
     oldest = docs[0].get("published_at")
     newest = docs[-1].get("published_at")
-    logger.info(
-        "archive_scorer: scored %d docs (%d entity rows, %d unscorable, %s marked) covering %s → %s",
+    logger.debug(
+        "archive_scorer batch: scored %d (%d entity rows, %d unscorable, %s marked) %s → %s",
         written_scores, written_entities, unscorable, marked, oldest, newest,
     )
 
