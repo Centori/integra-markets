@@ -238,11 +238,51 @@ def _timestamp_to_datetime(ts: str) -> Optional[dt.datetime]:
         return None
 
 
+def _existing_titles(supabase, source_name: str) -> set[str]:
+    """Normalised titles already stored for `source_name`.
+
+    Paged because a single source can hold tens of thousands of rows and
+    PostgREST caps a response at 1,000. Failure returns an empty set: worst
+    case we re-add some duplicates, which is strictly better than aborting
+    the walk.
+    """
+    seen: set[str] = set()
+    page, size = 0, 1000
+    try:
+        while True:
+            resp = (
+                supabase.table("raw_documents")
+                .select("title")
+                .eq("source", source_name)
+                .range(page * size, page * size + size - 1)
+                .execute()
+            )
+            batch = resp.data or []
+            for row in batch:
+                title = row.get("title")
+                if title:
+                    seen.add(" ".join(str(title).split()).strip().lower())
+            if len(batch) < size:
+                break
+            page += 1
+    except Exception as exc:  # noqa: BLE001
+        logger.warning("wayback: could not preload titles for %s: %s", source_name, exc)
+        return set()
+    logger.info("wayback %s: %d titles already stored", source_name, len(seen))
+    return seen
+
+
 def _backfill_host(supabase, host_config: dict[str, Any], *, since: dt.date, until: dt.date, cap: int) -> int:
     logger.info("wayback %s: enumerating snapshots %s → %s", host_config["host"], since, until)
     rows: list[dict[str, Any]] = []
     fetched = 0
     skipped_empty = 0
+    skipped_duplicate = 0
+
+    # Titles already stored for this source, so dedup survives across runs and
+    # not just within one. Without this the walk re-adds an article every time
+    # it passes a new snapshot of it.
+    seen_titles = _existing_titles(supabase, host_config["source_name"])
 
     for ts, original_url in _cdx_query(host_config, since, until):
         if fetched >= cap:
@@ -261,6 +301,21 @@ def _backfill_host(supabase, host_config: dict[str, Any], *, since: dt.date, unt
         if not headline:
             skipped_empty += 1
             continue
+
+        # Snapshot-level dedup. The Internet Archive captures a site many
+        # times, so the SAME article is reachable at many timestamped URLs.
+        # Upserting on (source, url_hash) cannot collapse those — they are
+        # genuinely different URLs — and the archive reached 34% duplicates,
+        # 47% in the historical tail, weighting some articles 6-8x in any
+        # sentiment series built over it.
+        #
+        # The title is the stable identity. Deduping on (source, title) here
+        # is what makes the one-time cleanup stay clean.
+        title_key = " ".join(headline.split()).strip().lower()
+        if title_key in seen_titles:
+            skipped_duplicate += 1
+            continue
+        seen_titles.add(title_key)
 
         rows.append(
             {
@@ -290,10 +345,10 @@ def _backfill_host(supabase, host_config: dict[str, Any], *, since: dt.date, unt
         logger.info("wayback %s: flushed %d docs (final)", host_config["host"], upserted)
 
     logger.info(
-        "wayback %s: %d snapshots fetched, %d skipped (no headline)",
-        host_config["host"], fetched, skipped_empty,
+        "wayback %s: %d snapshots fetched, %d skipped (no headline), %d skipped (duplicate title)",
+        host_config["host"], fetched, skipped_empty, skipped_duplicate,
     )
-    return fetched - skipped_empty
+    return fetched - skipped_empty - skipped_duplicate
 
 
 def backfill(
