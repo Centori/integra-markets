@@ -44,8 +44,8 @@ from typing import Any, Dict, Iterator, List, Optional
 from fastapi import APIRouter, Depends, HTTPException, Query
 from fastapi.responses import StreamingResponse
 
-from services.api_key_auth import assert_history_depth, require_scopes
-from services.entitlement import HISTORY_SCOPE
+from services.api_key_auth import assert_history_depth, effective_scopes, require_scopes
+from services.entitlement import ARCHIVE_SCOPE, HISTORY_DEPTH_CAP_DAYS, HISTORY_SCOPE
 from services.rate_limit import (
     check_and_consume_export,
     export_rows_limit,
@@ -60,6 +60,10 @@ router = APIRouter(prefix="/v1/export", tags=["export"])
 # Page size for reading out of PostgREST. Not the user-facing cap — the
 # endpoint pages until it reaches the row limit or runs out of data.
 _PAGE = int(os.environ.get("INTEGRA_EXPORT_PAGE_SIZE", "1000"))
+
+# Window used when the caller supplies no date range. Clamped at request time
+# to whatever depth their tier allows.
+DEFAULT_EXPORT_DAYS = int(os.environ.get("INTEGRA_EXPORT_DEFAULT_DAYS", "30"))
 
 _COLUMNS = [
     "published_at",
@@ -209,7 +213,26 @@ async def export_sentiment(
 
     commodity_lc = commodity.strip().lower()
     end = _parse_iso(to, "to") if to else dt.datetime.now(dt.timezone.utc)
-    start = _parse_iso(from_, "from") if from_ else end - dt.timedelta(days=30)
+
+    if from_:
+        start = _parse_iso(from_, "from")
+    else:
+        # Default to the deepest window the caller is actually entitled to,
+        # minus a minute of slack.
+        #
+        # Defaulting to exactly HISTORY_DEPTH_CAP_DAYS looks right and 403s
+        # every time: the gate below compares (now - start) > cap, and by the
+        # time it runs, `start` is microseconds older than the cap. A
+        # no-argument export must never be refused for arithmetic reasons —
+        # it is the first call anyone makes.
+        window = dt.timedelta(days=DEFAULT_EXPORT_DAYS)
+        if ARCHIVE_SCOPE not in effective_scopes(auth):
+            window = min(
+                window,
+                dt.timedelta(days=HISTORY_DEPTH_CAP_DAYS) - dt.timedelta(minutes=1),
+            )
+        start = end - window
+
     if start >= end:
         raise HTTPException(status_code=400, detail="'from' must be earlier than 'to'")
 

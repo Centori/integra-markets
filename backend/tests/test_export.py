@@ -260,3 +260,47 @@ class TestXlsxOutput:
             _xlsx_bytes(iter(_rows(1)))
         assert exc.value.status_code == 501
         assert "format=csv" in exc.value.detail
+
+
+class TestDefaultWindow:
+    """A no-argument export is the first call anyone makes. It must not 403."""
+
+    def test_default_window_sits_inside_the_depth_cap(self, monkeypatch):
+        """Defaulting to exactly HISTORY_DEPTH_CAP_DAYS looks right and fails
+        every time: the gate compares (now - start) > cap, and by the time it
+        runs, start is microseconds older than the cap."""
+        from api import export as export_mod
+        from services.entitlement import HISTORY_DEPTH_CAP_DAYS
+
+        seen = {}
+
+        def spy(_auth, days):
+            seen["days"] = days
+            if days > HISTORY_DEPTH_CAP_DAYS:
+                from fastapi import HTTPException
+
+                raise HTTPException(status_code=403, detail="too deep")
+
+        monkeypatch.setattr(export_mod, "assert_history_depth", spy)
+        monkeypatch.setattr(export_mod, "effective_scopes", lambda _a: {"history"})
+
+        c = _client(monkeypatch)
+        monkeypatch.setattr(export_mod, "assert_history_depth", spy)
+        r = c.get("/v1/export/sentiment?commodity=crude_oil")
+
+        assert r.status_code == 200, f"no-argument export was refused: {r.text[:120]}"
+        assert seen["days"] <= HISTORY_DEPTH_CAP_DAYS
+        assert seen["days"] > HISTORY_DEPTH_CAP_DAYS - 1, "should still give nearly the full window"
+
+    def test_archive_scope_gets_the_full_default(self, monkeypatch):
+        from api import export as export_mod
+
+        seen = {}
+        monkeypatch.setattr(export_mod, "assert_history_depth",
+                            lambda _a, d: seen.__setitem__("days", d))
+        monkeypatch.setattr(export_mod, "effective_scopes", lambda _a: {"history", "archive"})
+        c = _client(monkeypatch, tier="api_history")
+        monkeypatch.setattr(export_mod, "assert_history_depth",
+                            lambda _a, d: seen.__setitem__("days", d))
+        assert c.get("/v1/export/sentiment?commodity=crude_oil").status_code == 200
+        assert seen["days"] > 29.9, "archive callers should get the full default window"
