@@ -136,3 +136,39 @@ class TestIngestBoilerplateGuard:
             "ADNOC Comments on Fire", "350 Offshore Workers", "Gold",
         ]:
             assert _is_boilerplate(real) is False, real
+
+
+class TestSnapshotDedup:
+    """The Internet Archive captures a site repeatedly, so the same article is
+    reachable at many timestamped URLs. Upserting on (source, url_hash) cannot
+    collapse those — they are genuinely different URLs — and the archive
+    reached 34% duplicates (47% in the historical tail) before this.
+
+    A one-time cleanup does not hold: the walk re-adds articles every pass.
+    Dedup has to happen at ingest.
+    """
+
+    def test_titles_are_normalised_consistently(self):
+        from scripts.backfill.wayback import _is_boilerplate  # noqa: F401
+
+        def key(t):
+            return " ".join(t.split()).strip().lower()
+
+        variants = [
+            "Oil Prices Climb",
+            "  Oil   Prices    Climb  ",
+            "OIL PRICES CLIMB",
+            "oil prices climb\n",
+        ]
+        assert len({key(v) for v in variants}) == 1
+
+    def test_existing_titles_failure_does_not_abort_the_walk(self):
+        """Preloading is an optimisation, not a precondition. If it fails we
+        re-add some duplicates — strictly better than losing the run."""
+        from scripts.backfill import wayback
+
+        class Boom:
+            def table(self, *_a, **_k):
+                raise RuntimeError("postgrest down")
+
+        assert wayback._existing_titles(Boom(), "Kitco (archive)") == set()
