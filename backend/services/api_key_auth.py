@@ -14,7 +14,7 @@ import secrets
 import time
 from typing import Any, Dict, Optional
 
-from fastapi import Depends, Header, HTTPException, Request
+from fastapi import Depends, Header, HTTPException, Request, Response
 
 logger = logging.getLogger(__name__)
 
@@ -33,6 +33,11 @@ from services.entitlement import (  # noqa: E402  (kept beside the scope model i
     HISTORY_DEPTH_CAP_DAYS,
     HISTORY_SCOPE,
     resolve as resolve_entitlement,
+)
+from services.rate_limit import (  # noqa: E402
+    check_and_consume,
+    rate_limit_headers,
+    retry_after_seconds,
 )
 
 
@@ -105,6 +110,7 @@ def _extract_bearer(authorization: Optional[str]) -> Optional[str]:
 
 async def verify_api_key(
     request: Request,
+    response: Response,
     authorization: Optional[str] = Header(default=None),
 ) -> Dict[str, Any]:
     """FastAPI dependency: validate Authorization header against api_keys table.
@@ -148,6 +154,38 @@ async def verify_api_key(
         )
     row["_entitlement"] = ent
     row["_tier"] = ent.tier
+
+    # Metering. api_key_usage has recorded every request since launch and
+    # nothing has ever read it — one key could issue unlimited calls, and at
+    # 1,000 rows per /history call the whole archive was extractable by
+    # anyone willing to write a loop.
+    #
+    # Deliberately AFTER the entitlement check (no point metering a request
+    # we are about to 403) and BEFORE the usage write, so the request that
+    # trips the limit is itself refused rather than counted and served.
+    allowed, meter = check_and_consume(supabase, row["id"], ent.tier)
+    headers = rate_limit_headers(meter)
+    if not allowed:
+        retry = retry_after_seconds(meter)
+        logger.info(
+            "metering: key %s exhausted %s allowance (%s/%s)",
+            row.get("key_prefix"), ent.tier, meter.get("used"), meter.get("limit"),
+        )
+        raise HTTPException(
+            status_code=429,
+            detail=(
+                f"monthly request limit reached for the {ent.tier} tier "
+                f"({meter.get('limit')} requests). The allowance resets at the "
+                f"start of next month (UTC). Raise it at "
+                f"https://dashboard.integramarkets.app/api-tier"
+            ),
+            headers={**headers, "Retry-After": str(retry)},
+        )
+
+    # Success path carries the same headers so clients can self-throttle
+    # instead of discovering the ceiling by hitting it.
+    for header, value in headers.items():
+        response.headers[header] = value
 
     _record_usage_async(supabase, row, request, int((time.monotonic() - started) * 1000))
     return row
