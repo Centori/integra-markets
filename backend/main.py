@@ -113,6 +113,7 @@ except ImportError:
 
 try:
     from api.market_sentiment import router as market_sentiment_router
+        from api.export import router as export_router
     market_sentiment_available = True
 except ImportError:
     market_sentiment_available = False
@@ -221,6 +222,7 @@ if v1_public_available:
     app.include_router(v1_public_router)
 if market_sentiment_available:
     app.include_router(market_sentiment_router)
+    app.include_router(export_router)
 
 # Every router above is imported under `except ImportError: <n>_available =
 # False`, which means a typo'd import silently deletes an entire API surface
