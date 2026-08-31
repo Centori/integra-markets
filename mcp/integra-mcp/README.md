@@ -46,6 +46,37 @@ Add to `~/Library/Application Support/Claude/claude_desktop_config.json` (macOS)
 
 Restart Claude Desktop. The `integra` server should appear in the connectors list.
 
+## Remote access (Streamable HTTP)
+
+The install above is **stdio**: Claude Desktop and Claude Code spawn the server
+as a local subprocess. That is the right shape for a single user on their own
+machine, and it is what most people want.
+
+Clients that cannot spawn a process on your machine — ChatGPT connectors,
+hosted agents, anything reaching you over the network — need the server
+running somewhere reachable. `integra-mcp-http` is that:
+
+```bash
+npm run build
+PORT=8080 npm run start:http     # POST /mcp, plus GET /health
+```
+
+**The API key works differently here, and it matters.** In stdio mode the key
+comes from `INTEGRA_API_KEY` — one user, one machine, one key in a local file.
+In HTTP mode the server is shared, so **each request carries its own key**:
+
+```
+Authorization: Bearer ik_live_your_key_here
+```
+
+A key baked into the process would give every caller the same identity, the
+same entitlement and the same rate-limit bucket — one user's traffic would
+exhaust another's allowance, and usage records could not tell them apart.
+Requests without a key get `401` and a `WWW-Authenticate` header.
+
+The transport is **stateless** (no session id): a fresh server per request,
+nothing sticky, so instances scale horizontally without a shared store.
+
 ## Tools exposed
 
 | Tool | Tier | Purpose |
@@ -66,6 +97,21 @@ npm install
 npm run build
 INTEGRA_API_KEY=... npm start
 ```
+
+## Rate limits
+
+The API meters requests per calendar month, per key. Responses carry:
+
+```
+X-RateLimit-Limit      your monthly allowance
+X-RateLimit-Remaining  what is left
+X-RateLimit-Reset      unix timestamp of the reset
+```
+
+On exhaustion you get `429` with `Retry-After`. The MCP client surfaces this
+as a plain "monthly limit reached, resets on <date>, do not retry" message
+rather than a raw error, so an agent reports it instead of retrying into the
+wall.
 
 ## Support
 
