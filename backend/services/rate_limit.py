@@ -212,3 +212,106 @@ def retry_after_seconds(info: Dict[str, Any], now: Optional[dt.datetime] = None)
     now = now or dt.datetime.now(dt.timezone.utc)
     reset: dt.datetime = info.get("reset") or period_end(now)
     return max(1, int((reset - now).total_seconds()))
+
+
+# ---------------------------------------------------------------------------
+# Export budgets
+#
+# Request metering counts CALLS. One export call can return tens of thousands
+# of rows, so call-counting barely constrains it: an api_basic key has 50,000
+# calls a month, and at 50,000 rows each that is the entire archive many times
+# over. Exports therefore get a second, much smaller budget on a different
+# axis — how OFTEN — while the per-call row cap bounds how MUCH.
+# ---------------------------------------------------------------------------
+
+# Exports per calendar month, by tier. Absent tiers cannot export at all;
+# entitlement.can_export() refuses them before this is ever consulted.
+_EXPORT_COUNT_LIMITS: Dict[str, int] = {
+    "api_basic":   int(os.environ.get("INTEGRA_EXPORTS_API_BASIC", "100")),
+    "api":         int(os.environ.get("INTEGRA_EXPORTS_API", "100")),
+    "api_history": int(os.environ.get("INTEGRA_EXPORTS_API_HISTORY", "1000")),
+}
+_EXPORT_COUNT_FALLBACK = int(os.environ.get("INTEGRA_EXPORTS_UNKNOWN", "10"))
+
+# Rows per export. XLSX is lower than CSV on purpose: CSV streams row by row
+# and never holds the result, while a workbook must be finalised as a zip
+# before any of it can be sent.
+_EXPORT_ROW_LIMITS: Dict[str, int] = {
+    "api_basic":   int(os.environ.get("INTEGRA_EXPORT_ROWS_API_BASIC", "50000")),
+    "api":         int(os.environ.get("INTEGRA_EXPORT_ROWS_API", "50000")),
+    "api_history": int(os.environ.get("INTEGRA_EXPORT_ROWS_API_HISTORY", "500000")),
+}
+_EXPORT_ROW_FALLBACK = int(os.environ.get("INTEGRA_EXPORT_ROWS_UNKNOWN", "1000"))
+_XLSX_ROW_CEILING = int(os.environ.get("INTEGRA_EXPORT_ROWS_XLSX_MAX", "100000"))
+
+
+def export_rows_limit(tier: Optional[str], fmt: str = "csv") -> int:
+    """Maximum rows one export may return."""
+    rows = _EXPORT_ROW_LIMITS.get(tier or "", _EXPORT_ROW_FALLBACK)
+    if fmt == "xlsx":
+        return min(rows, _XLSX_ROW_CEILING)
+    return rows
+
+
+def export_count_limit(tier: Optional[str]) -> int:
+    """Maximum export operations per calendar month."""
+    return _EXPORT_COUNT_LIMITS.get(tier or "", _EXPORT_COUNT_FALLBACK)
+
+
+def _fetch_export_count(supabase: Any, key_id: str, since: dt.datetime) -> Optional[int]:
+    """Export calls recorded for this key in the period.
+
+    Reads api_key_usage rather than keeping a second ledger: the usage logger
+    already records every request's endpoint, so exports are countable by path
+    with no extra write on the hot path.
+    """
+    try:
+        resp = (
+            supabase.table("api_key_usage")
+            .select("id", count="exact")
+            .eq("key_id", key_id)
+            .like("endpoint", "/v1/export%")
+            .gte("ts", since.isoformat())
+            .limit(1)
+            .execute()
+        )
+        return None if resp.count is None else int(resp.count)
+    except Exception as exc:  # noqa: BLE001
+        logger.error("metering: export count failed for key %s: %s", key_id, exc)
+        return None
+
+
+def check_and_consume_export(
+    supabase: Any,
+    key_id: str,
+    tier: Optional[str],
+    now: Optional[dt.datetime] = None,
+) -> Tuple[bool, Dict[str, Any]]:
+    """Budget one export against the key's monthly export allowance.
+
+    Not cached, unlike check_and_consume: exports are rare and expensive, so a
+    round-trip is affordable and an exact count is worth more than the saving.
+    Fails OPEN for the same reason as request metering.
+    """
+    now = now or dt.datetime.now(dt.timezone.utc)
+    start = period_start(now)
+    limit = export_count_limit(tier)
+
+    used = _fetch_export_count(supabase, key_id, start)
+    if used is None:
+        return True, {
+            "limit": limit,
+            "remaining": None,
+            "reset": period_end(now),
+            "degraded": True,
+        }
+
+    if used >= limit and ENFORCED:
+        return False, {"limit": limit, "remaining": 0, "reset": period_end(now), "used": used}
+
+    return True, {
+        "limit": limit,
+        "remaining": max(0, limit - used - 1),
+        "reset": period_end(now),
+        "used": used,
+    }
