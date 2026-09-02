@@ -12,7 +12,7 @@ This quickstart shows how to ingest your own articles/events and retrieve sentim
 
 ## 3) Ingest via REST
 ```
-curl -X POST https://api.yourdomain.com/v1/ingest/articles \
+curl -X POST https://api.integramarkets.app/v1/ingest/articles \
   -H "Content-Type: application/json" \
   -H "X-Api-Key: <TENANT_API_KEY>" \
   -d '{
@@ -31,13 +31,13 @@ curl -X POST https://api.yourdomain.com/v1/ingest/articles \
 
 ## 4) Read sentiment via REST
 ```
-curl "https://api.yourdomain.com/v1/sentiment?ticker=CL=F&limit=50" \
+curl "https://api.integramarkets.app/v1/sentiment?ticker=CL=F&limit=50" \
   -H "X-Api-Key: <TENANT_API_KEY>"
 ```
 
 ## 5) Ingest via GraphQL
 ```
-POST https://api.yourdomain.com/v1/graphql
+POST https://api.integramarkets.app/v1/graphql
 
 mutation Ingest($articles: [ArticleInput!]!) {
   ingestArticles(articles: $articles) {
