@@ -19,15 +19,39 @@ export async function fetchTier(jwt: string): Promise<string> {
   }
 }
 
+// Every tier the backend can return that grants programmatic access.
+//
+// The dashboard used to gate on `tier === "api"` alone. The backend actually
+// issues `api_basic` (the shipping $99 plan), `api_trial` and `api_history` —
+// so a paying api_basic customer was told "Key management unlocks with the API
+// tier" and could not see, create or revoke their own keys. tierLabel had no
+// case for them either, so the same customer was shown "Free trial".
+//
+// Kept as a set rather than an equality check so adding a tier is one edit
+// here instead of a hunt through pages.
+const API_TIERS = new Set(["api", "api_basic", "api_history", "api_trial"]);
+
+export function isApiTier(tier: string): boolean {
+  return API_TIERS.has(tier);
+}
+
 export function tierLabel(tier: string): string {
   switch (tier) {
     case "api":
       return "API";
+    case "api_basic":
+      return "API";
+    case "api_history":
+      return "API + History";
+    case "api_trial":
+      return "API trial";
     case "basic":
       return "Basic";
     case "basic_markets":
       return "Basic + Markets";
-    default:
+    case "free_trial":
       return "Free trial";
+    default:
+      return "Free";
   }
 }
