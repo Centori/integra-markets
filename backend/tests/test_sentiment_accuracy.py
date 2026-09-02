@@ -49,14 +49,28 @@ def _label_to_int(label: str) -> int:
 
 
 def _classify(text: str) -> int:
-    """Run the production sentiment pipeline on a single sentence."""
-    # Import lazily so test failures here don't mask import errors elsewhere.
-    from main_simple_nlp import analyze_market_sentiment, vader_analyzer
+    """Run the production sentiment pipeline on a single sentence.
 
-    if vader_analyzer is None:
-        pytest.skip("VADER not initialised in this environment")
+    This used to do `from main_simple_nlp import vader_analyzer` and then
+    `pytest.skip` when it was None — and it was ALWAYS None, because that
+    global is only assigned inside FastAPI's lifespan() and a from-import
+    copies the value at import time. So the gate protecting the accuracy floor
+    never executed once, in CI or locally, while the CI job advertised itself
+    as "Backend pytest (sentiment >=65%)".
 
-    result = analyze_market_sentiment(text)
+    That is the same import-time-None bug that routed 96% of the archive
+    through a 20-word keyword list. It appeared in four places: both scoring
+    jobs, the archive-scorer test fixture, and here — in the test that existed
+    to catch exactly this class of regression.
+
+    Now sourced from services.sentiment_engine, which builds the analyser on
+    demand and raises rather than returning None.
+    """
+    from main_simple_nlp import analyze_market_sentiment
+    from services.sentiment_engine import clean_text, get_analyzer
+
+    scores = get_analyzer().polarity_scores(clean_text(text))
+    result = analyze_market_sentiment(text, None, scores=scores)
     return _label_to_int(result["sentiment"])
 
 
