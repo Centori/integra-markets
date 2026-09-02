@@ -120,3 +120,7 @@ deployment/
 -integra-markets-backup/
 .vercel
 .env
+
+# Raw live schema pulled for SDK regeneration — openapi.json is the filtered
+# artefact that gets committed, not this.
+live_openapi.json

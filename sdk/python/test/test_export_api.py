@@ -1,6 +1,5 @@
 # coding: utf-8
 
-# flake8: noqa
 """
     Integra Markets API
 
@@ -12,10 +11,28 @@
     Do not edit the class manually.
 """  # noqa: E501
 
-# import models into model package
-from integra_markets.models.ask_request import AskRequest
-from integra_markets.models.ask_response import AskResponse
-from integra_markets.models.http_validation_error import HTTPValidationError
-from integra_markets.models.location_inner import LocationInner
-from integra_markets.models.validation_error import ValidationError
 
+import unittest
+
+from integra_markets.api.export_api import ExportApi
+
+
+class TestExportApi(unittest.TestCase):
+    """ExportApi unit test stubs"""
+
+    def setUp(self) -> None:
+        self.api = ExportApi()
+
+    def tearDown(self) -> None:
+        pass
+
+    def test_export_sentiment(self) -> None:
+        """Test case for export_sentiment
+
+        Export Sentiment
+        """
+        pass
+
+
+if __name__ == '__main__':
+    unittest.main()
