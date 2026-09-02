@@ -1,25 +1,172 @@
-# Handoff — 2026-08-23
+# Handoff — 2026-09-02
 
-> Supersedes the 2026-07-06 handoff entirely. Everything below was verified in
-> source or against live production during the 20–23 Aug session; findings that
-> turned out to be wrong are called out as such rather than deleted, because two
-> of them were believed for days and will otherwise be re-derived.
+> Supersedes the 2026-08-23 handoff. Sections 3 onward are carried forward from
+> it unchanged where still true. Findings that turned out to be wrong are called
+> out rather than deleted, because several were believed for days and will
+> otherwise be re-derived.
 
-## 1. Goal
+## 0. Read this first: the sentiment engine was not the sentiment engine
 
-Launch the API tier. **User decision, 23 Aug: one paid tier at $99/mo** —
-everything in the lower consumer tiers, plus API access, plus sentiment queries
-over a **7–30 day window**. The **$249 archive tier is dropped from launch** and
-must not be built, priced or advertised until the archive is genuinely queryable.
+**Until 2 September 2026, 96% of the archive had never been scored by the model
+the product is sold on.**
 
-That decision resolves a contradiction: real queryable depth is ~57 days, so the
-previous 90-day cap sold a window wider than the data, and $99 vs $249 returned
-identical output. A 7–30 day window sits *inside* what exists.
+`main_simple_nlp` declares `vader_analyzer = None` at module level and builds the
+lexicon-enriched analyser only inside FastAPI's `lifespan()`. Both scoring jobs
+did `from main_simple_nlp import vader_analyzer`, which copies the value **at
+import time**. Neither job runs under FastAPI, so both copied `None`, hit
+`if vader:` and fell through to `basic_sentiment_analysis` — a 20-word keyword
+list — while stamping rows `model_name="vader_v2_commodity"`.
 
-## 2. Deploy topology — read this before touching anything
+Proof was a fingerprint: `basic_sentiment_analysis` can only emit
+`0.5 / 0.68 / 0.76 / 0.84 / 0.85`, capped at 0.85. 60,225 of 62,771 rows carried
+only those values. 2020–2025 was **0.0%** real NLP.
 
-This has caused recurring confusion across several sessions. Verified via the
-Vercel API on 23 Aug:
+**The identical bug existed in four places.** This is the single most important
+pattern to watch for in this repo:
+
+| # | Location | Effect |
+|---|---|---|
+| 1 | `jobs/archive_scorer.py` | corrupted the backfill |
+| 2 | `jobs/news_fetcher.py` | **live ingest** — corrupting new data every 10 min |
+| 3 | `tests/test_archive_scorer.py` fixture set `vader_analyzer = None` | suite exercised the fallback and stayed green |
+| 4 | `tests/test_sentiment_accuracy.py` | called `pytest.skip` — **the accuracy gate never ran once**, while CI advertised "Backend pytest (sentiment >=65%)" |
+
+Anything doing `from <module> import <mutable global>` in this codebase is
+suspect. Construction now lives behind `services.sentiment_engine.get_analyzer()`
+— no importable global to copy, and it raises `LexiconUnavailable` rather than
+returning a weaker engine that looks identical.
+
+### Accuracy, finally measured
+
+Against `backend/tests/data/financial_phrasebank.csv` (4,846 sentences),
+reproducing the published baselines exactly:
+
+| configuration | accuracy | documented |
+|---|---|---|
+| plain VADER | 58.75% | 58.7% |
+| + Henry + SentiBignomics | 69.34% | 69.4% |
+| + domain-neutral overrides | **71.40%** | 70.2% (prior best) |
+
+**Caveat that matters for the institutional pitch:** Financial Phrasebank is
+*earnings press releases*. There is still **no accuracy measurement on commodity
+news**, which is the domain actually being sold. Building a labelled commodity
+eval set is the highest-value next step for that claim.
+
+### The commodity names carried sentiment
+
+VADER scores `crude` at **−2.70** ("vulgar") and `natural` at **+1.50**
+("wholesome"). The two commodity *names* biased their own headlines in opposite
+directions. Over 6,000 real titles:
+
+```
+crude-oil headlines    mean compound  -0.4850 -> +0.0185   (76.3% relabelled)
+natural-gas headlines  mean compound  +0.3965 -> +0.0251   (71.3% relabelled)
+whole corpus           mean compound  +0.0298 -> +0.0257   ( 5.6% relabelled)
+```
+
+An 0.88 artificial spread from two adjectives. Verified these are the **only**
+two that matter — gold, silver, copper, wheat, uranium, nickel are not in the
+lexicon at all. Fix lives in `services/lexicons/domain_neutral.py`; terms were
+found by ranking the lexicon by *frequency × |polarity|* over the real corpus.
+
+## 1. `score` is confidence. `sentiment_score` is direction.
+
+The most consequential data fact in the system.
+
+`entity_mentions.score` is a **confidence magnitude**. Direction lives only in
+the `sentiment` text column. Before the fix, bearish rows averaged **higher**
+than bullish ones (0.7145 vs 0.7106), so every endpoint that averaged `score`
+produced a number that **rose as the news got worse**.
+
+`_label_for` compounded it by testing `score > 0.15` against data clamped to
+[0.5, 0.96] — "bearish" was structurally unreachable, and copper at exactly
+0.5000 (the neutral midpoint) was reported bullish.
+
+**Use `sentiment_score`** — a Postgres generated column, −1..+1, 0 = neutral:
+
+```sql
+case sentiment
+    when 'bullish' then  (score - 0.5) * 2
+    when 'bearish' then -((score - 0.5) * 2)
+    else 0
+end
+```
+
+Generated in the database on purpose: retroactive across all rows with no
+backfill job, and **aggregatable in SQL**. That last part matters — the read path
+still pulls rows into Python under `.limit(1000)`/`.limit(2000)` and averages
+there. Fine for 7 days, silently wrong for "compare today to 2020". Moving those
+aggregations into SQL is **open work**.
+
+## 2. Archive state after the 2 Sep re-score
+
+- `entity_mentions`: **64,093 rows, single provenance `model_version 2026-09-02`**,
+  2020-01-01 → present, **492 distinct score values** (was ~40).
+- `raw_documents`: 44,343 docs.
+- Trigger a re-score with `update raw_documents set scored_at = null`. The
+  scheduler thread (`jobs/scheduler.py`, 600s interval, 60s drain budget) drains
+  it. Full pass took ~30 minutes.
+
+**Three traps for the next re-score:**
+
+1. `entity_mentions` had **no unique constraint**, and both writers upserted on
+   `document_id,entity,entity_type,model_version` — a key matching nothing.
+   Including `model_version` means **a model bump duplicates the whole archive by
+   design**. Now `entity_mentions_doc_entity_type_key UNIQUE (document_id,
+   entity, entity_type)`.
+2. `ignore_duplicates=True` is `ON CONFLICT DO NOTHING` — a re-score would have
+   silently changed nothing. Now `False`.
+3. Upsert overwrites keys it writes but does **not delete** rows for entities the
+   new pass no longer detects. 981 orphans survived and had to be deleted.
+
+**Verify duplicates with `GROUP BY … HAVING count(*) > 1`.**
+`count(distinct (a,b,c)) = count(*)` does **not** detect them — that check gave a
+false all-clear and the constraint then failed on first attempt.
+
+## 3. Security fixed 2 Sep — check these stay fixed
+
+- **`/kalshi/*` had 18 routes with no authentication, live in production**,
+  including `POST /kalshi/trade` using `KALSHI_API_KEY_ID`/`KALSHI_PRIVATE_KEY`
+  from the server's own env — i.e. anonymous callers could place, amend and
+  cancel real orders on Integra's account and read its full position book.
+  Nine routes now require a key (`tests/test_kalshi_auth.py` guards it, with a
+  catch-all for newly added `/portfolio` or `/trade` routes).
+  **Still unverified: `KALSHI_USE_SANDBOX` in Railway.**
+- **`archive_purge_backup` had RLS disabled** and was readable with the anon key,
+  which ships in the mobile bundle. 13,243 articles with full body text. RLS now
+  enabled with no policies; migrations run as owner and bypass it.
+- **Unverified, reported by audit:** `POST /api/subscriptions/webhook` skips its
+  auth check when `REVENUECAT_WEBHOOK_AUTHORIZATION` is unset, which would let
+  anyone grant any user any tier. **Check that env var in Railway.**
+
+### A previous handoff dismissed the Kalshi issue as false
+
+The 2026-08-23 handoff listed **"`/kalshi/*` fully unauthenticated" — false in
+production. Live probes return 401, not 503.** That correction was itself wrong,
+and the vulnerability stayed open for another ten days.
+
+The 401 came from Kalshi's own upstream rejecting the server's credentials on
+some route, not from Integra requiring a key. On 2 Sep, `GET /kalshi/health`
+returned **200 with no credentials**, and the router carried no dependency at
+all — 20 routes, including order placement.
+
+Lesson worth keeping: **probe the specific route you are worried about, and read
+what the status code is actually telling you.** A 401 from an upstream is not an
+authenticated endpoint.
+
+## 4. Dashboard
+
+`/account/api` is the single page for subscription, keys, MCP connector, and (new)
+a live API console. `/api-keys` redirects there.
+
+It gated on `tier === "api"`. The shipping plan is **`api_basic`**, so the keys
+panel was hidden from 100% of paying API customers, who were simultaneously told
+they were on "Free trial". Use `isApiTier()` from `lib/entitlement.ts`, never an
+equality check.
+
+## 5. Deploy topology — read before touching anything
+
+Verified via the Vercel API:
 
 ```
 www.integramarkets.app
@@ -27,156 +174,59 @@ www.integramarkets.app
      └─ rootDirectory  web/
          └─ GitHub  Centori/integra-markets     <-- THE repo
              └─ production branch  main
-                 └─ ssoProtection  all_except_custom_domains
 ```
 
 `dashboard.integramarkets.app` = Vercel project `integra-dashboard`,
-rootDirectory `dashboard/`, same repo.
+rootDirectory `dashboard/`, same repo. Backend = Railway, auto-deploys on merge
+to `main`.
 
 **`jeremiahMshelia/integra-markets` is NOT the web repo.** Its `main` is stuck at
-2026-06-29 and has no `web/` directory (`contents/web` → 404) and no `mcp/`.
-PRs there do not reach production. PR #18 ("move profile sidebar left") sat there
-unmergeable for weeks for exactly this reason; it was redone as PR #24 here.
+2026-06-29, has no `web/` and no `mcp/`. PRs there do not reach production.
 
-### The trap that cost hours
-`ssoProtection: all_except_custom_domains` means **every preview URL is behind
-Vercel SSO**. `curl` against a preview returns **HTTP 200 with the SSO login
-page** — ~477KB of generic HTML that looks like a successful fetch of a stale
-site. Do not verify previews with curl/grep. Verify by building locally and
-grepping `.next/server/app/*.html`, or by checking the custom domain after merge.
+## 6. Open work, highest value first
 
-## 3. Current state
+1. **Move aggregation into SQL.** `.limit(1000)`/`.limit(2000)` then average in
+   Python silently truncates any multi-year window. This blocks the entire
+   "historical antecedent" product story.
+2. **A commodity-domain eval set.** 71.40% is Financial Phrasebank, not
+   commodity news. Without this, "institutional grade" is unmeasured.
+3. **Commodity name normalisation on read.** Stored entities are
+   `oil, gas, gold, silver, uranium, forex, bitcoin, wheat, corn, macro, weather`.
+   Read paths do only `.strip().lower()`, so the tickers the MCP tools advertise
+   (`brent`, `wti`, `ng`, `copper`) match nothing and return an empty 200.
+4. **MCP divergence tools are broken** — they send parameters the endpoint does
+   not accept (422) and expect a response shape it does not return.
+5. **`@integra/mcp` is unpublished on npm**, so the dashboard's install
+   instructions do not work. `integra-markets-mcp` is available.
+6. **`/v1/historical/analogs` is still a 501 stub.**
+7. **`market_divergences` table does not exist** — `/v1/brief`'s
+   `key_divergences` is permanently empty. Divergence is computed live in
+   `services/divergence.py` but per *topic* key; needs a commodity→topic mapping.
+8. **Weather terms carry the wrong sign** (`drought` −0.07, `hurricane` −0.07).
+   A drought is bullish for wheat. Belongs in the rulebook as a sign flip.
+9. **28.9% of documents have no body**, so a third of the archive is
+   headline-only, mixed with full-text rows and unmarked.
 
-### Live on www (merged + deployed 23 Aug, PRs #23 and #24)
-- Account deletion — modal, non-dismissible pending banner, `lib/accountService.ts`.
-  Same two Supabase Edge Functions and same `account_deletion_requests` row as
-  mobile, so a deletion scheduled on either surface shows on both.
-- **Session refresh middleware** (`web/src/middleware.ts`). `@supabase/ssr` keeps
-  sessions in cookies with short-lived tokens and nothing refreshed them
-  server-side, so returning users were bounced to /login despite a valid refresh
-  token. Calls `getUser()`, never `getSession()`. Refresh only, no redirects.
-- Profile pane opens from the **left**.
-- News-card image fallback renders the **"integra" wordmark** over the brand
-  gradient, matching mobile build 88.
-- **Divergence badge** on news cards. The feed always sent `divergence*` fields
-  (~⅓ of articles); `NewsItem` never declared them.
-- Landing "Key Management" card → **MCP connector card**. It and **Webhooks**
-  now carry "Soon" pills — neither is reachable by a customer.
-- Removed `@supabase/auth-helpers-nextjs` (deprecated, imported nowhere).
+## 7. Residual bias — do not oversell the signal
 
-### Mobile
-Build 88 **cleared review**. Its in-flight work is committed at `fd1cc16e` in
-`/Users/lm/Desktop/integra/integra-markets-2` (branch `build64-exact`): wordmark
-component, `alertMatcher`, and 5 regression suites — **43 tests passing**.
-`coverage/` and `dist/` deliberately left unstaged.
+After the re-score every year reads mildly positive (+0.05 to +0.14). There is a
+**positive offset** in the engine. Treat `sentiment_score` as a *relative* signal
+— deviation from its own baseline — not an absolute bull/bear call.
 
-## 4. Blocking the first dollar
+An earlier claim in this session that "2020 comes out net bearish, validating the
+pipeline against the COVID demand collapse" was computed on the **keyword-scored**
+labels and **does not hold** on properly-scored data. It is recorded here so it
+is not repeated.
 
-All confirmed in source. Items 1, 2 and 6 are one circuit — **one change closes
-all three**: derive scopes server-side from the subscription at mint time, and
-re-derive in `verify_api_key` so cancellation revokes.
+## 8. PRs from the 2 Sep session
 
-| # | Blocker | Where | Effect |
-|---|---------|-------|--------|
-| 1 | Scopes taken from the request body, unvalidated | `backend/api/api_keys.py:77` | Any signed-in free user mints an `archive` key |
-| 2 | Nothing writes `api_keys.scopes` on purchase | `backend/api/stripe.py` webhook | Paying customers get `scopes: []` → 403 on what they bought |
-| 3 | Depth check measures window **width**, not **age** | `backend/api/sentiment_history.py:163` | Paginate `from=2015-01-01&to=2015-03-01` → full archive |
-| 4 | `/v1/agent/ask` unscoped and uncapped | `backend/api/agent_ask.py:94` | Bypasses the gates; ≤13 Groq calls/request. Only unbounded cost |
-| 5 | `link-web-tier` takes tier from the body | `backend/api/subscriptions.py` | Self-grant $35 mobile tier; clobbers RevenueCat rows |
-| 6 | Cancellation never revokes | `effective_tier` SQL | Expiry lists `'api'` but not `api_basic`/`api_history` |
+| PR | What |
+|---|---|
+| #49 | Kalshi auth — verified live (`/kalshi/portfolio` → 401) |
+| #50 | Lexicon wiring + domain overrides + accuracy gate made to run |
+| #51 | `entity_mentions` unique key + real upsert |
+| #52 | Signed `sentiment_score`, `raw_documents` join, loud errors |
+| #53 | Dashboard tier gate + live API console |
 
-Also apply with the pricing decision: `HISTORY_DEPTH_CAP_DAYS` **90 → 30**
-(`backend/services/api_key_auth.py`), and park `STRIPE_API_HISTORY_PRICE_ID`.
-
-## 5. The archive — it has been building, into tables nothing reads
-
-This is the single most misunderstood area. The backfill **has** been running:
-GDELT's cursor advanced 2020-01-26 → 2020-07-20 during this session.
-
-**But none of it is reachable by the API:**
-- GDELT writes `historical_events` — **zero endpoints query that table**.
-- Wayback writes `raw_documents` — never scored, so never becomes `entity_mentions`.
-- `entity_mentions` is the **only** table `/v1/sentiment/*/history` and `/daily`
-  read, and its `extracted_at` is `default now()`, never set from publication
-  date (`supabase/migrations/20260624_historical_archive.sql:93`). Anything scored
-  lands on the backfill date regardless of article age.
-
-Result: **~57 days of queryable depth, 5,733 rows** (measured in migration
-`20260814`). More backfilling does not fix this.
-
-Two fixes convert stored work into a sellable archive:
-1. A **scoring pass** `raw_documents` → `entity_mentions`.
-2. A real **`published_at` axis** on `entity_mentions`, indexed
-   `(entity, published_at desc)`, with `/history`, `/daily` and the depth check
-   repointed at it.
-
-Throughput, separately: `wayback.py:34` imports `write_cursor` but **not**
-`read_cursor`, so every run re-enumerates from 2020-01-01, hits `cap_per_host
-2000`, and re-upserts settled documents — burning ~3h and throttling GDELT from
-~96 runs/day to ~7. Fixing that one import takes the ETA from **~100 days to ~8**.
-
-## 6. Corrections to earlier beliefs
-
-Recorded because each was believed and acted on:
-
-- **"Bookmarks never sync between mobile and web"** — **false**. `BookmarkProvider.tsx`
-  in the live mobile repo reads remote rows, pushes local-only ones, inserts on
-  add, deletes on remove. AsyncStorage is a cache. The error came from reading
-  `app/` inside *this* repo, which is a stale build-54-era copy.
-- **"Production runs code in no git remote"** — **false**. Every file is on
-  `Centori/integra-markets@main`; a local clone had corrupted objects.
-- **"PyJWT/stripe missing → everything 503s"** and **"/kalshi/* fully
-  unauthenticated"** — **false in production**. Live probes return 401, not 503.
-- Alert preferences **are** half-synced: mobile upserts the Supabase row but
-  `AlertsScreen.loadAlertPreferences()` reads only AsyncStorage. **One-way.**
-
-## 7. Next steps
-
-### Blocking
-1. **Derive scopes server-side** — closes blockers 1, 2, 6.
-2. Fix `link-web-tier` the same way.
-3. Age-not-width; scope-gate and cap `/v1/agent/ask`.
-4. Park the $249 Stripe price; set depth cap to 30.
-5. Ship a `data_coverage` envelope. Today a request for a 3-year window returns
-   **those dates echoed back** over ~57 days of data — an affirmative
-   misstatement on a paid response, and ~20 lines to fix.
-6. Read `api_key_usage` once. It has logged every authenticated request and
-   nothing has ever queried it. Answer "is anyone using this" before pricing.
-
-### Queued
-7. Mobile **alert-prefs read path** — the one-way sync. Pure JS, ships as an OTA
-   now that 88 has cleared.
-8. **API section in the web profile drawer** — do this *after* step 1. The
-   mockup's "choose your scopes" affordance should not exist; the server decides
-   from the subscription.
-9. Archive: wayback cursor → scoring pass → `published_at` axis.
-10. Fill **NAT GAS and COPPER** — live check shows 0 samples each; WHEAT 1,
-    CORN 3. Two of six headline commodities are empty. This is the $99 product.
-
-### Infrastructure
-11. `@sentry/nextjs` and a web test runner (`vitest` + `@testing-library/react`).
-    Web has **zero tests**; mobile has 43. Every bug this session was caught by a
-    person looking.
-12. Inbound rate limiting (`redis` + `limits`). The only limiter in the tree is
-    outbound to Kalshi.
-
-## 8. Loose ends
-
-- A stray Vercel project named **`web`** was created by accident on 23 Aug
-  (`web-one-lyart-39.vercel.app`). Inert, no env vars — **delete it**.
-- **`Lint + Jest` CI is misconfigured**: the workflow runs `npm install` in
-  `app/`, where no `package.json` exists on `main`. It therefore fails on every
-  PR regardless of content, and PRs #23/#24 were merged with `--admin` over it.
-  CI currently means nothing; fix the path or the checks are theatre.
-- Docs still advertise **$199/$699 seat plans** and "webhooks and streaming
-  included in every plan". None exist. The landing cards were fixed; `docs/` was not.
-- The **Historical Archive** landing card claims "34 commodity and macro topics
-  for backtesting" against ~57 days of data. Same overclaim class.
-
-## 9. Reference
-
-- Launch checklist — https://claude.ai/code/artifact/7f27aade-f692-480b-9669-f42c1655b817
-- Parity report — https://claude.ai/code/artifact/240b81d9-1ad8-45b1-8b85-320a716d62e1
-- Web assessment — https://claude.ai/code/artifact/fddcfa0c-97ff-427c-846a-37e00b544354
-- Profile-pane + API mockup (**design intent, not shipped**) —
-  https://claude.ai/code/artifact/a4f962c4-f11a-41f0-bbf3-e1d2f0cfe703
+Engine walkthrough (flowchart + annotated code):
+https://claude.ai/code/artifact/e836bb7e-32c3-4cb1-9c6d-c11731d60495
