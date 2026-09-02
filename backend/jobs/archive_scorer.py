@@ -58,10 +58,17 @@ def _load_scoring_fns():
         analyze_market_sentiment,
         basic_sentiment_analysis,
         normalize_commodity,
-        vader_analyzer,
     )
 
-    return analyze_market_sentiment, basic_sentiment_analysis, normalize_commodity, vader_analyzer
+    # NOT `from main_simple_nlp import vader_analyzer`. That global is None at
+    # import time and only assigned inside FastAPI's lifespan(); a from-import
+    # copies the None, this job never runs under FastAPI, and every document
+    # fell through to basic_sentiment_analysis — a 20-word keyword list. That
+    # is how 96% of the archive was scored while claiming vader_v2_commodity.
+    # get_analyzer() builds it on demand and raises rather than degrading.
+    from services.sentiment_engine import get_analyzer
+
+    return analyze_market_sentiment, basic_sentiment_analysis, normalize_commodity, get_analyzer()
 
 
 def _score_text(fns, text: str) -> Tuple[Optional[str], Optional[float], Optional[str]]:
