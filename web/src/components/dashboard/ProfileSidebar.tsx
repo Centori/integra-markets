@@ -379,6 +379,27 @@ export default function ProfileSidebar({ isOpen, onClose, user, onLogout, onBook
                                     <span className="text-white">Edit Alerts</span>
                                     <ChevronRight size={18} className="text-zinc-600" />
                                 </button>
+                                {/* API access lives here rather than only on a separate
+                                    subdomain. Stripe, OpenAI and GitHub all keep keys under
+                                    account settings, so this is where people look for them;
+                                    sending users to a different host to find their own keys
+                                    is the unfamiliar move. Opens in a new tab because the
+                                    dashboard is a separate Vercel project (integra-dashboard,
+                                    rootDirectory dashboard/), not a route in this app. */}
+                                <a
+                                    href="https://dashboard.integramarkets.app/account/api"
+                                    target="_blank"
+                                    rel="noopener noreferrer"
+                                    className="flex items-center justify-between px-4 py-3 border-b border-[#333] hover:bg-white/5"
+                                >
+                                    <div className="flex items-center gap-2">
+                                        <span className="text-white">API access &amp; keys</span>
+                                        <span className="rounded bg-[#4ECCA3]/15 px-1.5 py-0.5 text-[10px] uppercase tracking-wide text-[#4ECCA3]">
+                                            Pro
+                                        </span>
+                                    </div>
+                                    <ChevronRight size={18} className="text-zinc-600" />
+                                </a>
                                 <Link href="/settings/privacy" className="flex items-center justify-between px-4 py-3 border-b border-[#333] hover:bg-white/5"><span className="text-white">Privacy Policy</span><ChevronRight size={18} className="text-zinc-600" /></Link>
                                 <Link href="/settings/terms" className="flex items-center justify-between px-4 py-3 border-b border-[#333] hover:bg-white/5"><span className="text-white">Terms of Service</span><ChevronRight size={18} className="text-zinc-600" /></Link>
                                 <Link href="/settings/about" className="flex items-center justify-between px-4 py-3 border-b border-[#333] hover:bg-white/5"><span className="text-white">About</span><ChevronRight size={18} className="text-zinc-600" /></Link>
