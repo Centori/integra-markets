@@ -2,17 +2,24 @@
 
 import { useState } from "react";
 
-const CLAUDE_CODE_CMD = `claude mcp add integra \\
-  --env INTEGRA_API_KEY=<your_api_key> \\
-  -- npx -y @integra/mcp`;
+// These instructions used to run `npx -y @integra/mcp`. That package is NOT
+// published to npm, so the command failed for every user who copied it. Until
+// it is published, the working path is a local build — verified end to end
+// against the live API.
+const CLAUDE_CODE_CMD = `git clone https://github.com/Centori/integra-markets.git
+cd integra-markets/mcp/integra-mcp && npm install && npm run build
+
+claude mcp add integra \\
+  --env INTEGRA_API_KEY=ik_live_your_key_here \\
+  -- node $(pwd)/dist/index.js`;
 
 const CLAUDE_DESKTOP_JSON = `{
   "mcpServers": {
     "integra": {
-      "command": "npx",
-      "args": ["-y", "@integra/mcp"],
+      "command": "node",
+      "args": ["/absolute/path/to/integra-markets/mcp/integra-mcp/dist/index.js"],
       "env": {
-        "INTEGRA_API_KEY": "<your_api_key>"
+        "INTEGRA_API_KEY": "ik_live_your_key_here"
       }
     }
   }
@@ -62,7 +69,7 @@ export function ConnectClaude({ hasHistoryTier = false }: Props) {
           <h2 className="text-lg font-semibold">Connect to Claude</h2>
           <p className="mt-1 text-sm text-text-secondary">
             Use Integra from Claude Desktop or Claude Code with no code.
-            Replace <code className="text-accent-primary">&lt;your_api_key&gt;</code> with a key created above.
+            Replace <code className="text-accent-primary">ik_live_your_key_here</code> with a key created above.
           </p>
         </div>
       </div>
