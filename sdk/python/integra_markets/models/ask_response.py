@@ -17,19 +17,22 @@ import pprint
 import re  # noqa: F401
 import json
 
-from pydantic import BaseModel, ConfigDict
+from pydantic import BaseModel, ConfigDict, StrictStr
 from typing import Any, ClassVar, Dict, List, Optional
-from integra_markets.models.validation_error import ValidationError
 from typing import Optional, Set
 from typing_extensions import Self
 from pydantic_core import to_jsonable_python
 
-class HTTPValidationError(BaseModel):
+class AskResponse(BaseModel):
     """
-    HTTPValidationError
+    AskResponse
     """ # noqa: E501
-    detail: Optional[List[ValidationError]] = None
-    __properties: ClassVar[List[str]] = ["detail"]
+    answer: StrictStr
+    sources: List[Dict[str, Any]]
+    tool_calls: List[Dict[str, Any]]
+    model: StrictStr
+    template_used: Optional[StrictStr] = None
+    __properties: ClassVar[List[str]] = ["answer", "sources", "tool_calls", "model", "template_used"]
 
     model_config = ConfigDict(
         validate_by_name=True,
@@ -49,7 +52,7 @@ class HTTPValidationError(BaseModel):
 
     @classmethod
     def from_json(cls, json_str: str) -> Optional[Self]:
-        """Create an instance of HTTPValidationError from a JSON string"""
+        """Create an instance of AskResponse from a JSON string"""
         return cls.from_dict(json.loads(json_str))
 
     def to_dict(self) -> Dict[str, Any]:
@@ -70,18 +73,16 @@ class HTTPValidationError(BaseModel):
             exclude=excluded_fields,
             exclude_none=True,
         )
-        # override the default output from pydantic by calling `to_dict()` of each item in detail (list)
-        _items = []
-        if self.detail:
-            for _item_detail in self.detail:
-                if _item_detail:
-                    _items.append(_item_detail.to_dict())
-            _dict['detail'] = _items
+        # set to None if template_used (nullable) is None
+        # and model_fields_set contains the field
+        if self.template_used is None and "template_used" in self.model_fields_set:
+            _dict['template_used'] = None
+
         return _dict
 
     @classmethod
     def from_dict(cls, obj: Optional[Dict[str, Any]]) -> Optional[Self]:
-        """Create an instance of HTTPValidationError from a dict"""
+        """Create an instance of AskResponse from a dict"""
         if obj is None:
             return None
 
@@ -89,7 +90,11 @@ class HTTPValidationError(BaseModel):
             return cls.model_validate(obj)
 
         _obj = cls.model_validate({
-            "detail": [ValidationError.from_dict(_item) for _item in obj["detail"]] if obj.get("detail") is not None else None
+            "answer": obj.get("answer"),
+            "sources": obj.get("sources"),
+            "tool_calls": obj.get("tool_calls"),
+            "model": obj.get("model"),
+            "template_used": obj.get("template_used")
         })
         return _obj
 
