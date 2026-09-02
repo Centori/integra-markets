@@ -286,10 +286,25 @@ def _score_batch(supabase, fns, ACTIVE_MODEL_NAME, ACTIVE_MODEL_VERSION) -> Dict
     written_entities = 0
     if entity_rows:
         try:
+            # on_conflict was "document_id,entity,entity_type,model_version" —
+            # a key with NO matching unique constraint, so PostgREST could not
+            # dedupe on it and every row was simply inserted. Worse, including
+            # model_version in the key means a model bump duplicates the entire
+            # archive BY DESIGN: the new rows collide with nothing. That is what
+            # produced 93 old/new pairs within minutes of the lexicon fix
+            # deploying.
+            #
+            # ignore_duplicates was True (ON CONFLICT DO NOTHING), which would
+            # make a re-score a silent no-op for every document already scored —
+            # the job would report success having changed nothing.
+            #
+            # Now: 3-column key matching entity_mentions_doc_entity_type_key,
+            # and DO UPDATE so re-scoring overwrites in place. One row per
+            # (document, entity, type), always carrying the current model.
             supabase.table("entity_mentions").upsert(
                 entity_rows,
-                on_conflict="document_id,entity,entity_type,model_version",
-                ignore_duplicates=True,
+                on_conflict="document_id,entity,entity_type",
+                ignore_duplicates=False,
             ).execute()
             written_entities = len(entity_rows)
         except Exception as exc:  # noqa: BLE001
