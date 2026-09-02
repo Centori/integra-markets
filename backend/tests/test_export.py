@@ -31,9 +31,20 @@ def _rows(n, start=dt.datetime(2026, 8, 1, tzinfo=dt.timezone.utc)):
             "document_id": f"doc-{i}",
             "entity": "crude_oil",
             "sentiment": "bullish",
-            "score": 0.7,
-            "confidence": 0.7,
+            # signed -1..+1. NOT `score`, which is a confidence magnitude and
+            # averages HIGHER for bearish rows than bullish ones.
+            "sentiment_score": 0.7,
+            "confidence": 0.85,
             "published_at": (start + dt.timedelta(hours=i)).isoformat(),
+            "model_version": "2026-09-02",
+            # headline/source/url/precision live on raw_documents and arrive as
+            # a PostgREST embed, not as flat columns.
+            "raw_documents": {
+                "title": f"Crude headline {i}",
+                "source": "OilPrice.com",
+                "url": f"https://example.test/{i}",
+                "published_at_precision": "exact" if i % 2 == 0 else "crawl_estimate",
+            },
         }
         for i in range(n)
     ]
@@ -138,8 +149,9 @@ class TestCsvOutput:
         r = c.get("/v1/export/sentiment?commodity=crude_oil&format=csv")
         parsed = list(csv.reader(io.StringIO(r.text)))
         assert parsed[0] == [
-            "published_at", "commodity", "sentiment", "score",
-            "confidence", "document_id", "published_at_precision",
+            "published_at", "commodity", "sentiment", "sentiment_score",
+            "confidence", "headline", "source", "url", "document_id",
+            "published_at_precision", "model_version",
         ]
         assert len(parsed) == 4  # header + 3
 
@@ -154,9 +166,34 @@ class TestCsvOutput:
         """~87% of the archive is dated by crawl time, not publication time.
         A spreadsheet outlives any caveat in the docs, so the column ships in
         the file itself."""
-        c = _client(monkeypatch, rows=_rows(2))
+        c = _client(monkeypatch, rows=_rows(4))
         rows = list(csv.DictReader(io.StringIO(c.get("/v1/export/sentiment?commodity=crude_oil").text)))
-        assert all(r["published_at_precision"] for r in rows)
+
+        # This used to assert only truthiness, which passed while the value was
+        # a HARDCODED "crawl_estimate" on every row — the column was never
+        # selected from the database at all, so exact-dated rows were labelled
+        # as guesses. Assert the real per-row values instead.
+        assert [r["published_at_precision"] for r in rows] == [
+            "exact", "crawl_estimate", "exact", "crawl_estimate",
+        ]
+
+    def test_export_carries_the_article_it_scored(self):
+        """A number with no headline cannot answer "why was oil bearish then"."""
+        from api.export import _COLUMNS, _row_values
+
+        values = dict(zip(_COLUMNS, _row_values(_rows(1)[0])))
+        assert values["headline"] == "Crude headline 0"
+        assert values["source"] == "OilPrice.com"
+        assert values["url"] == "https://example.test/0"
+
+    def test_sentiment_score_is_signed_and_distinct_from_confidence(self):
+        """They were byte-identical in 100% of exported rows."""
+        from api.export import _COLUMNS, _row_values
+
+        values = dict(zip(_COLUMNS, _row_values(_rows(1)[0])))
+        assert values["sentiment_score"] == 0.7
+        assert values["confidence"] == 0.85
+        assert values["sentiment_score"] != values["confidence"]
 
 
 class TestRowCap:

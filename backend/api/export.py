@@ -65,14 +65,34 @@ _PAGE = int(os.environ.get("INTEGRA_EXPORT_PAGE_SIZE", "1000"))
 # to whatever depth their tier allows.
 DEFAULT_EXPORT_DAYS = int(os.environ.get("INTEGRA_EXPORT_DEFAULT_DAYS", "30"))
 
+# Column order is the contract. `sentiment_score` leads the numeric block
+# because it is the one a client should chart; `confidence` follows it as a
+# qualifier.
+#
+# What changed 2026-09-02, and why it mattered:
+#   - `sentiment_score` is NEW: signed -1..+1, generated in Postgres from
+#     sentiment + score. Before this, the only numeric column was `score`,
+#     which is a CONFIDENCE MAGNITUDE — bearish rows averaged HIGHER than
+#     bullish ones, so a client charting it got a line that rose as the news
+#     got worse.
+#   - `confidence` used to be a byte-identical copy of `score` in 100% of
+#     rows. Two columns, one number, two names.
+#   - headline/source/url are NEW. Clients previously got a number and an
+#     opaque UUID with no way to see what moved it — which made the archive
+#     unusable for the "why was oil bearish that week" question it exists to
+#     answer.
 _COLUMNS = [
     "published_at",
     "commodity",
     "sentiment",
-    "score",
+    "sentiment_score",
     "confidence",
+    "headline",
+    "source",
+    "url",
     "document_id",
     "published_at_precision",
+    "model_version",
 ]
 
 
@@ -115,7 +135,16 @@ def _iter_rows(
         try:
             page = (
                 supabase.table("entity_mentions")
-                .select("document_id, entity, sentiment, score, confidence, published_at")
+                # raw_documents(...) is a PostgREST resource embed over the
+                # document_id FK. headline/source/url/precision are NOT columns
+                # on entity_mentions — selecting them directly is what made
+                # /v1/sentiment and /v1/narratives return 200 with zero rows
+                # for months, because the resulting error was swallowed.
+                .select(
+                    "document_id, entity, sentiment, sentiment_score, confidence, "
+                    "published_at, model_version, "
+                    "raw_documents(title, source, url, published_at_precision)"
+                )
                 .eq("entity", commodity)
                 .gte("published_at", start.isoformat())
                 .lte("published_at", end.isoformat())
@@ -137,17 +166,32 @@ def _iter_rows(
 
 
 def _row_values(row: Dict[str, Any]) -> List[Any]:
+    # headline/source/url/precision live on raw_documents, embedded by the
+    # PostgREST select as a nested object. A missing embed means the join
+    # returned nothing for that row, which is worth showing as blank rather
+    # than inventing a value.
+    doc = row.get("raw_documents") or {}
     return [
         row.get("published_at"),
         row.get("entity"),
         row.get("sentiment"),
-        row.get("score"),
+        row.get("sentiment_score"),
         row.get("confidence"),
+        doc.get("title"),
+        doc.get("source"),
+        doc.get("url"),
         row.get("document_id"),
         # Surfaced per row on purpose. Roughly 87% of the archive is dated by
         # Internet Archive CRAWL time rather than publication time, and an
         # exported spreadsheet outlives any caveat written in the docs.
-        row.get("published_at_precision", "crawl_estimate"),
+        #
+        # This used to read row.get("published_at_precision", "crawl_estimate")
+        # against entity_mentions, which HAS NO SUCH COLUMN — the default fired
+        # every time, so every row in every export was stamped
+        # "crawl_estimate", including rows whose date is exact. A caveat that
+        # is always on is a caveat nobody can act on.
+        doc.get("published_at_precision"),
+        row.get("model_version"),
     ]
 
 

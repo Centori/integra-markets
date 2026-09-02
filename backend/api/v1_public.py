@@ -52,6 +52,15 @@ def _tier_for(auth: Dict[str, Any]) -> str:
 
 
 def _label_for(score: Optional[float]) -> str:
+    """Label a SIGNED sentiment score (-1..+1, 0 = neutral).
+
+    This is only correct because callers now pass `sentiment_score`. It used to
+    be fed `entity_mentions.score`, which is a CONFIDENCE magnitude clamped to
+    [0.5, 0.96] — so `score > 0.15` was true for every row with any data and
+    `score < -0.15` was unreachable. /v1/sentiment could not return "bearish"
+    at all; copper sat at exactly 0.5000, the neutral midpoint, and was
+    reported bullish.
+    """
     if score is None:
         return "neutral"
     if score > 0.15:
@@ -84,7 +93,15 @@ async def sentiment(
     try:
         rows = (
             supabase.table("entity_mentions")
-            .select("document_id, sentiment, score, published_at, source, headline, url")
+            # headline/source/url are NOT columns on entity_mentions. Selecting
+            # them directly errored, the except below swallowed it, and this
+            # endpoint returned 200 with articles_analyzed=0 for EVERY
+            # commodity and window. They live on raw_documents, reached here by
+            # PostgREST resource embed over the document_id FK.
+            .select(
+                "document_id, sentiment, sentiment_score, published_at, "
+                "raw_documents(title, source, url)"
+            )
             .eq("entity", commodity_lc)
             .gte("published_at", since)
             .order("published_at", desc=True)
@@ -92,25 +109,33 @@ async def sentiment(
             .execute()
         ).data or []
     except Exception as exc:  # noqa: BLE001
-        logger.warning("v1_public.sentiment query failed: %s", exc)
-        rows = []
+        # Loud, and fail the request. Returning [] here is what let a schema
+        # error masquerade as "no news about this commodity" for months.
+        logger.error("v1_public.sentiment query failed: %s", exc)
+        raise HTTPException(status_code=503, detail="sentiment store unavailable") from exc
 
-    scores = [r["score"] for r in rows if r.get("score") is not None]
+    # sentiment_score, NOT score. `score` is confidence: bearish rows average
+    # HIGHER than bullish ones, so averaging it produced a number that rose as
+    # the news got worse.
+    scores = [r["sentiment_score"] for r in rows if r.get("sentiment_score") is not None]
     avg = round(statistics.fmean(scores), 4) if scores else 0.0
     # Top drivers = highest |sentiment| headlines, deduped by URL.
     seen: set[str] = set()
     top: List[Dict[str, Any]] = []
-    for r in sorted(rows, key=lambda r: abs(r.get("score") or 0), reverse=True):
-        url = r.get("url") or r.get("document_id") or ""
+    for r in sorted(rows, key=lambda r: abs(r.get("sentiment_score") or 0), reverse=True):
+        doc = r.get("raw_documents") or {}
+        url = doc.get("url") or r.get("document_id") or ""
         if url in seen:
             continue
         seen.add(url)
         top.append(
             {
-                "headline": r.get("headline") or "(no headline)",
-                "source": r.get("source") or "unknown",
-                "sentiment": round(r.get("score") or 0.0, 4),
-                "url": r.get("url") or "",
+                "headline": doc.get("title") or "(no headline)",
+                "source": doc.get("source") or "unknown",
+                # Named `sentiment`, so it must BE sentiment. This previously
+                # emitted the confidence magnitude under this name.
+                "sentiment": round(r.get("sentiment_score") or 0.0, 4),
+                "url": doc.get("url") or "",
             }
         )
         if len(top) >= 10:
@@ -125,6 +150,31 @@ async def sentiment(
         "updated_at": dt.datetime.now(dt.timezone.utc).isoformat(),
         "top_drivers": top,
     }
+
+
+
+def _flatten_docs(rows: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
+    """Lift the embedded raw_documents fields onto each row.
+
+    headline/source/url are NOT columns on entity_mentions — they live on
+    raw_documents and arrive as a nested object from the PostgREST embed.
+    Selecting them directly is what made these endpoints return 200 with empty
+    results. `score` is mapped from `sentiment_score` (signed), never from
+    `score` (a confidence magnitude).
+    """
+    out: List[Dict[str, Any]] = []
+    for r in rows:
+        doc = r.get("raw_documents") or {}
+        out.append(
+            {
+                "headline": doc.get("title"),
+                "source": doc.get("source"),
+                "url": doc.get("url"),
+                "score": r.get("sentiment_score"),
+                "published_at": r.get("published_at"),
+            }
+        )
+    return out
 
 
 # ---------------------------------------------------------------------------
@@ -157,17 +207,17 @@ async def narratives(
     try:
         rows = (
             supabase.table("entity_mentions")
-            .select("headline, score, published_at, source")
+            .select("sentiment_score, published_at, raw_documents(title, source)")
             .eq("entity", commodity_lc)
             .gte("published_at", since)
             .limit(500)
             .execute()
         ).data or []
     except Exception as exc:  # noqa: BLE001
-        logger.warning("v1_public.narratives query failed: %s", exc)
-        rows = []
+        logger.error("v1_public.narratives query failed: %s", exc)
+        raise HTTPException(status_code=503, detail="narrative store unavailable") from exc
 
-    themes = _cluster_headlines(rows)
+    themes = _cluster_headlines(_flatten_docs(rows))
     return {
         "commodity": commodity_lc,
         "lookback": lookback,
@@ -268,7 +318,7 @@ async def brief(
     def _scores_between(start: str, end: Optional[str] = None) -> List[float]:
         q = (
             supabase.table("entity_mentions")
-            .select("score")
+            .select("sentiment_score")
             .eq("entity", commodity_lc)
             .gte("published_at", start)
         )
@@ -279,7 +329,7 @@ async def brief(
         except Exception as exc:  # noqa: BLE001
             logger.warning("v1_public.brief query failed: %s", exc)
             return []
-        return [r["score"] for r in data if r.get("score") is not None]
+        return [r["sentiment_score"] for r in data if r.get("sentiment_score") is not None]
 
     scores_7d = _scores_between(since_7d)
     scores_prior_7d = _scores_between(since_14d, since_7d)
@@ -293,7 +343,7 @@ async def brief(
     try:
         narrative_rows = (
             supabase.table("entity_mentions")
-            .select("headline, score, published_at, source")
+            .select("sentiment_score, published_at, raw_documents(title, source)")
             .eq("entity", commodity_lc)
             .gte("published_at", since_7d)
             .limit(500)
@@ -311,18 +361,21 @@ async def brief(
         for n in _cluster_headlines(narrative_rows)[:5]
     ]
 
-    # Key divergences — pull from any recent divergence signals for this commodity
-    try:
-        div_rows = (
-            supabase.table("market_divergences")
-            .select("question, market_implied_prob, ai_implied_prob, divergence")
-            .eq("commodity", commodity_lc)
-            .order("divergence", desc=True)
-            .limit(3)
-            .execute()
-        ).data or []
-    except Exception:  # noqa: BLE001
-        div_rows = []
+    # Key divergences.
+    #
+    # This queried a table called `market_divergences` that DOES NOT EXIST —
+    # the name appears nowhere else in the repo, no migration creates it and
+    # nothing writes it. PostgREST returned relation-not-found, the bare
+    # `except` swallowed it, and this list has been empty since the endpoint
+    # shipped. The MCP client gates the whole "AI vs market" section on
+    # `key_divergences.length > 0`, so the headline feature silently never
+    # rendered in a market brief.
+    #
+    # Divergence IS computed, live, by services/divergence.py — but per TOPIC
+    # key, not per commodity, so wiring it here needs a commodity→topic mapping
+    # that does not exist yet. Returning an explicit empty list with this note
+    # is honest; a query against a phantom table was not.
+    div_rows: List[Dict[str, Any]] = []
 
     return {
         "commodity": commodity_lc,
