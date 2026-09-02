@@ -291,10 +291,14 @@ def persist_articles(
             #   entity_mentions (document_id, entity, entity_type, coalesce(model_version,''))
             (
                 supabase.table("entity_mentions")
+                # See jobs/archive_scorer.py for the full rationale: model_version
+                # in the conflict key means a model bump duplicates the archive,
+                # and DO NOTHING makes a re-score a silent no-op. This is the
+                # live ingest path, so it duplicated on every tick.
                 .upsert(
                     entity_rows,
-                    on_conflict="document_id,entity,entity_type,model_version",
-                    ignore_duplicates=True,
+                    on_conflict="document_id,entity,entity_type",
+                    ignore_duplicates=False,
                 )
                 .execute()
             )
