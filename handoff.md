@@ -139,6 +139,21 @@ false all-clear and the constraint then failed on first attempt.
   auth check when `REVENUECAT_WEBHOOK_AUTHORIZATION` is unset, which would let
   anyone grant any user any tier. **Check that env var in Railway.**
 
+### A previous handoff dismissed the Kalshi issue as false
+
+The 2026-08-23 handoff listed **"`/kalshi/*` fully unauthenticated" — false in
+production. Live probes return 401, not 503.** That correction was itself wrong,
+and the vulnerability stayed open for another ten days.
+
+The 401 came from Kalshi's own upstream rejecting the server's credentials on
+some route, not from Integra requiring a key. On 2 Sep, `GET /kalshi/health`
+returned **200 with no credentials**, and the router carried no dependency at
+all — 20 routes, including order placement.
+
+Lesson worth keeping: **probe the specific route you are worried about, and read
+what the status code is actually telling you.** A 401 from an upstream is not an
+authenticated endpoint.
+
 ## 4. Dashboard
 
 `/account/api` is the single page for subscription, keys, MCP connector, and (new)
