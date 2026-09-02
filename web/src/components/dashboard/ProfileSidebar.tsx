@@ -400,6 +400,24 @@ export default function ProfileSidebar({ isOpen, onClose, user, onLogout, onBook
                                     </div>
                                     <ChevronRight size={18} className="text-zinc-600" />
                                 </a>
+                                <a
+                                    href="https://dashboard.integramarkets.app/docs"
+                                    target="_blank"
+                                    rel="noopener noreferrer"
+                                    className="flex items-center justify-between px-4 py-3 border-b border-[#333] hover:bg-white/5"
+                                >
+                                    <span className="text-white">API documentation</span>
+                                    <ChevronRight size={18} className="text-zinc-600" />
+                                </a>
+                                <a
+                                    href="https://github.com/Centori/integra-markets/tree/main/sdk"
+                                    target="_blank"
+                                    rel="noopener noreferrer"
+                                    className="flex items-center justify-between px-4 py-3 border-b border-[#333] hover:bg-white/5"
+                                >
+                                    <span className="text-white">SDKs &amp; MCP connector</span>
+                                    <ChevronRight size={18} className="text-zinc-600" />
+                                </a>
                                 <Link href="/settings/privacy" className="flex items-center justify-between px-4 py-3 border-b border-[#333] hover:bg-white/5"><span className="text-white">Privacy Policy</span><ChevronRight size={18} className="text-zinc-600" /></Link>
                                 <Link href="/settings/terms" className="flex items-center justify-between px-4 py-3 border-b border-[#333] hover:bg-white/5"><span className="text-white">Terms of Service</span><ChevronRight size={18} className="text-zinc-600" /></Link>
                                 <Link href="/settings/about" className="flex items-center justify-between px-4 py-3 border-b border-[#333] hover:bg-white/5"><span className="text-white">About</span><ChevronRight size={18} className="text-zinc-600" /></Link>
