@@ -60,13 +60,17 @@ _TRACKED = (
 _WINDOW_HOURS = 24
 # Score is 0..1 with 0.5 neutral. This band around the midpoint reads as
 # neutral rather than as a weak directional call.
+# Band around ZERO, not around 0.5. These constants used to assume `score`,
+# which ran 0.5..1.0 with 0.5 meaning neutral. sentiment_score is signed with 0
+# meaning neutral, so leaving the old midpoint would report every commodity as
+# bearish.
 _NEUTRAL_BAND = 0.05
 
 
 def _label(avg: float) -> str:
-    if avg >= 0.5 + _NEUTRAL_BAND:
+    if avg >= _NEUTRAL_BAND:
         return "BULLISH"
-    if avg <= 0.5 - _NEUTRAL_BAND:
+    if avg <= -_NEUTRAL_BAND:
         return "BEARISH"
     return "NEUTRAL"
 
@@ -75,7 +79,7 @@ def _rows_for(supabase, entity: str, since: str) -> List[Dict[str, Any]]:
     try:
         return (
             supabase.table("entity_mentions")
-            .select("score,sentiment,published_at")
+            .select("sentiment_score,sentiment,published_at")
             .eq("entity_type", "commodity")
             .eq("entity", entity)
             .gte("published_at", since)
@@ -111,7 +115,7 @@ async def get_market_sentiment() -> Dict[str, Any]:
     if supabase is not None:
         for entity, display in _TRACKED:
             rows = _rows_for(supabase, entity, since)
-            scores = [r["score"] for r in rows if r.get("score") is not None]
+            scores = [r["sentiment_score"] for r in rows if r.get("sentiment_score") is not None]
             avg: Optional[float] = round(statistics.fmean(scores), 4) if scores else None
             commodities.append({
                 "name": display,
@@ -119,7 +123,8 @@ async def get_market_sentiment() -> Dict[str, Any]:
                 "sentiment": _label(avg) if avg is not None else "NEUTRAL",
                 # Signed deviation from neutral, on the same scale the legacy
                 # payload used for `change`.
-                "change": round((avg - 0.5) * 100, 2) if avg is not None else 0.0,
+                # Deviation from neutral on the signed scale, as a percentage.
+                "change": round(avg * 100, 2) if avg is not None else 0.0,
                 "confidence": round(min(0.5 + len(scores) / 100.0, 0.95), 2) if scores else 0.0,
                 "avg_score": avg,
                 "sample_size": len(scores),

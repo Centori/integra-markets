@@ -129,7 +129,7 @@ def _tool_get_sentiment_now(commodity: str) -> Dict[str, Any]:
     since = (dt.datetime.now(dt.timezone.utc) - dt.timedelta(hours=24)).isoformat()
     rows = (
         supabase.table("entity_mentions")
-        .select("score, sentiment, published_at")
+        .select("sentiment_score, sentiment, published_at")
         .eq("entity", commodity_lc)
         .gte("published_at", since)
         .order("published_at", desc=True)
@@ -138,7 +138,9 @@ def _tool_get_sentiment_now(commodity: str) -> Dict[str, Any]:
     ).data or []
     if not rows:
         return {"commodity": commodity_lc, "no_data": True}
-    scores = [r["score"] for r in rows if r.get("score") is not None]
+    # Signed, not confidence. This value is narrated to the user by an LLM,
+    # so a wrong sign becomes a fluent, confident, wrong sentence.
+    scores = [r["sentiment_score"] for r in rows if r.get("sentiment_score") is not None]
     return {
         "commodity": commodity_lc,
         "latest_sentiment": rows[0].get("sentiment"),
@@ -155,7 +157,7 @@ def _tool_get_recent_history(commodity: str, days: int = 7, limit: int = 25) -> 
     since = (dt.datetime.now(dt.timezone.utc) - dt.timedelta(days=days)).isoformat()
     rows = (
         supabase.table("entity_mentions")
-        .select("document_id, sentiment, score, confidence, published_at")
+        .select("document_id, sentiment, sentiment_score, confidence, published_at")
         .eq("entity", commodity_lc)
         .gte("published_at", since)
         .order("published_at", desc=True)
@@ -171,7 +173,7 @@ def _tool_get_daily_aggregates(commodity: str, days: int = 30) -> Dict[str, Any]
     since = (dt.datetime.now(dt.timezone.utc) - dt.timedelta(days=days)).isoformat()
     rows = (
         supabase.table("entity_mentions")
-        .select("sentiment, score, published_at")
+        .select("sentiment, sentiment_score, published_at")
         .eq("entity", commodity_lc)
         .gte("published_at", since)
         .limit(50000)
@@ -191,7 +193,7 @@ def _tool_get_daily_aggregates(commodity: str, days: int = 30) -> Dict[str, Any]
     prev: Optional[float] = None
     for day in sorted(buckets):
         bucket = buckets[day]
-        scores = [b["score"] for b in bucket if b.get("score") is not None]
+        scores = [b["sentiment_score"] for b in bucket if b.get("sentiment_score") is not None]
         avg = round(statistics.fmean(scores), 4) if scores else None
         momentum = round(avg - prev, 4) if avg is not None and prev is not None else None
         series.append({

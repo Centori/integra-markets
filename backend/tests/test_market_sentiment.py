@@ -82,7 +82,14 @@ def _mentions(*scores):
     # migration 20260827_entity_mentions_published_at — scoring 2020 articles
     # stamps extracted_at with today, so an extracted_at window would pull
     # five-year-old news into "sentiment right now".
-    return [{"score": s, "sentiment": "neutral", "published_at": _iso(1)} for s in scores]
+    # sentiment_score, NOT score. `score` is a confidence magnitude on 0.5..1.0;
+    # bearish rows average HIGHER than bullish ones, so it can never express
+    # direction. These fixtures used 0..1 values with 0.5 as the midpoint, which
+    # is why they kept passing while the endpoint could not report BEARISH at all.
+    return [
+        {"sentiment_score": s, "sentiment": "neutral", "published_at": _iso(1)}
+        for s in scores
+    ]
 
 
 class TestAlwaysAnswers200:
@@ -133,34 +140,34 @@ class TestComputesFromRealData:
     'in production, this would use real data'."""
 
     def test_bullish_scores_read_bullish(self, monkeypatch):
-        _install(monkeypatch, FakeSupabase({"oil": _mentions(0.8, 0.75, 0.9)}))
+        _install(monkeypatch, FakeSupabase({"oil": _mentions(0.6, 0.5, 0.8)}))
         oil = {c["name"]: c for c in (get_market_sentiment())["commodities"]}["OIL"]
         assert oil["sentiment"] == "BULLISH"
-        assert oil["avg_score"] == pytest.approx(0.8167, abs=1e-3)
+        assert oil["avg_score"] == pytest.approx(0.6333, abs=1e-3)
         assert oil["sample_size"] == 3
         assert oil["change"] > 0
 
     def test_bearish_scores_read_bearish(self, monkeypatch):
-        _install(monkeypatch, FakeSupabase({"wheat": _mentions(0.2, 0.3)}))
+        _install(monkeypatch, FakeSupabase({"wheat": _mentions(-0.6, -0.4)}))
         wheat = {c["name"]: c for c in (get_market_sentiment())["commodities"]}["WHEAT"]
         assert wheat["sentiment"] == "BEARISH"
         assert wheat["change"] < 0
 
-    def test_scores_at_the_midpoint_read_neutral(self, monkeypatch):
-        _install(monkeypatch, FakeSupabase({"corn": _mentions(0.5, 0.52, 0.48)}))
+    def test_scores_near_zero_read_neutral(self, monkeypatch):
+        _install(monkeypatch, FakeSupabase({"corn": _mentions(0.0, 0.02, -0.02)}))
         corn = {c["name"]: c for c in (get_market_sentiment())["commodities"]}["CORN"]
         assert corn["sentiment"] == "NEUTRAL"
 
     def test_overall_follows_the_majority(self, monkeypatch):
         _install(monkeypatch, FakeSupabase({
-            "oil": _mentions(0.9), "gold": _mentions(0.85), "wheat": _mentions(0.2),
+            "oil": _mentions(0.8), "gold": _mentions(0.7), "wheat": _mentions(-0.6),
         }))
         result = get_market_sentiment()
         assert result["overall"] == "BULLISH"
         assert result["confidence"] > 0.65
 
     def test_a_tie_is_neutral(self, monkeypatch):
-        _install(monkeypatch, FakeSupabase({"oil": _mentions(0.9), "wheat": _mentions(0.1)}))
+        _install(monkeypatch, FakeSupabase({"oil": _mentions(0.8), "wheat": _mentions(-0.8)}))
         assert (get_market_sentiment())["overall"] == "NEUTRAL"
 
     def test_unobserved_commodities_are_not_invented(self, monkeypatch):
