@@ -94,8 +94,20 @@ def patched(monkeypatch):
             "sentiment": "BULLISH", "confidence": 0.8
         }
         fake_nlp.normalize_commodity = lambda _a, _b: "oil"
-        fake_nlp.vader_analyzer = None
         monkeypatch.setitem(sys.modules, "main_simple_nlp", fake_nlp)
+
+        # The scorer gets its analyser from services.sentiment_engine, NOT from
+        # a main_simple_nlp global. These fakes used to set
+        # `fake_nlp.vader_analyzer = None`, which is exactly what production
+        # did — so the suite exercised the keyword fallback and stayed green
+        # while 96% of the archive was scored by a 20-word list. Stubbing the
+        # engine keeps the tests hermetic (no NLTK download) AND keeps them on
+        # the branch that actually runs.
+        fake_engine = types.ModuleType("services.sentiment_engine")
+        fake_engine.get_analyzer = lambda: types.SimpleNamespace(
+            polarity_scores=lambda _text: {"compound": 0.6, "pos": 0.6, "neg": 0.0, "neu": 0.4}
+        )
+        monkeypatch.setitem(sys.modules, "services.sentiment_engine", fake_engine)
 
         fake_topics = types.ModuleType("services.topic_taxonomy")
         fake_topics.detect_topics = lambda text, title=None: ["crude_oil"]
@@ -165,8 +177,11 @@ class TestLabelNormalisation:
     def test_unrecognised_label_is_still_rejected(self, patched, monkeypatch):
         """Normalising must not turn into accepting anything."""
         client = patched(FakeSupabase([_doc("a")]))
-        sys.modules["main_simple_nlp"].basic_sentiment_analysis = (
-            lambda text, commodity: {"sentiment": "SPICY", "confidence": 0.9}
+        # Patch the path the scorer actually takes. This used to patch
+        # `basic_sentiment_analysis`, which only ran because the analyser was
+        # None — i.e. the assertion depended on the bug being present.
+        sys.modules["main_simple_nlp"].analyze_market_sentiment = (
+            lambda text, commodity, scores=None: {"sentiment": "SPICY", "confidence": 0.9}
         )
         result = archive_scorer.run()
         assert result["unscorable"] == 1 and result["scored"] == 0

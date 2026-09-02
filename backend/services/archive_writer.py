@@ -26,7 +26,15 @@ logger = logging.getLogger(__name__)
 # threshold, model swap). PRs touching `analyze_market_sentiment`,
 # `SENTIMENT_RULE_COEF`, or the lexicon loaders must update this.
 ACTIVE_MODEL_NAME = "vader_v2_commodity"
-ACTIVE_MODEL_VERSION = "2026-06-23"  # date of PR #9 landing
+# 2026-09-02: the previous version, "2026-06-23", is a LIE for 96% of the rows
+# carrying it. The scoring jobs imported a `vader_analyzer` global that was
+# None at import time, so 60,225 of 62,771 rows were produced by
+# basic_sentiment_analysis (a 20-word keyword list) while stamped
+# vader_v2_commodity. This version marks rows genuinely scored by the
+# lexicon-enriched engine, with commodity-name polarity neutralised
+# (see services/sentiment_engine.py and services/lexicons/domain_neutral.py).
+# Keeping the old string distinguishable is the point: do not reuse it.
+ACTIVE_MODEL_VERSION = "2026-09-02"
 
 
 def _url_hash(url: str) -> str:
