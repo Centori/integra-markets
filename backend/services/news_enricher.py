@@ -25,8 +25,37 @@ from typing import Any, Dict, List, Optional
 logger = logging.getLogger(__name__)
 
 
+def _leading_market(reading, provider: str) -> Optional[Dict[str, Any]]:
+    """The most-traded market from `provider` behind this reading.
+
+    `related_markets` already carries the normalized gamma-api fields --
+    question, slug, condition_id and a resolved event URL. Picking the
+    highest-volume one gives the card a concrete, checkable referent rather
+    than an unattributed number.
+    """
+    # getattr rather than attribute access: this module's contract is that a
+    # divergence hiccup never blocks a news response, and callers pass any
+    # reading-shaped object (the monitor job and the tests both do).
+    related = getattr(reading, "related_markets", None) or []
+    markets = [
+        m for m in related
+        if isinstance(m, dict)
+        and m.get("provider") == provider
+        and (m.get("question") or m.get("title"))
+    ]
+    if not markets:
+        return None
+    return max(markets, key=lambda m: (m.get("volume_24h") or m.get("liquidity") or 0.0))
+
+
 def _pick_strongest_signal(reading) -> Optional[Dict[str, Any]]:
     """Return the (provider, delta, status) with the largest |delta|.
+
+    Also carries the identity of the market the number came from. Previously
+    this reduced the reading to provider/delta/status and dropped
+    `related_markets` on the floor, so a card could say "Polymarket
+    underpricing by 24pt" but structurally could not say *which* market, or
+    link to it. The data was already in hand at this point.
 
     Returns None if neither provider has a delta (both NO_DATA).
     """
@@ -38,7 +67,14 @@ def _pick_strongest_signal(reading) -> Optional[Dict[str, Any]]:
     if not candidates:
         return None
     provider, delta, status = max(candidates, key=lambda c: abs(c[1]))
-    return {"provider": provider, "delta": delta, "status": status}
+
+    signal = {"provider": provider, "delta": delta, "status": status}
+    market = _leading_market(reading, provider)
+    if market:
+        signal["marketQuestion"] = market.get("question") or market.get("title")
+        signal["marketUrl"] = market.get("url")
+        signal["marketId"] = market.get("condition_id") or market.get("id")
+    return signal
 
 
 def _cross_market_signal(reading, threshold: float) -> Optional[Dict[str, Any]]:
@@ -196,6 +232,12 @@ def enrich_articles_with_divergence(
             art["divergenceStatus"] = best_signal["status"]
             art["divergenceDelta"] = best_signal["delta"]
             art["divergenceTopic"] = cand["topic"]
+            # The specific market the delta was computed against, so the card
+            # can name and link it instead of asserting an unattributed number.
+            if best_signal.get("marketQuestion"):
+                art["divergenceMarketQuestion"] = best_signal["marketQuestion"]
+                art["divergenceMarketUrl"] = best_signal.get("marketUrl")
+                art["divergenceMarketId"] = best_signal.get("marketId")
         if best_cross is not None and cross_owners.get(cand["cross_topic"]) == idx:
             art["crossMarketStatus"] = best_cross["crossStatus"]
             art["crossMarketDelta"] = best_cross["crossDelta"]

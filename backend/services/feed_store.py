@@ -55,6 +55,8 @@ import logging
 import re
 from typing import Any, Dict, Iterable, List, Optional, Sequence, Set, Tuple
 
+from services.text_clean import best_summary
+
 logger = logging.getLogger(__name__)
 
 # Fetch this many candidate rows per requested article so that preference
@@ -172,7 +174,13 @@ def _to_article(row: Dict[str, Any],
         # Body text where we have it, else the headline — same contract as
         # before, but sourced from the cron's stored content rather than a
         # per-request scrape that kept returning publisher disclaimers.
-        "summary": content or title,
+        #
+        # Cleaned on the way out: `content` is stored verbatim from the feed,
+        # so Google News rows arrive as a raw <a href="..."> anchor and rows
+        # with no body fall back to a summary identical to the headline. Both
+        # shipped to production cards before this. best_summary() strips
+        # markup/URLs and rejects a body that only restates the title.
+        "summary": best_summary(content, title),
         "source": row.get("source") or "unknown",
         "url": row.get("url"),
         # ISO 8601 UTC, always. The old response mixed '-0500', ' EST ',

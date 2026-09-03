@@ -38,51 +38,17 @@ logger = logging.getLogger(__name__)
 # summarize_url() there returned Fusion Media's site-wide disclaimer instead of
 # the story — the same paragraph on every card (reported on build 88).
 # Any candidate summary matching these is discarded rather than shown.
-_BOILERPLATE_RE = re.compile(
-    r"fusion media|"
-    r"cryptocurrencies are extremely volatile|"
-    r"prohibited to use, store, reproduce|"
-    r"not necessarily real-time nor accurate|"
-    r"would like to remind you|"
-    r"all rights reserved|"
-    r"terms of use|privacy policy|cookie policy|"
-    r"is not responsible for any loss|"
-    r"enable javascript|subscribe to (?:continue|read)",
-    re.IGNORECASE,
+# Summary hygiene now lives in services.text_clean so every producer of card
+# text can reach it (the store reader and the on-demand summarizer could not
+# import it from here without pulling in VADER). Re-exported for the existing
+# callers and tests that import these names from this module.
+from services.text_clean import (  # noqa: E402,F401
+    _BOILERPLATE_RE,
+    _MIN_SUMMARY_CHARS,
+    best_summary,
+    clean_summary_text,
+    is_usable_summary,
 )
-
-# Below this a "summary" carries no more information than the headline.
-_MIN_SUMMARY_CHARS = 60
-
-
-def clean_summary_text(raw: str) -> str:
-    """Strip markup/entities out of an RSS description and normalise spacing."""
-    if not raw:
-        return ""
-    text = BeautifulSoup(str(raw), "html.parser").get_text(" ")
-    return re.sub(r"\s+", " ", text).strip()
-
-
-def is_usable_summary(text: str, title: str = "") -> bool:
-    """
-    True when `text` is worth showing as an article summary.
-
-    Rejects: empties, publisher boilerplate, anything too short to add detail,
-    and text that merely restates the headline (which is what the feed emitted
-    for every article before this).
-    """
-    cleaned = clean_summary_text(text)
-    if len(cleaned) < _MIN_SUMMARY_CHARS:
-        return False
-    if _BOILERPLATE_RE.search(cleaned):
-        return False
-    if title:
-        norm = lambda s: re.sub(r"\W+", " ", s).strip().lower()
-        if norm(cleaned) == norm(title) or (
-            norm(cleaned).startswith(norm(title)) and len(cleaned) < len(title) * 1.3
-        ):
-            return False
-    return True
 
 
 class UserNewsService:
