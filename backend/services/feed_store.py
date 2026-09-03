@@ -175,6 +175,11 @@ def _to_article(row: Dict[str, Any],
         "summary": content or title,
         "source": row.get("source") or "unknown",
         "url": row.get("url"),
+        # Card image. The store reader emitted no image_url key at all, so
+        # NewsCard fell back to the brand mark on 100% of cards rather than
+        # on the articles that genuinely have no image. Rows archived before
+        # image capture landed carry no image and still fall back — correctly.
+        "image_url": (row.get("raw_payload") or {}).get("image_url") or None,
         # ISO 8601 UTC, always. The old response mixed '-0500', ' EST ',
         # 'GMT' and 'Aug 17, 2026 07:37 GMT' in one payload.
         "published": published,
