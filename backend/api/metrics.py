@@ -210,3 +210,82 @@ def _feedback_alignment(supabase: Any, since: str) -> Dict[str, Any]:
     except Exception as exc:  # noqa: BLE001
         logger.warning("feedback alignment query failed: %s", exc)
         return {"n": 0, "alignment": None, "error": str(exc)}
+
+
+@router.get("/archive")
+async def archive_metrics() -> Dict[str, Any]:
+    """How far the archive reaches, and whether the backward walk is moving.
+
+    Exists because the answer was previously only obtainable with the Supabase
+    service-role key: `raw_documents` and `entity_mentions` have RLS, so an
+    anon read returns zero rows whether the table is empty or merely blocked.
+    That made "is the archive growing?" a credential-handling exercise rather
+    than a URL, which is the wrong shape for a question worth asking daily.
+
+    Reads with the backend's own client, so the counts are real.
+    """
+    from services._supabase import get_supabase_client
+
+    supabase = get_supabase_client()
+    if supabase is None:
+        return {"error": "supabase client unavailable"}
+
+    def _edge(order_desc: bool) -> Any:
+        """Oldest (or newest) published_at in raw_documents."""
+        try:
+            rows = (
+                supabase.table("raw_documents")
+                .select("published_at")
+                .not_.is_("published_at", "null")
+                .order("published_at", desc=order_desc)
+                .limit(1)
+                .execute()
+            ).data or []
+            return rows[0]["published_at"] if rows else None
+        except Exception as exc:  # noqa: BLE001
+            logger.warning("archive_metrics: edge query failed: %s", exc)
+            return None
+
+    def _count(table: str) -> Any:
+        try:
+            res = (
+                supabase.table(table)
+                .select("id", count="exact")
+                .limit(1)
+                .execute()
+            )
+            return getattr(res, "count", None)
+        except Exception as exc:  # noqa: BLE001
+            logger.warning("archive_metrics: count(%s) failed: %s", table, exc)
+            return None
+
+    cursors: List[Dict[str, Any]] = []
+    try:
+        cursors = (
+            supabase.table("backfill_cursors")
+            .select("source,cursor_kind,cursor_value,rows_ingested,last_run_at")
+            .order("last_run_at", desc=True)
+            .limit(50)
+            .execute()
+        ).data or []
+    except Exception as exc:  # noqa: BLE001
+        logger.warning("archive_metrics: cursor read failed: %s", exc)
+
+    oldest = _edge(order_desc=False)
+    newest = _edge(order_desc=True)
+
+    # An empty cursor table with a populated archive is the signature of a
+    # forward-only pipeline — which is exactly the state this endpoint was
+    # added to make visible.
+    backfill_started = bool(cursors)
+
+    return {
+        "documents": _count("raw_documents"),
+        "entity_mentions": _count("entity_mentions"),
+        "sentiment_scores": _count("sentiment_scores"),
+        "oldest_document": oldest,
+        "newest_document": newest,
+        "backfill_started": backfill_started,
+        "cursors": cursors,
+        "checked_at": datetime.now(timezone.utc).isoformat(),
+    }
