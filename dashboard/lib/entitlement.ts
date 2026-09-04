@@ -7,9 +7,14 @@ const API_URL =
 export async function fetchTier(jwt: string): Promise<string> {
   if (!jwt) return "free_trial";
   try {
+    // Bounded: this runs on every /account render, and an unbounded fetch
+    // here hangs the whole Vercel invocation rather than falling through to
+    // the free_trial default below. The catch cannot save us — a request that
+    // never settles never rejects.
     const res = await fetch(`${API_URL}/api/subscriptions/entitlement`, {
       headers: { Authorization: `Bearer ${jwt}` },
       cache: "no-store",
+      signal: AbortSignal.timeout(6_000),
     });
     if (!res.ok) return "free_trial";
     const data = (await res.json()) as { tier?: string };

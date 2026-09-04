@@ -11,12 +11,47 @@ type KeyRow = {
 
 type CreateKeyResponse = KeyRow & { key: string };
 
+
+// Vercel kills a serverless invocation at its wall-clock limit. A `fetch`
+// with no timeout does not fail — it hangs, and takes the whole function down
+// with it, which surfaces to the user as:
+//
+//     504: GATEWAY_TIMEOUT  /  FUNCTION_INVOCATION_TIMEOUT
+//
+// A try/catch does not help here: a request that never settles never rejects,
+// so the catch never runs. The only thing that bounds it is an abort signal.
+//
+// 8s is chosen against observed backend latency (~0.5-0.9s for /health and
+// /v1) with generous headroom for a cold Railway container, while still
+// leaving room inside Vercel's limit to render an error rather than be killed.
+const UPSTREAM_TIMEOUT_MS = 8_000;
+
+export class UpstreamTimeoutError extends Error {
+  constructor(path: string) {
+    super(
+      `The Integra API did not respond within ${UPSTREAM_TIMEOUT_MS / 1000}s (${path}).`
+    );
+    this.name = "UpstreamTimeoutError";
+  }
+}
+
 async function call<T>(path: string, init: RequestInit = {}): Promise<T> {
-  const res = await fetch(`${API_BASE}${path}`, {
-    ...init,
-    headers: { "Content-Type": "application/json", ...(init.headers ?? {}) },
-    cache: "no-store",
-  });
+  let res: Response;
+  try {
+    res = await fetch(`${API_BASE}${path}`, {
+      ...init,
+      headers: { "Content-Type": "application/json", ...(init.headers ?? {}) },
+      cache: "no-store",
+      signal: AbortSignal.timeout(UPSTREAM_TIMEOUT_MS),
+    });
+  } catch (err) {
+    // AbortSignal.timeout rejects with a TimeoutError DOMException. Translate
+    // it so the page shows "the API is slow" instead of a bare "aborted".
+    if (err instanceof Error && (err.name === "TimeoutError" || err.name === "AbortError")) {
+      throw new UpstreamTimeoutError(path);
+    }
+    throw err;
+  }
   if (!res.ok) {
     const body = await res.text();
     throw new Error(`${res.status} ${body || res.statusText}`);
