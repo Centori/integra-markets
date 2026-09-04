@@ -1,5 +1,6 @@
 from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
+import logging
 import os
 from pathlib import Path
 from dotenv import load_dotenv
@@ -151,6 +152,8 @@ except ImportError:
     outcome_evaluator_available = False
 
 _outcome_evaluator: Optional["OutcomeEvaluator"] = None
+
+logger = logging.getLogger(__name__)
 
 app = FastAPI(title="Integra AI Backend", description="Financial AI Analysis API")
 
@@ -304,6 +307,92 @@ app.add_middleware(
     allow_headers=["Authorization", "Content-Type", "X-Requested-With", "Accept"],
     max_age=86400,
 )
+
+# ---------------------------------------------------------------------------
+# Request identity + a machine-readable error envelope.
+#
+# Registered AFTER CORSMiddleware so it runs INSIDE it: Starlette applies
+# middleware in reverse order of registration, so CORS stays outermost and its
+# headers land on error responses too. Getting this backwards produces the
+# classic "the error is invisible in the browser because it has no CORS
+# headers" bug.
+#
+# See services/api_errors.py for why both halves ship together.
+# ---------------------------------------------------------------------------
+try:
+    from fastapi import Request as _Request
+    from fastapi.exceptions import RequestValidationError as _ValidationError
+    from fastapi.responses import JSONResponse as _JSONResponse
+    from starlette.exceptions import HTTPException as _StarletteHTTPException
+
+    from services.api_errors import (
+        REQUEST_ID_HEADER,
+        error_body,
+        new_request_id,
+        set_request_id,
+    )
+
+    @app.middleware("http")
+    async def _request_id_middleware(request: _Request, call_next):
+        # Honour a caller-supplied id so a client can correlate its own logs
+        # with ours, but never trust it into a log line unbounded — an
+        # attacker-controlled header should not be able to write 10 KB of
+        # forged context into our logs.
+        incoming = (request.headers.get(REQUEST_ID_HEADER) or "").strip()
+        rid = incoming[:64] if incoming else new_request_id()
+        set_request_id(rid)
+        request.state.request_id = rid
+
+        try:
+            response = await call_next(request)
+        except Exception:
+            # The 500 handler below builds the body; it needs the id, which the
+            # ContextVar still holds. Re-raise so that handler runs.
+            logger.exception("unhandled error [%s] %s %s", rid, request.method, request.url.path)
+            raise
+
+        response.headers[REQUEST_ID_HEADER] = rid
+        return response
+
+    @app.exception_handler(_StarletteHTTPException)
+    async def _http_exception_handler(request: _Request, exc: _StarletteHTTPException):
+        rid = getattr(request.state, "request_id", None)
+        return _JSONResponse(
+            status_code=exc.status_code,
+            content=error_body(exc.status_code, exc.detail, request_id=rid),
+            # Preserve headers the raiser set — Retry-After and the
+            # X-RateLimit-* family arrive on the 429 this way.
+            headers={**(exc.headers or {}), REQUEST_ID_HEADER: rid or ""},
+        )
+
+    @app.exception_handler(_ValidationError)
+    async def _validation_exception_handler(request: _Request, exc: _ValidationError):
+        rid = getattr(request.state, "request_id", None)
+        return _JSONResponse(
+            status_code=422,
+            content=error_body(422, exc.errors(), request_id=rid),
+            headers={REQUEST_ID_HEADER: rid or ""},
+        )
+
+    @app.exception_handler(Exception)
+    async def _unhandled_exception_handler(request: _Request, exc: Exception):
+        # Never leak an internal message or traceback to the caller. The id is
+        # the bridge: they quote it, we grep it in the logged exception above.
+        rid = getattr(request.state, "request_id", None)
+        return _JSONResponse(
+            status_code=500,
+            content=error_body(
+                500,
+                "an internal error occurred; quote the request id when reporting it",
+                request_id=rid,
+            ),
+            headers={REQUEST_ID_HEADER: rid or ""},
+        )
+
+except ImportError as _err_exc:  # pragma: no cover - API degrades, does not die
+    logging.getLogger(__name__).warning(
+        "error envelope unavailable, falling back to FastAPI defaults: %s", _err_exc
+    )
 
 # Get Supabase URL and Key from environment variables.
 # Prefer SUPABASE_SERVICE_ROLE_KEY for backend writes — the archive
