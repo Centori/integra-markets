@@ -91,12 +91,12 @@ export default async function ApiTierPage({
         <ul className="mt-4 space-y-2 text-sm text-text-secondary">
           <li>
             <span className="text-text-primary">•</span> Full REST access:{" "}
-            <code className="text-accent-primary">/v1/news</code>,{" "}
             <code className="text-accent-primary">/v1/sentiment</code>,{" "}
-            <code className="text-accent-primary">/v1/markets/divergence</code>
+            <code className="text-accent-primary">/v1/markets/divergence</code>,{" "}
+            <code className="text-accent-primary">/v1/brief</code>
           </li>
           <li>
-            <span className="text-text-primary">•</span> 100k requests / month, 100 req/sec burst
+            <span className="text-text-primary">•</span> 50,000 requests / month
           </li>
           <li>
             <span className="text-text-primary">•</span> Full historical sentiment archive back to launch
