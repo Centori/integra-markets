@@ -232,7 +232,28 @@ def _xlsx_bytes(rows: Iterator[Dict[str, Any]]) -> bytes:
     return out.getvalue()
 
 
-@router.get("/sentiment")
+# The declared responses matter: this route returns a StreamingResponse of CSV
+# or XLSX, but FastAPI cannot infer that from the signature and defaults to
+# `application/json` with an empty schema. The SDK generator believed it, so a
+# generated client would hand a CSV stream to a JSON decoder.
+@router.get(
+    "/sentiment",
+    # response_class suppresses FastAPI's default `application/json` entry —
+    # `responses=` alone MERGES with it rather than replacing, leaving an empty
+    # JSON schema alongside the real ones for the generator to believe.
+    response_class=StreamingResponse,
+    responses={
+        200: {
+            "description": "Scored sentiment rows as a file download.",
+            "content": {
+                "text/csv": {"schema": {"type": "string", "format": "binary"}},
+                "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet": {
+                    "schema": {"type": "string", "format": "binary"}
+                },
+            },
+        }
+    },
+)
 async def export_sentiment(
     commodity: str = Query(..., description="Commodity or topic key, e.g. crude_oil"),
     from_: Optional[str] = Query(default=None, alias="from", description="ISO 8601 UTC"),
