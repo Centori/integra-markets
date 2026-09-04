@@ -1,5 +1,7 @@
 from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.openapi.utils import get_openapi
+import logging
 import os
 from pathlib import Path
 from dotenv import load_dotenv
@@ -153,6 +155,20 @@ except ImportError:
 _outcome_evaluator: Optional["OutcomeEvaluator"] = None
 
 app = FastAPI(title="Integra AI Backend", description="Financial AI Analysis API")
+
+
+# Declare the public API's auth scheme in the published spec. Without it every
+# /v1 operation generates into an SDK that cannot authenticate -- see
+# services/openapi_security.py for why this is post-processing rather than a
+# swap to fastapi.security.HTTPBearer.
+try:
+    from services.openapi_security import build_schema as _build_openapi_schema
+
+    app.openapi = lambda: _build_openapi_schema(app, get_openapi)
+except ImportError as _sec_exc:  # pragma: no cover - spec degrades, API does not
+    logging.getLogger(__name__).warning(
+        "openapi security scheme unavailable, spec will omit it: %s", _sec_exc
+    )
 
 # Lifespan events
 @app.on_event("startup")
