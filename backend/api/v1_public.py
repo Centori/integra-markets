@@ -20,6 +20,7 @@ from typing import Any, Dict, List, Optional
 from fastapi import APIRouter, Depends, HTTPException, Query
 
 from services.api_key_auth import verify_api_key
+from services.pagination import fetch_all
 from services.tier_enforcement import (
     can_query_historical,
     clamp_hours_back,
@@ -90,8 +91,16 @@ async def sentiment(
     commodity_lc = commodity.strip().lower()
     since = (dt.datetime.now(dt.timezone.utc) - dt.timedelta(hours=hours)).isoformat()
 
-    try:
-        rows = (
+    # Paged to exhaustion rather than capped at 1000.
+    #
+    # `avg` below is the mean of whatever this returns. With a fixed .limit()
+    # that made it the mean of the most recent N rows — a biased sample, not a
+    # random one — while articles_analyzed reported the sample size as though
+    # it were the population. The answer looked complete, was wrong, and got
+    # more wrong the longer the window, which is exactly backwards for a
+    # product sold on historical context.
+    def _page(start: int, end: int):
+        return (
             supabase.table("entity_mentions")
             # headline/source/url are NOT columns on entity_mentions. Selecting
             # them directly errored, the except below swallowed it, and this
@@ -105,9 +114,11 @@ async def sentiment(
             .eq("entity", commodity_lc)
             .gte("published_at", since)
             .order("published_at", desc=True)
-            .limit(1000)
-            .execute()
-        ).data or []
+            .range(start, end)
+        )
+
+    try:
+        rows, truncated = fetch_all(_page)
     except Exception as exc:  # noqa: BLE001
         # Loud, and fail the request. Returning [] here is what let a schema
         # error masquerade as "no news about this commodity" for months.
@@ -147,6 +158,11 @@ async def sentiment(
         "score": avg,
         "label": _label_for(avg),
         "articles_analyzed": len(scores),
+        # True when the row ceiling stopped the read, so `score` is a mean over
+        # a subset. Reported rather than hidden: a capped aggregate presented
+        # as a total is indistinguishable from a correct one, and that is the
+        # failure this endpoint used to have silently.
+        "truncated": truncated,
         "updated_at": dt.datetime.now(dt.timezone.utc).isoformat(),
         "top_drivers": top,
     }
