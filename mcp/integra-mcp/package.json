@@ -2,16 +2,39 @@
   "name": "@integra/mcp",
   "version": "0.2.0",
   "description": "Integra Markets MCP server \u2014 commodity sentiment, prediction-market divergence, and narrative intelligence. stdio for Claude Desktop/Code; Streamable HTTP for remote clients.",
+  "license": "MIT",
+  "author": "Integra Markets",
+  "homepage": "https://integramarkets.app",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/Centori/integra-markets.git",
+    "directory": "mcp/integra-mcp"
+  },
+  "keywords": [
+    "mcp",
+    "claude",
+    "integra",
+    "commodities",
+    "sentiment",
+    "prediction-markets"
+  ],
   "type": "module",
   "bin": {
     "integra-mcp": "dist/index.js",
     "integra-mcp-http": "dist/http.js"
   },
   "main": "dist/index.js",
+  "types": "dist/index.d.ts",
   "files": [
     "dist",
     "README.md"
   ],
+  "publishConfig": {
+    "access": "public"
+  },
+  "engines": {
+    "node": ">=18"
+  },
   "scripts": {
     "build": "tsc",
     "dev": "tsc --watch",
@@ -26,24 +49,5 @@
   "devDependencies": {
     "@types/node": "^22.10.0",
     "typescript": "^5.7.2"
-  },
-  "engines": {
-    "node": ">=18"
-  },
-  "keywords": [
-    "mcp",
-    "claude",
-    "integra",
-    "commodities",
-    "sentiment",
-    "prediction-markets"
-  ],
-  "license": "UNLICENSED",
-  "author": "Integra Markets",
-  "homepage": "https://integramarkets.app",
-  "repository": {
-    "type": "git",
-    "url": "https://github.com/Centori/integra-markets.git",
-    "directory": "mcp/integra-mcp"
   }
 }

@@ -23,7 +23,7 @@ Claude will call the Integra API on your behalf and return structured answers.
 ### Claude Code
 
 ```bash
-claude mcp add integra --env INTEGRA_API_KEY=intg_your_key_here -- npx -y @integra/mcp
+claude mcp add integra --env INTEGRA_API_KEY=ik_live_your_key_here -- npx -y @integra/mcp
 ```
 
 ### Claude Desktop
@@ -37,7 +37,7 @@ Add to `~/Library/Application Support/Claude/claude_desktop_config.json` (macOS)
       "command": "npx",
       "args": ["-y", "@integra/mcp"],
       "env": {
-        "INTEGRA_API_KEY": "intg_your_key_here"
+        "INTEGRA_API_KEY": "ik_live_your_key_here"
       }
     }
   }
