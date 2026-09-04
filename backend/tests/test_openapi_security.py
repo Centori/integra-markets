@@ -61,17 +61,17 @@ class TestSecurityScheme:
     def test_scheme_is_declared(self):
         s = _schema()
         schemes = s["components"]["securitySchemes"]
-        assert "ApiKeyBearer" in schemes
-        assert schemes["ApiKeyBearer"]["type"] == "http"
-        assert schemes["ApiKeyBearer"]["scheme"] == "bearer"
+        assert "ApiKeyAuth" in schemes
+        assert schemes["ApiKeyAuth"]["type"] == "http"
+        assert schemes["ApiKeyAuth"]["scheme"] == "bearer"
 
     def test_scheme_documents_where_to_get_a_key(self):
-        desc = _schema()["components"]["securitySchemes"]["ApiKeyBearer"]["description"]
+        desc = _schema()["components"]["securitySchemes"]["ApiKeyAuth"]["description"]
         assert "Authorization" in desc and "Bearer" in desc
 
     def test_public_v1_operations_require_it(self):
         op = _schema()["paths"]["/v1/thing"]["get"]
-        assert op.get("security") == [{"ApiKeyBearer": []}]
+        assert op.get("security") == [{"ApiKeyAuth": []}]
 
     def test_health_is_not_marked_authenticated(self):
         """A document-level security block would break unauthenticated clients."""
@@ -89,7 +89,7 @@ class TestSecurityScheme:
         """Ten of the fourteen live /v1 operations do not carry the public-v1
         tag. Matching on tag alone documented them as needing no key."""
         assert _schema()["paths"][path]["get"].get("security") == [
-            {"ApiKeyBearer": []}
+            {"ApiKeyAuth": []}
         ]
 
     def test_every_v1_path_is_secured(self):

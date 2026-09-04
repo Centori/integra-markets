@@ -32,18 +32,22 @@ logger = logging.getLogger(__name__)
 PUBLIC_API_TAG = "public-v1"
 PUBLIC_API_PREFIX = "/v1/"
 
-SECURITY_SCHEME_NAME = "ApiKeyBearer"
+# Must match scripts/build_openapi_spec.py, which declares the same scheme on
+# the filtered customer-facing spec and is what both SDKs were generated from.
+# Two names for one scheme would produce clients that disagree about which
+# credential they are sending.
+SECURITY_SCHEME_NAME = "ApiKeyAuth"
 
 SECURITY_SCHEMES: Dict[str, Dict[str, Any]] = {
     SECURITY_SCHEME_NAME: {
         "type": "http",
         "scheme": "bearer",
         "description": (
-            "Integra API key, sent as `Authorization: Bearer <key>`. Keys are "
-            "issued per account and carry the scopes of the subscription that "
-            "created them; a request with a valid key but no active entitlement "
-            "receives 403 rather than 401. Manage keys at "
-            "https://dashboard.integramarkets.app/account/api"
+            "An Integra API key, e.g. ik_live_..., sent as "
+            "`Authorization: Bearer <key>`. Keys carry the scopes of the "
+            "subscription that created them, resolved live per request; a valid "
+            "key with no active entitlement receives 403 rather than 401. "
+            "Manage keys at https://dashboard.integramarkets.app/account/api"
         ),
     }
 }
