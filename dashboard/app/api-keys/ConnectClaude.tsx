@@ -2,22 +2,29 @@
 
 import { useState } from "react";
 
-// These instructions used to run `npx -y @integra/mcp`. That package is NOT
-// published to npm, so the command failed for every user who copied it. Until
-// it is published, the working path is a local build — verified end to end
-// against the live API.
-const CLAUDE_CODE_CMD = `git clone https://github.com/Centori/integra-markets.git
-cd integra-markets/mcp/integra-mcp && npm install && npm run build
-
-claude mcp add integra \\
+// Back to npx, now that @integra/mcp is published.
+//
+// The previous instructions told every customer to `git clone` the whole
+// repository — backend, scripts, migrations and all — to obtain one 8.5 kB
+// connector. That was a deliberate stopgap while the package was unpublished,
+// but it handed the entire codebase to anyone who bought an API key, and it
+// asked them to run a build before they could make their first call.
+//
+// The published tarball contains dist/ and README.md only: 11 files, 8.5 kB.
+// No source, no repository.
+//
+// ORDERING: this file must not ship before `npm publish` succeeds. Until the
+// package resolves, `npx -y @integra/mcp` fails for every reader — which is
+// the exact failure the git-clone stopgap existed to avoid.
+const CLAUDE_CODE_CMD = `claude mcp add integra \\
   --env INTEGRA_API_KEY=ik_live_your_key_here \\
-  -- node $(pwd)/dist/index.js`;
+  -- npx -y @integra/mcp`;
 
 const CLAUDE_DESKTOP_JSON = `{
   "mcpServers": {
     "integra": {
-      "command": "node",
-      "args": ["/absolute/path/to/integra-markets/mcp/integra-mcp/dist/index.js"],
+      "command": "npx",
+      "args": ["-y", "@integra/mcp"],
       "env": {
         "INTEGRA_API_KEY": "ik_live_your_key_here"
       }
