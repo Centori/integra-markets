@@ -1,4 +1,4 @@
-# Handoff — 2026-09-02
+# Handoff — 2026-09-04  (§9 is this session; §0–8 are from 2026-09-02)
 
 > Supersedes the 2026-08-23 handoff. Sections 3 onward are carried forward from
 > it unchanged where still true. Findings that turned out to be wrong are called
@@ -230,3 +230,84 @@ is not repeated.
 
 Engine walkthrough (flowchart + annotated code):
 https://claude.ai/code/artifact/e836bb7e-32c3-4cb1-9c6d-c11731d60495
+
+---
+
+## 9. Session 2026-09-04 — the fixes existed; nobody merged them
+
+`/account/api` was diagnosed, fixed, and reported fixed on 25 Aug. It stayed
+blank for nine more days because **PR #62 and #64 were opened and never merged.**
+
+Production last deployed **2 Sep 19:24**, minutes after #59. The ~9 Vercel
+deploys in the hours before this session were all **Preview** builds from PR
+branches — the fix was live on preview URLs and nowhere else.
+
+**A PR is not a deploy.** Before reporting anything as fixed in production:
+
+```bash
+git ls-tree origin/main <path>                 # is the file actually on main?
+vercel ls integra-dashboard --scope team_...   # did a *Production* row appear?
+```
+
+Second trap, same bug: an anonymous request to `/account/api` returns 200 and
+redirects to `/login` correctly even when the page is completely broken. The
+failure only appears **once signed in**. Never conclude from an anon `curl` that
+the page is healthy.
+
+### Shipped 4 Sep 09:12
+
+| PR | Fix |
+|---|---|
+| #62 | Blank `/account/*`. Two independent faults: `dashboard/` had **no `middleware.ts`** (only `web/src/` did), so nothing refreshed the Supabase session on a server request; and `supabase-server.ts` called `store.set()` unguarded, which **throws** in a Server Component and takes the whole page down instead of redirecting. |
+| #64 | `504 FUNCTION_INVOCATION_TIMEOUT`. Three unbounded server `fetch()` calls. A request that never settles never rejects, so try/catch cannot save it — only `AbortSignal.timeout()`. Budgets 8s / 6s / 15s, sized against measured backend latency of 0.87s on `/health`. |
+
+The new middleware reads the same two env vars (`NEXT_PUBLIC_SUPABASE_URL`,
+`NEXT_PUBLIC_SUPABASE_ANON_KEY`) that the shipped code already read, so it added
+no new environment dependency — that was checked before merging, because a
+middleware that throws takes down every route, not one page.
+
+### Open PRs — do not merge blind
+
+| PR | State |
+|---|---|
+| #68 | MCP npm prep. **Must not deploy before `npm publish` runs.** It switches the install instruction to `npx -y @integra/mcp`, which 404s for every reader until that package exists. Unverified: whether the `@integra` npm **org** exists (scope has 0 published packages; needs an authenticated check). Fallback `@integra-markets/mcp` — 3 files, documented in `mcp/integra-mcp/PUBLISHING.md`. |
+| #67 | Docs: six claims the API does not honour. |
+| #66 | Aggregate over the whole window, not the first page. The current cap can **invert the sign** — a sample reading +0.9 where the true window is −0.1. |
+| #65 | Request ids + machine-readable error envelope. `detail` preserved for the mobile app, dashboard and both SDKs. |
+| #61 | Handoff entry for the 25 Aug audit session. |
+| #60 | Archive backfill scheduling. |
+
+### Pick up here
+
+1. **Confirm `/account/api` renders while signed in.** If it renders but shows
+   the wrong tier or an empty key list, that is the entitlement call, a
+   *separate* bug from #62 — do not reopen #62 for it.
+2. **Publish the MCP, then merge #68 — in that order.** `npm publish`, verify
+   `npx -y @integra/mcp` starts from a clean directory, then merge. Reversing
+   this breaks the install instructions for everyone.
+3. **Then the SDK-off-GitHub question.** `@integra-markets/sdk` still carries
+   generator placeholders (`author: "OpenAPI-Generator"`, repo
+   `GIT_USER_ID/GIT_REPO_ID`), so it is not publishable as-is either. **Delete
+   nothing from `sdk/` before mapping what references it** —
+   `scripts/build_openapi_spec.py` and the regeneration workflow both do. The
+   ask was to get the docs off GitHub without collateral deletion.
+4. **Remaining readiness items:** SDK user agent (still
+   `OpenAPI-Generator/1.0.0/python`) + retries + a server-only note;
+   **idempotency keys, which must land before retries default on**; versioning
+   policy, changelog, status page.
+
+### Standing constraints — these are settled decisions, not open questions
+
+- **No docs hosted on GitHub.**
+- **Keep the bespoke `dashboard/app/docs/page.tsx` styling.** Mintlify was
+  evaluated and **declined** (#63 closed): it publishes a second docs site in
+  its own theme, losing the styling. The file's own header already recorded that
+  deferral before it was re-proposed.
+- Customers must never be told to clone the repo to get a connector.
+
+### Still true from earlier sessions
+
+`services/divergence.py:145` reads `score` (a confidence magnitude ~[0.5, 0.96])
+where it needs `sentiment_score` (signed −1..+1). The news side of every
+divergence is therefore **structurally non-negative and can never read bearish**.
+This is the last piece of the signed-score migration that #52 and #58 began.
