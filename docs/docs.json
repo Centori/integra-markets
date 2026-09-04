@@ -20,29 +20,58 @@
         "groups": [
           {
             "group": "Get started",
-            "pages": ["quickstart", "quickstart-beta", "authentication"]
+            "pages": [
+              "quickstart",
+              "quickstart-beta",
+              "authentication"
+            ]
           },
           {
             "group": "Concepts",
-            "pages": ["pricing", "limits"]
+            "pages": [
+              "pricing",
+              "limits"
+            ]
           }
         ]
       },
       {
         "tab": "API reference",
+        "openapi": "https://api.integramarkets.app/openapi.json",
         "groups": [
           {
             "group": "Sentiment",
             "pages": [
-              "api-reference/sentiment-analyze",
-              "api-reference/sentiment-market"
+              "GET /v1/sentiment",
+              "GET /v1/sentiment/{commodity}/now",
+              "GET /v1/sentiment/{commodity}/history",
+              "GET /v1/sentiment/{commodity}/daily",
+              "GET /v1/export/sentiment"
             ]
           },
           {
-            "group": "Prediction markets",
+            "group": "Markets & divergence",
             "pages": [
-              "api-reference/prediction-market/connectors",
-              "api-reference/prediction-market/sentiment"
+              "GET /v1/markets/divergence",
+              "GET /v1/markets/divergence/{topic}",
+              "GET /v1/markets/overlay",
+              "GET /v1/topics"
+            ]
+          },
+          {
+            "group": "Research",
+            "pages": [
+              "GET /v1/brief",
+              "GET /v1/narratives",
+              "GET /v1/commodities",
+              "GET /v1/historical/analogs"
+            ]
+          },
+          {
+            "group": "Agent",
+            "pages": [
+              "GET /v1/agent/templates",
+              "POST /v1/agent/ask"
             ]
           },
           {
@@ -60,7 +89,10 @@
         "groups": [
           {
             "group": "Clients",
-            "pages": ["sdks/python", "sdks/typescript"]
+            "pages": [
+              "sdks/python",
+              "sdks/typescript"
+            ]
           }
         ]
       },
@@ -83,13 +115,13 @@
     "links": [
       {
         "label": "Dashboard",
-        "href": "https://www.integramarkets.app/dashboard"
+        "href": "https://dashboard.integramarkets.app/account/api"
       }
     ],
     "primary": {
       "type": "button",
       "label": "Get API key",
-      "href": "https://www.integramarkets.app/dashboard/api-keys"
+      "href": "https://dashboard.integramarkets.app/account/api"
     }
   },
   "footer": {
@@ -97,7 +129,10 @@
       {
         "header": "Support",
         "items": [
-          { "label": "Contact", "href": "mailto:contact@integramarkets.app" }
+          {
+            "label": "Contact",
+            "href": "mailto:contact@integramarkets.app"
+          }
         ]
       }
     ]
