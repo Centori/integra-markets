@@ -4,10 +4,20 @@ import { useState } from "react";
 import { useSearchParams } from "next/navigation";
 import { browserClient } from "@/lib/supabase";
 
-// Web Apple sign-in needs a Services ID configured in Supabase (separate from
-// the iOS App ID). Flip NEXT_PUBLIC_ENABLE_APPLE_AUTH=1 in Vercel once that
-// exists — no code change needed.
-const APPLE_ENABLED = process.env.NEXT_PUBLIC_ENABLE_APPLE_AUTH === "1";
+// Apple sign-in, enabled. It sat behind NEXT_PUBLIC_ENABLE_APPLE_AUTH, which
+// was never set on the integra-dashboard Vercel project — so the dashboard
+// offered only Google and a magic link, while www.integramarkets.app/login
+// offered Apple, Google AND email/password. Anyone who created their account
+// with Apple could not reach their own API keys at all.
+//
+// Verified against production 2026-09-02, using the DASHBOARD's own callback:
+//   GET /auth/v1/authorize?provider=apple&redirect_to=<dashboard>  -> 302
+//   GET /auth/v1/authorize?provider=google&redirect_to=<dashboard> -> 302
+// which proves both that the Services ID exists and that this callback is in
+// Supabase's redirect allowlist. Apple redirects to Supabase's own
+// /auth/v1/callback, never to this host, so Apple's return-URL list is not
+// involved beyond what already works.
+const APPLE_ENABLED = process.env.NEXT_PUBLIC_ENABLE_APPLE_AUTH !== "0";
 
 function GoogleIcon() {
   return (

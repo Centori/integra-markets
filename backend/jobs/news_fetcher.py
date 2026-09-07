@@ -100,8 +100,16 @@ def _score(articles: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
             extract_commodity_tickers,
             extract_keywords,
             normalize_commodity,
-            vader_analyzer,
         )
+        # NOT `vader_analyzer` — that global is None at import time and only
+        # assigned inside FastAPI's lifespan(). This job runs in the scheduler
+        # process, so the from-import copied None, `if vader_analyzer:` failed,
+        # and every LIVE article was scored by a 20-word keyword list. Same bug
+        # as jobs/archive_scorer.py; this one was corrupting new data, not just
+        # the backfill.
+        from services.sentiment_engine import get_analyzer
+
+        vader_analyzer = get_analyzer()
     except ImportError as exc:
         logger.warning("news_fetcher: sentiment functions not importable: %s", exc)
         # Return articles unscored — archive_writer will skip sentiment rows.

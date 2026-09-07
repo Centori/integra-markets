@@ -16,9 +16,16 @@ jobs:
   frontend:
     name: Lint + Jest
     runs-on: ubuntu-latest
-    defaults:
-      run:
-        working-directory: app
+    # The mobile package lives at the repo ROOT — package.json, jest.config.js
+    # and node_modules are all there. `app/` holds only the RN source tree
+    # (App.js, components/, services/) and has no package.json of its own, so
+    # this job failed with ENOENT on every pull request regardless of content:
+    #
+    #   npm error path /home/runner/work/.../app/package.json
+    #   npm error enoent Could not read package.json
+    #
+    # A check that is red on every PR stops being a signal, so this had the
+    # same practical effect as having no frontend CI at all.
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4

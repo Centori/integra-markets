@@ -110,10 +110,10 @@ async def sentiment_now(
     try:
         rows = (
             supabase.table("entity_mentions")
-            .select("score, sentiment, extracted_at")
+            .select("sentiment_score, sentiment, published_at")
             .eq("entity", commodity_lc)
-            .gte("extracted_at", since)
-            .order("extracted_at", desc=True)
+            .gte("published_at", since)
+            .order("published_at", desc=True)
             .limit(500)
             .execute()
         ).data or []
@@ -124,15 +124,18 @@ async def sentiment_now(
     if not rows:
         raise HTTPException(status_code=404, detail=f"no data for commodity '{commodity_lc}' in last 24h")
 
-    scores = [r["score"] for r in rows if r.get("score") is not None]
+    # sentiment_score (signed), NOT score (a confidence magnitude). Averaging
+    # `score` produced a number that rose as the news got worse: bearish rows
+    # average HIGHER than bullish ones.
+    scores = [r["sentiment_score"] for r in rows if r.get("sentiment_score") is not None]
     avg = round(statistics.fmean(scores), 4) if scores else None
     latest = rows[0]
     return {
         "commodity": commodity_lc,
         "latest": {
             "sentiment": latest.get("sentiment"),
-            "score": latest.get("score"),
-            "observed_at": latest.get("extracted_at"),
+            "score": latest.get("sentiment_score"),
+            "observed_at": latest.get("published_at"),
         },
         "rolling_24h": {
             "avg_score": avg,
@@ -167,11 +170,11 @@ async def sentiment_history(
     try:
         rows = (
             supabase.table("entity_mentions")
-            .select("document_id, sentiment, score, confidence, extracted_at")
+            .select("document_id, sentiment, sentiment_score, confidence, published_at")
             .eq("entity", commodity_lc)
-            .gte("extracted_at", start.isoformat())
-            .lte("extracted_at", end.isoformat())
-            .order("extracted_at", desc=True)
+            .gte("published_at", start.isoformat())
+            .lte("published_at", end.isoformat())
+            .order("published_at", desc=True)
             .limit(limit)
             .execute()
         ).data or []
@@ -207,10 +210,10 @@ async def sentiment_daily(
     try:
         rows = (
             supabase.table("entity_mentions")
-            .select("sentiment, score, extracted_at")
+            .select("sentiment, sentiment_score, published_at")
             .eq("entity", commodity_lc)
-            .gte("extracted_at", start.isoformat())
-            .lte("extracted_at", end.isoformat())
+            .gte("published_at", start.isoformat())
+            .lte("published_at", end.isoformat())
             .limit(50000)
             .execute()
         ).data or []
@@ -221,7 +224,7 @@ async def sentiment_daily(
     # Bucket by UTC date.
     buckets: Dict[str, List[Dict[str, Any]]] = {}
     for r in rows:
-        observed = r.get("extracted_at")
+        observed = r.get("published_at")
         if not observed:
             continue
         try:
@@ -235,7 +238,7 @@ async def sentiment_daily(
     prev_avg: Optional[float] = None
     for date_key in sorted_dates:
         bucket = buckets[date_key]
-        scores = [b["score"] for b in bucket if b.get("score") is not None]
+        scores = [b["sentiment_score"] for b in bucket if b.get("sentiment_score") is not None]
         avg = round(statistics.fmean(scores), 4) if scores else None
         momentum = round(avg - prev_avg, 4) if (avg is not None and prev_avg is not None) else None
         series.append({

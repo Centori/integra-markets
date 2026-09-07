@@ -1,4 +1,4 @@
-# @integra-markets/sdk@0.1.0
+# @integra-markets/sdk@1.0.0
 
 A TypeScript SDK client for the api.integramarkets.app API.
 
@@ -16,21 +16,27 @@ Next, try it out.
 ```ts
 import {
   Configuration,
-  ApiKeysApi,
+  AgentApi,
 } from '@integra-markets/sdk';
-import type { CreateKeyApiKeysPostRequest } from '@integra-markets/sdk';
+import type { AskAgentRequest } from '@integra-markets/sdk';
 
 async function example() {
   console.log("🚀 Testing @integra-markets/sdk SDK...");
-  const api = new ApiKeysApi();
+  const config = new Configuration({ 
+    // Configure HTTP bearer authorization: ApiKeyAuth
+    accessToken: "YOUR BEARER TOKEN",
+  });
+  const api = new AgentApi(config);
 
   const body = {
-    // CreateKeyRequest
-    createKeyRequest: ...,
-  } satisfies CreateKeyApiKeysPostRequest;
+    // AskRequest
+    askRequest: ...,
+    // string (optional)
+    authorization: authorization_example,
+  } satisfies AskAgentRequest;
 
   try {
-    const data = await api.createKeyApiKeysPost(body);
+    const data = await api.askAgent(body);
     console.log(data);
   } catch (error) {
     console.error(error);
@@ -50,71 +56,40 @@ All URIs are relative to *https://api.integramarkets.app*
 
 | Class | Method | HTTP request | Description
 | ----- | ------ | ------------ | -------------
-*ApiKeysApi* | [**createKeyApiKeysPost**](docs/ApiKeysApi.md#createkeyapikeyspost) | **POST** /api/keys | Create Key
-*ApiKeysApi* | [**listKeysApiKeysGet**](docs/ApiKeysApi.md#listkeysapikeysget) | **GET** /api/keys | List Keys
-*ApiKeysApi* | [**revokeKeyApiKeysKeyIdDelete**](docs/ApiKeysApi.md#revokekeyapikeyskeyiddelete) | **DELETE** /api/keys/{key_id} | Revoke Key
-*DefaultApi* | [**aiAnalyzeAiAnalyzePost**](docs/DefaultApi.md#aianalyzeaianalyzepost) | **POST** /ai/analyze | Ai Analyze
-*DefaultApi* | [**aiChatAiChatPost**](docs/DefaultApi.md#aichataichatpost) | **POST** /ai/chat | Ai Chat
-*DefaultApi* | [**analyzeNewsApiNewsAnalysisPost**](docs/DefaultApi.md#analyzenewsapinewsanalysispost) | **POST** /api/news/analysis | Analyze News
-*DefaultApi* | [**analyzeSentimentApiSentimentPost**](docs/DefaultApi.md#analyzesentimentapisentimentpost) | **POST** /api/sentiment | Analyze Sentiment
-*DefaultApi* | [**analyzeSentimentLegacyAnalyzeSentimentPost**](docs/DefaultApi.md#analyzesentimentlegacyanalyzesentimentpost) | **POST** /analyze-sentiment | Analyze Sentiment Legacy
-*DefaultApi* | [**comprehensiveAnalysisApiComprehensiveAnalysisPost**](docs/DefaultApi.md#comprehensiveanalysisapicomprehensiveanalysispost) | **POST** /api/comprehensive-analysis | Comprehensive Analysis
-*DefaultApi* | [**createPolymarketConnectorApiPredictionMarketConnectorsPolymarketPost**](docs/DefaultApi.md#createpolymarketconnectorapipredictionmarketconnectorspolymarketpost) | **POST** /api/prediction-market/connectors/polymarket | Create Polymarket Connector
-*DefaultApi* | [**deletePolymarketConnectorApiPredictionMarketConnectorsPolymarketConnectorIdDelete**](docs/DefaultApi.md#deletepolymarketconnectorapipredictionmarketconnectorspolymarketconnectoriddelete) | **DELETE** /api/prediction-market/connectors/polymarket/{connector_id} | Delete Polymarket Connector
-*DefaultApi* | [**explainCommodityLexiconApiLexiconExplainPost**](docs/DefaultApi.md#explaincommoditylexiconapilexiconexplainpost) | **POST** /api/lexicon/explain | Explain Commodity Lexicon
-*DefaultApi* | [**generateAiReportAiReportPost**](docs/DefaultApi.md#generateaireportaireportpost) | **POST** /ai/report | Generate Ai Report
-*DefaultApi* | [**getCommodityLexiconCatalogApiLexiconCommoditiesGet**](docs/DefaultApi.md#getcommoditylexiconcatalogapilexiconcommoditiesget) | **GET** /api/lexicon/commodities | Get Commodity Lexicon Catalog
-*DefaultApi* | [**getCommodityLexiconDetailApiLexiconCommoditiesCommodityGet**](docs/DefaultApi.md#getcommoditylexicondetailapilexiconcommoditiescommodityget) | **GET** /api/lexicon/commodities/{commodity} | Get Commodity Lexicon Detail
-*DefaultApi* | [**getDashboardSentimentEngineApiDashboardSentimentEnginePost**](docs/DefaultApi.md#getdashboardsentimentengineapidashboardsentimentenginepost) | **POST** /api/dashboard/sentiment-engine | Get Dashboard Sentiment Engine
-*DefaultApi* | [**getMarketSentimentApiSentimentMarketGet**](docs/DefaultApi.md#getmarketsentimentapisentimentmarketget) | **GET** /api/sentiment/market | Get Market Sentiment
-*DefaultApi* | [**getModelsStatusApiModelsStatusGet**](docs/DefaultApi.md#getmodelsstatusapimodelsstatusget) | **GET** /api/models/status | Get Models Status
-*DefaultApi* | [**getNewsFeedApiNewsFeedPost**](docs/DefaultApi.md#getnewsfeedapinewsfeedpost) | **POST** /api/news/feed | Get News Feed
-*DefaultApi* | [**getOverallNewsSentimentApiNewsOverallSentimentPost**](docs/DefaultApi.md#getoverallnewssentimentapinewsoverallsentimentpost) | **POST** /api/news/overall-sentiment | Get Overall News Sentiment
-*DefaultApi* | [**getPolymarketConnectorSentimentApiPredictionMarketPolymarketSentimentPost**](docs/DefaultApi.md#getpolymarketconnectorsentimentapipredictionmarketpolymarketsentimentpost) | **POST** /api/prediction-market/polymarket/sentiment | Get Polymarket Connector Sentiment
-*DefaultApi* | [**getTopMoversApiSentimentMoversGet**](docs/DefaultApi.md#gettopmoversapisentimentmoversget) | **GET** /api/sentiment/movers | Get Top Movers
-*DefaultApi* | [**getUserNewsApiUserNewsPost**](docs/DefaultApi.md#getusernewsapiusernewspost) | **POST** /api/user/news | Get User News
-*DefaultApi* | [**getWeatherAlertsApiWeatherAlertsGet**](docs/DefaultApi.md#getweatheralertsapiweatheralertsget) | **GET** /api/weather/alerts | Get Weather Alerts
-*DefaultApi* | [**healthCheckHealthGet**](docs/DefaultApi.md#healthcheckhealthget) | **GET** /health | Health Check
-*DefaultApi* | [**listPolymarketConnectorsApiPredictionMarketConnectorsPolymarketUserIdGet**](docs/DefaultApi.md#listpolymarketconnectorsapipredictionmarketconnectorspolymarketuseridget) | **GET** /api/prediction-market/connectors/polymarket/{user_id} | List Polymarket Connectors
-*DefaultApi* | [**readRootGet**](docs/DefaultApi.md#readrootget) | **GET** / | Read Root
-*DefaultApi* | [**summarizeArticleApiSummarizeArticlePost**](docs/DefaultApi.md#summarizearticleapisummarizearticlepost) | **POST** /api/summarize/article | Summarize Article
-*DefaultApi* | [**testNewsEndpointApiTestNewsGet**](docs/DefaultApi.md#testnewsendpointapitestnewsget) | **GET** /api/test/news | Test News Endpoint
-*DefaultApi* | [**validatePolymarketConnectorApiPredictionMarketConnectorsPolymarketValidatePost**](docs/DefaultApi.md#validatepolymarketconnectorapipredictionmarketconnectorspolymarketvalidatepost) | **POST** /api/prediction-market/connectors/polymarket/validate | Validate Polymarket Connector
+*AgentApi* | [**askAgent**](docs/AgentApi.md#askagent) | **POST** /v1/agent/ask | Ask
+*AgentApi* | [**listAgentTemplates**](docs/AgentApi.md#listagenttemplates) | **GET** /v1/agent/templates | List Templates
+*DivergenceApi* | [**getDivergence**](docs/DivergenceApi.md#getdivergence) | **GET** /v1/markets/divergence | Divergence Batch
+*DivergenceApi* | [**getDivergenceForTopic**](docs/DivergenceApi.md#getdivergencefortopic) | **GET** /v1/markets/divergence/{topic} | Divergence For Topic
+*DivergenceApi* | [**listTopics**](docs/DivergenceApi.md#listtopics) | **GET** /v1/topics | List Topics
+*ExportApi* | [**exportSentiment**](docs/ExportApi.md#exportsentiment) | **GET** /v1/export/sentiment | Export Sentiment
+*PublicV1Api* | [**findHistoricalAnalogs**](docs/PublicV1Api.md#findhistoricalanalogs) | **GET** /v1/historical/analogs | Historical Analogs
+*PublicV1Api* | [**getBrief**](docs/PublicV1Api.md#getbrief) | **GET** /v1/brief | Brief
+*PublicV1Api* | [**getNarratives**](docs/PublicV1Api.md#getnarratives) | **GET** /v1/narratives | Narratives
+*PublicV1Api* | [**getSentiment**](docs/PublicV1Api.md#getsentiment) | **GET** /v1/sentiment | Sentiment
+*SentimentHistoryApi* | [**getMarketOverlay**](docs/SentimentHistoryApi.md#getmarketoverlay) | **GET** /v1/markets/overlay | Markets Overlay
+*SentimentHistoryApi* | [**getSentimentDaily**](docs/SentimentHistoryApi.md#getsentimentdaily) | **GET** /v1/sentiment/{commodity}/daily | Sentiment Daily
+*SentimentHistoryApi* | [**getSentimentHistory**](docs/SentimentHistoryApi.md#getsentimenthistory) | **GET** /v1/sentiment/{commodity}/history | Sentiment History
+*SentimentHistoryApi* | [**getSentimentNow**](docs/SentimentHistoryApi.md#getsentimentnow) | **GET** /v1/sentiment/{commodity}/now | Sentiment Now
+*SentimentHistoryApi* | [**listCommodities**](docs/SentimentHistoryApi.md#listcommodities) | **GET** /v1/commodities | List Commodities
 
 
 ### Models
 
-- [AIAnalysisRequest](docs/AIAnalysisRequest.md)
-- [AIChatRequest](docs/AIChatRequest.md)
-- [ArticleSummarizeRequest](docs/ArticleSummarizeRequest.md)
-- [ComprehensiveAnalysisRequest](docs/ComprehensiveAnalysisRequest.md)
-- [ConnectorCredentialRequest](docs/ConnectorCredentialRequest.md)
-- [CreateKeyRequest](docs/CreateKeyRequest.md)
-- [CreateKeyResponse](docs/CreateKeyResponse.md)
-- [DashboardSentimentEngineRequest](docs/DashboardSentimentEngineRequest.md)
+- [AskRequest](docs/AskRequest.md)
+- [AskResponse](docs/AskResponse.md)
 - [HTTPValidationError](docs/HTTPValidationError.md)
-- [KeyRow](docs/KeyRow.md)
-- [LexiconExplainRequest](docs/LexiconExplainRequest.md)
 - [LocationInner](docs/LocationInner.md)
-- [NewsAnalysisRequest](docs/NewsAnalysisRequest.md)
-- [NewsRequest](docs/NewsRequest.md)
-- [OverallSentimentRequest](docs/OverallSentimentRequest.md)
-- [PolymarketAuthenticationMeta](docs/PolymarketAuthenticationMeta.md)
-- [PolymarketConnectorAuthSummary](docs/PolymarketConnectorAuthSummary.md)
-- [PolymarketConnectorContext](docs/PolymarketConnectorContext.md)
-- [PolymarketConnectorRequest](docs/PolymarketConnectorRequest.md)
-- [PolymarketConnectorValidationRequest](docs/PolymarketConnectorValidationRequest.md)
-- [PolymarketSentimentRequest](docs/PolymarketSentimentRequest.md)
-- [PolymarketSentimentResponse](docs/PolymarketSentimentResponse.md)
-- [SentimentBreakdown](docs/SentimentBreakdown.md)
-- [SentimentRequest](docs/SentimentRequest.md)
-- [UserNewsRequest](docs/UserNewsRequest.md)
 - [ValidationError](docs/ValidationError.md)
 
 ### Authorization
 
-Endpoints do not require authorization.
 
+Authentication schemes defined for the API:
+<a id="ApiKeyAuth"></a>
+#### ApiKeyAuth
+
+
+- **Type**: HTTP Bearer Token authentication
 
 ## About
 
@@ -122,8 +97,8 @@ This TypeScript SDK client supports the [Fetch API](https://fetch.spec.whatwg.or
 and is automatically generated by the
 [OpenAPI Generator](https://openapi-generator.tech) project:
 
-- API version: `0.1.0`
-- Package version: `0.1.0`
+- API version: `1.0.0`
+- Package version: `1.0.0`
 - Generator version: `7.22.0`
 - Build package: `org.openapitools.codegen.languages.TypeScriptFetchClientCodegen`
 

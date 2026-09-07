@@ -117,6 +117,15 @@ try:
 except ImportError:
     market_sentiment_available = False
 
+# Own try/except, not bundled with market_sentiment: sharing one block means a
+# failure in either silently removes BOTH surfaces, and the export endpoint
+# imports xlsxwriter transitively.
+try:
+    from api.export import router as export_router
+    export_available = True
+except ImportError:
+    export_available = False
+
 try:
     from api.kalshi import router as kalshi_router
     kalshi_available = True
@@ -221,6 +230,8 @@ if v1_public_available:
     app.include_router(v1_public_router)
 if market_sentiment_available:
     app.include_router(market_sentiment_router)
+if export_available:
+    app.include_router(export_router)
 
 # Every router above is imported under `except ImportError: <n>_available =
 # False`, which means a typo'd import silently deletes an entire API surface

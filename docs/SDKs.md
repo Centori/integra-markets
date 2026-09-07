@@ -7,7 +7,7 @@ Lightweight SDKs make it easy to ingest and query sentiment. Until packages are 
 from datetime import datetime, timezone
 from integra_sdk.client import IntegraClient, ArticleInput
 
-client = IntegraClient(api_key="sk_live_xxx", base_url="https://api.yourdomain.com")
+client = IntegraClient(api_key="sk_live_xxx", base_url="https://api.integramarkets.app")
 
 # Ingest
 res = client.ingest_articles([
@@ -31,7 +31,7 @@ for r in recent:
 ```ts
 import { IntegraClient } from "@integra/markets-sdk";
 
-const client = new IntegraClient({ apiKey: process.env.INTEGRA_API_KEY!, baseUrl: "https://api.yourdomain.com" });
+const client = new IntegraClient({ apiKey: process.env.INTEGRA_API_KEY!, baseUrl: "https://api.integramarkets.app" });
 
 await client.ingestArticles([{ 
   source: "bloomberg", 

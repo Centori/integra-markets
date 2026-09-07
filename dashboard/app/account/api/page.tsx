@@ -4,11 +4,12 @@
 
 import { redirect } from "next/navigation";
 import { serverClient } from "@/lib/supabase-server";
-import { fetchTier, tierLabel } from "@/lib/entitlement";
+import { fetchTier, isApiTier, tierLabel } from "@/lib/entitlement";
 import { listKeysAction } from "@/app/api-keys/actions";
 import { KeysPanel } from "@/app/api-keys/KeysPanel";
 import { ConnectClaude } from "@/app/api-keys/ConnectClaude";
 import ApiTierPanel from "@/app/api-tier/ApiTierPanel";
+import { TryIt } from "./TryIt";
 import type { KeyRow } from "@/lib/api";
 
 export const dynamic = "force-dynamic";
@@ -25,7 +26,9 @@ export default async function AccountApiPage({
   const { data: sessionData } = await supabase.auth.getSession();
   const jwt = sessionData.session?.access_token ?? "";
   const tier = await fetchTier(jwt);
-  const hasApiTier = tier === "api";
+  // NOT `tier === "api"`. The shipping plan is `api_basic`, so that check
+  // hid the keys panel from every paying customer.
+  const hasApiTier = isApiTier(tier);
 
   let keys: KeyRow[] = [];
   let fetchError: string | null = null;
@@ -99,6 +102,16 @@ export default async function AccountApiPage({
           </div>
         )}
       </section>
+
+      {hasApiTier ? (
+        <section className="space-y-3">
+          <h2 className="text-lg font-semibold">Test the API</h2>
+          <p className="text-text-secondary text-sm">
+            Fire a real request without leaving the dashboard.
+          </p>
+          <TryIt />
+        </section>
+      ) : null}
 
       <section className="space-y-3">
         <h2 className="text-lg font-semibold">Claude MCP connector</h2>
