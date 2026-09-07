@@ -95,6 +95,10 @@ SENTIBIG_SCALE: float = 0.1
 SENTIMENT_THRESHOLD: float = 0.33
 SENTIMENT_BLEND_VADER: float = 0.5  # weight on VADER vs rulebook when rules fire
 SENTIMENT_RULE_COEF: float = 0.22   # per-match increment in analyze_fundamental_direction
+# Independent one-sided rule matches required before the fundamental read
+# DETERMINES the label instead of being averaged with tone. See the note in
+# analyze_market_sentiment.
+SENTIMENT_RULE_DOMINANCE_MIN: int = 2
 
 # Initialize VADER analyzer
 vader_analyzer = None
@@ -1811,14 +1815,28 @@ def get_commodity_rulebook() -> Dict[str, Dict[str, List[Dict[str, str]]]]:
         "oil": {
             "bullish": [
                 {"pattern": r"opec\+?.{0,20}(cut|reduce|curb)", "signal": "OPEC supply cut"},
-                {"pattern": r"(inventory|stockpile).{0,12}(draw|drop|fall)", "signal": "Inventory draw"},
+                {"pattern": r"(inventor\w+|stockpile\w*).{0,26}(draw|drawdown|drop|fall|decline)", "signal": "Inventory draw"},
                 {"pattern": r"(sanctions|embargo|conflict|war).{0,24}(oil|crude|shipping|export)?", "signal": "Supply disruption risk"},
                 {"pattern": r"(hurricane|storm|outage|disruption).{0,24}(production|supply|export|offshore)?", "signal": "Production disruption"},
+                # Kinetic supply disruption. The rulebook's vocabulary was
+                # war/conflict/sanctions/embargo/hurricane/storm/outage/disruption,
+                # none of which appear in a story that says a refinery was
+                # "hit in a new attack" and "struck again". A physical strike on
+                # export infrastructure is the most direct bullish-crude event
+                # there is, and nothing matched it.
+                #
+                # Anchored to infrastructure nouns in both directions, because
+                # bare "attack" is far too broad — "attack on inflation" must
+                # not read as a supply shock.
+                {"pattern": r"(attack|attacked|strike|struck|drone|missile|shelling|sabotage|explosion|blast)\w*.{0,40}(refinery|refineries|pipeline|terminal|tanker|vessel|facilit|oilfield|port|depot|infrastructure|export)", "signal": "Infrastructure attack"},
+                {"pattern": r"(refinery|refineries|pipeline|terminal|tanker|vessel|facilit\w+|oilfield|port|depot|infrastructure).{0,40}(attack|struck|hit|damaged|ablaze|sabotage|offline|shut in)", "signal": "Infrastructure attack"},
+                {"pattern": r"(blockade|seiz\w+|impound\w*|detain\w*).{0,30}(tanker|vessel|ship|cargo|export|shipment)", "signal": "Shipping interdiction"},
+                {"pattern": r"(export|shipment|loading|output|production).{0,24}(halt\w*|suspend\w*|stopp?\w*|curtail\w*)", "signal": "Export halt"},
                 {"pattern": r"demand.{0,18}(rise|strong|increase|recover)", "signal": "Demand strengthening"}
             ],
             "bearish": [
                 {"pattern": r"(production|output|supply).{0,18}(rise|increase|boost|grow)", "signal": "Supply growth"},
-                {"pattern": r"(inventory|stockpile).{0,12}(build|rise|increase)", "signal": "Inventory build"},
+                {"pattern": r"(inventor\w+|stockpile\w*).{0,26}(build|rise|increase|surplus)", "signal": "Inventory build"},
                 {"pattern": r"demand.{0,18}(slow|weak|fall|decline)", "signal": "Demand weakness"},
                 {"pattern": r"(recession|slowdown|demand destruction)", "signal": "Macro demand risk"}
             ]
@@ -1826,12 +1844,12 @@ def get_commodity_rulebook() -> Dict[str, Dict[str, List[Dict[str, str]]]]:
         "gas": {
             "bullish": [
                 {"pattern": r"(cold|freeze|arctic|winter storm)", "signal": "Heating demand surge"},
-                {"pattern": r"(storage|inventory).{0,12}(draw|drop|below)", "signal": "Storage draw"},
+                {"pattern": r"(storage|inventor\w+).{0,26}(draw|drawdown|drop|below)", "signal": "Storage draw"},
                 {"pattern": r"(lng|pipeline).{0,18}(outage|disruption|constraint)", "signal": "Supply constraint"}
             ],
             "bearish": [
                 {"pattern": r"(warm|mild).{0,18}(weather|winter)", "signal": "Weak heating demand"},
-                {"pattern": r"(storage|inventory).{0,12}(build|surplus|above)", "signal": "Storage surplus"},
+                {"pattern": r"(storage|inventor\w+).{0,26}(build|surplus|above|glut)", "signal": "Storage surplus"},
                 {"pattern": r"production.{0,18}(rise|increase|record)", "signal": "Production increase"}
             ]
         },
@@ -2002,12 +2020,42 @@ def analyze_market_sentiment(text: str, commodity: Optional[str] = None, scores:
     # VADER now scores against an extended finance lexicon (Henry + SentiBignomics),
     # so the pure-VADER path is much more informative than before this PR.
     method = "vader_v2"
-    if has_rules:
+
+    # Is the fundamental read one-sided? Conflicting signals mean the situation
+    # is genuinely ambiguous and tone deserves an equal vote; agreement across
+    # several independent rules does not.
+    directions = {m["direction"] for m in fundamental["matched_signals"]}
+    one_sided = len(directions) == 1
+    n_signals = len(fundamental["matched_signals"])
+
+    if has_rules and one_sided and n_signals >= SENTIMENT_RULE_DOMINANCE_MIN:
+        # Fundamentals DETERMINE the direction; tone only sets confidence.
+        #
+        # The 50/50 blend below cannot express commodity reality. Worked example
+        # from production, "Saudi Aramco's Jizan Refinery Hit Again as Houthi
+        # Attacks Escalate": VADER reads -0.902, because "attack", "hit",
+        # "escalate" and "threatening" are negative words in every general
+        # lexicon. An attack on Red Sea export infrastructure is bullish for
+        # crude. Under the blend, with directional_score clamped to +-0.9, even
+        # EVERY bullish rule firing yields -0.001 -- NEUTRAL. The label could
+        # never be BULLISH no matter how strong the fundamental evidence.
+        #
+        # That is backwards for this domain. The prose describing a supply shock
+        # is always grim; the price implication is the opposite. Event type
+        # decides direction, tone decides how strongly it is held.
+        #
+        # Deliberately gated: one-sided AND at least
+        # SENTIMENT_RULE_DOMINANCE_MIN independent matches. A single keyword
+        # match is not enough to overrule tone.
+        combined_score = fundamental["directional_score"]
+        method = "commodity_rules_v3"
+    elif has_rules:
         combined_score = (
             compound * SENTIMENT_BLEND_VADER
             + fundamental["directional_score"] * (1 - SENTIMENT_BLEND_VADER)
         )
         method = "commodity_vader_v2"
+
     if combined_score >= SENTIMENT_THRESHOLD:
         sentiment = "BULLISH"
     elif combined_score <= -SENTIMENT_THRESHOLD:
