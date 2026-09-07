@@ -6,9 +6,20 @@ Pure-logic tests over the tier LIMITS matrix, no Supabase/network.
 from services.tier_enforcement import can_query_historical, exports_allowed, limits_for
 
 
-def test_trial_is_30_days_and_cannot_export():
+def test_trial_is_24_hours_and_cannot_export():
+    """CHANGED 2026-09-07, deliberately: the open beta was 30 days.
+
+    30 days of history is the paid api_basic product. A free tier that ships
+    the paid tier's depth has nothing to convert to, so the trial now shows 24
+    hours — enough to see the shape of the data, not enough to substitute for
+    paying.
+
+    This is a REDUCTION for anyone already holding a beta key. It is revertible
+    without a deploy: INTEGRA_DEPTH_QUERY_API_TRIAL=30 on Railway restores the
+    old depth. See test_depth_is_overridable_without_a_deploy.
+    """
     lim = limits_for("api_trial")
-    assert lim.history_days == 30
+    assert lim.history_days == 1
     assert exports_allowed("api_trial") is False
 
 

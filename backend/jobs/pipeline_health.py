@@ -72,6 +72,7 @@ def run() -> Dict[str, Any]:
         ("feed_quality", _check_feed_quality),
         ("card_content", _check_card_content),
         ("summarize_endpoint", _check_summarize_endpoint),
+        ("tier_depth_contract", _check_tier_depth_contract),
         ("archive_backfill_progress", _check_backfill_progress),
         ("archive_scoring_progress", _check_scoring_progress),
         ("archive_depth", _check_archive_depth),
@@ -560,5 +561,64 @@ def _check_summarize_endpoint():
         return False, detail
     if junk:
         detail["reason"] = f"{len(junk)} summaries came back as a URL or encoded token"
+        return False, detail
+    return True, detail
+
+
+def _check_tier_depth_contract():
+    """The paid ladder still grants what it sells.
+
+    Every gate in the depth system fails in the invisible direction: a clamp
+    returns LESS data rather than erroring, so a tier quietly losing its
+    allowance looks like a slow week in the market. Same shape as the four
+    failures in this module's header, and as the brand mark showing on 100% of
+    cards — the system reports success while the customer gets less.
+
+    Three properties, none needing a network call:
+
+      1. No drift. api_trial / api_basic / api_history are defined in BOTH
+         tier_enforcement (drives clamp_hours_back, used by /v1/sentiment and
+         the feed) and entitlement (drives the depth gates, used by export).
+         Two literals for one policy is how they diverge, and which one applied
+         would depend on the path a request happened to take.
+      2. The ladder ascends. A paid tier must never reach less far than the one
+         below it — which is what a careless env override produces.
+      3. Export never exceeds query. Being able to download what you may not
+         read is the two-axis split inverted.
+    """
+    from services.entitlement import export_depth_days, query_depth_days
+    from services.tier_enforcement import limits_for
+
+    tiers = ("api_trial", "api_basic", "api_history")
+    detail = {
+        t: {
+            "query": query_depth_days(t),
+            "export": export_depth_days(t),
+            "clamp": limits_for(t).history_days,
+        }
+        for t in tiers
+    }
+
+    problems = []
+    for t in tiers:
+        d = detail[t]
+        if d["clamp"] != d["query"]:
+            problems.append(
+                f"{t}: tier_enforcement says {d['clamp']}d, entitlement says {d['query']}d"
+            )
+        if d["export"] > d["query"]:
+            problems.append(
+                f"{t}: export depth {d['export']}d exceeds query depth {d['query']}d"
+            )
+
+    for lower, upper in zip(tiers, tiers[1:]):
+        if detail[upper]["query"] < detail[lower]["query"]:
+            problems.append(
+                f"{upper} queries less deeply ({detail[upper]['query']}d) than "
+                f"{lower} ({detail[lower]['query']}d)"
+            )
+
+    if problems:
+        detail["reason"] = "; ".join(problems)
         return False, detail
     return True, detail

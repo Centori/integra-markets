@@ -17,9 +17,11 @@ TTL bounds how long a cancellation can lag, so keep it small.
 from __future__ import annotations
 
 import logging
+import math
 import os
 import threading
 import time
+from dataclasses import dataclass
 from typing import Any, Dict, Optional, Set
 
 logger = logging.getLogger(__name__)
@@ -27,9 +29,103 @@ logger = logging.getLogger(__name__)
 HISTORY_SCOPE = "history"
 ARCHIVE_SCOPE = "archive"
 
-# How far back a non-archive key may look. The $99 tier and the 30-day open
-# beta both sit inside real queryable depth (~57 days measured 2026-08-14).
-HISTORY_DEPTH_CAP_DAYS = int(os.environ.get("INTEGRA_HISTORY_DEPTH_CAP_DAYS", "30"))
+# ---------------------------------------------------------------------------
+# Depth: two axes, not one.
+#
+# Until now a single number governed both "how far back may this key ASK" and
+# "how far back may it DOWNLOAD", and the archive scope lifted the cap for both
+# at once. That let an archive key export half a million rows reaching to the
+# beginning of the archive — which is the whole database, one call at a time.
+#
+# Separating the axes closes that without weakening the product. An archive
+# customer can compute a multi-year series and get the answer; they cannot walk
+# away with the rows that produced it. What is sold stops being the data and
+# becomes access to the questions.
+#
+# This only holds up because the API can answer analytical questions without
+# returning rows. If that stops being true, customers will export in order to
+# compute and the export cap just makes the product worse.
+UNLIMITED_DEPTH = math.inf
+
+
+@dataclass(frozen=True)
+class DepthLimits:
+    """Days of history a tier may reach, per axis."""
+
+    query_days: float
+    export_days: float
+
+
+def _depth_env(name: str, default: float) -> float:
+    """Read a depth override. "unlimited" and "0" both need to survive."""
+    raw = os.environ.get(name)
+    if raw is None:
+        return default
+    raw = raw.strip().lower()
+    if raw in ("unlimited", "inf", "infinity", "-1"):
+        return UNLIMITED_DEPTH
+    try:
+        return float(raw)
+    except ValueError:
+        logger.warning("%s=%r is not a number — using default %s", name, raw, default)
+        return default
+
+
+_TIER_DEPTH: Dict[str, DepthLimits] = {
+    # Open beta. 24 hours is enough to see the shape of the data and not
+    # enough to be a substitute for paying. Export was already denied to this
+    # tier by _EXPORT_TIERS; export_days=0 states it on this axis too.
+    #
+    # Overridable because this is a REDUCTION from the 30 days the beta
+    # previously allowed. If a design partner turns out to depend on the old
+    # depth, INTEGRA_DEPTH_QUERY_API_TRIAL=30 restores it as a config change on
+    # Railway rather than a deploy.
+    "api_trial": DepthLimits(
+        query_days=_depth_env("INTEGRA_DEPTH_QUERY_API_TRIAL", 1),
+        export_days=_depth_env("INTEGRA_DEPTH_EXPORT_API_TRIAL", 0),
+    ),
+    # Paid mid-tier. Query and export match: there is nothing to separate at
+    # 30 days, and an asymmetry here would only be confusing.
+    "api_basic": DepthLimits(
+        query_days=_depth_env("INTEGRA_DEPTH_QUERY_API_BASIC", 30),
+        export_days=_depth_env("INTEGRA_DEPTH_EXPORT_API_BASIC", 30),
+    ),
+    "api": DepthLimits(  # legacy alias for api_basic
+        query_days=_depth_env("INTEGRA_DEPTH_QUERY_API_BASIC", 30),
+        export_days=_depth_env("INTEGRA_DEPTH_EXPORT_API_BASIC", 30),
+    ),
+    # Archive tier. Ask anything; carry away a year. Per-key overrides are the
+    # intended escape hatch for a negotiated enterprise contract — the cap
+    # exists to stop bulk extraction, not to stop a signed customer.
+    "api_history": DepthLimits(
+        query_days=_depth_env("INTEGRA_DEPTH_QUERY_API_HISTORY", UNLIMITED_DEPTH),
+        export_days=_depth_env("INTEGRA_DEPTH_EXPORT_API_HISTORY", 365),
+    ),
+}
+
+# An unrecognised tier is a bug, and the safe reading of a bug is "give the
+# least", not "give everything" — matching rate_limit._FALLBACK_LIMIT.
+_DEPTH_FALLBACK = DepthLimits(query_days=1, export_days=0)
+
+
+def depth_for(tier: Optional[str]) -> DepthLimits:
+    return _TIER_DEPTH.get((tier or "").strip(), _DEPTH_FALLBACK)
+
+
+def query_depth_days(tier: Optional[str]) -> float:
+    return depth_for(tier).query_days
+
+
+def export_depth_days(tier: Optional[str]) -> float:
+    return depth_for(tier).export_days
+
+
+# Retained so existing imports and the migration's documented contract keep
+# working. It is now DERIVED from the table above rather than being a separate
+# global that could drift from it — which it had: tier_enforcement gave
+# api_basic 90 days while this constant capped it at 30, and which applied
+# depended on whether a request went through /v1/sentiment or through export.
+HISTORY_DEPTH_CAP_DAYS = int(query_depth_days("api_basic"))
 
 # Seconds an entitlement decision may be reused. Bounds revocation lag.
 ENTITLEMENT_TTL_SECONDS = int(os.environ.get("INTEGRA_ENTITLEMENT_TTL_SECONDS", "60"))

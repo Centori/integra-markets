@@ -42,6 +42,27 @@ class TierLimits:
     exports_enabled: bool = False
 
 
+def _api_query_depth(tier: str) -> float:
+    """Query depth for an API tier, read from the one table in entitlement.py.
+
+    These three tiers are defined in BOTH modules: this one drives
+    clamp_hours_back (used by /v1/sentiment and the feed), entitlement drives
+    assert_history_depth (used by export). Two literals for one policy is how
+    they drift, and which number applied would depend on the path a request
+    happened to take. One table, read twice.
+
+    Falls back to the previous literals if entitlement cannot be imported, so a
+    bad import degrades to the old behaviour rather than to no access.
+    """
+    try:
+        from services.entitlement import query_depth_days
+
+        return query_depth_days(tier)
+    except Exception:  # noqa: BLE001
+        logger.warning("entitlement unavailable; using literal depth for %s", tier)
+        return {"api_trial": 30.0, "api_basic": 30.0}.get(tier, UNLIMITED)
+
+
 LIMITS: dict[str, TierLimits] = {
     # Post-trial resting state — what the App Store listing calls FREE
     # ("curated commodity news feed, AI sentiment on every story"). Deliberately
@@ -125,7 +146,7 @@ LIMITS: dict[str, TierLimits] = {
         commodities=UNLIMITED,
         custom_rss_urls=UNLIMITED,
         ai_overlay_per_day=UNLIMITED,
-        history_days=30,
+        history_days=_api_query_depth("api_trial"),
         articles_per_session=UNLIMITED,
         alert_types=("news", "sentiment", "divergence"),
         push_mode="realtime",
@@ -138,7 +159,7 @@ LIMITS: dict[str, TierLimits] = {
         commodities=UNLIMITED,
         custom_rss_urls=UNLIMITED,
         ai_overlay_per_day=UNLIMITED,
-        history_days=30,
+        history_days=_api_query_depth("api_basic"),
         articles_per_session=UNLIMITED,
         alert_types=("news", "sentiment", "divergence"),
         push_mode="realtime",
@@ -151,7 +172,7 @@ LIMITS: dict[str, TierLimits] = {
         commodities=UNLIMITED,
         custom_rss_urls=UNLIMITED,
         ai_overlay_per_day=UNLIMITED,
-        history_days=UNLIMITED,
+        history_days=_api_query_depth("api_history"),
         articles_per_session=UNLIMITED,
         alert_types=("news", "sentiment", "divergence"),
         push_mode="realtime",
