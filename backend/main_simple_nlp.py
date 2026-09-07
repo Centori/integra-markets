@@ -95,10 +95,10 @@ SENTIBIG_SCALE: float = 0.1
 SENTIMENT_THRESHOLD: float = 0.33
 SENTIMENT_BLEND_VADER: float = 0.5  # weight on VADER vs rulebook when rules fire
 SENTIMENT_RULE_COEF: float = 0.22   # per-match increment in analyze_fundamental_direction
-# Independent one-sided rule matches required before the fundamental read
+# Summed one-sided signal WEIGHT required before the fundamental read
 # DETERMINES the label instead of being averaged with tone. See the note in
 # analyze_market_sentiment.
-SENTIMENT_RULE_DOMINANCE_MIN: int = 2
+SENTIMENT_RULE_DOMINANCE_WEIGHT: float = 0.85
 
 # Initialize VADER analyzer
 vader_analyzer = None
@@ -1770,44 +1770,148 @@ def basic_sentiment_analysis(text: str, commodity: Optional[str] = None) -> dict
 def _clamp(value: float, lower: float, upper: float) -> float:
     return max(lower, min(upper, value))
 
+# Aliases -> canonical commodity. Order is irrelevant: resolution scores every
+# alias and takes the strongest, rather than returning whichever happened to be
+# first in a dict.
+_COMMODITY_ALIASES: Dict[str, str] = {
+    "oil": "oil", "crude": "oil", "crude oil": "oil", "wti": "oil",
+    "brent": "oil", "petroleum": "oil",
+    # Refined products belong with crude, not with natural gas. "gasoline"
+    # previously resolved to `gas` on a substring match, which routed every
+    # motor-fuel story into the natural-gas rulebook.
+    "gasoline": "oil", "diesel": "oil", "gasoil": "oil", "jet fuel": "oil",
+    "naphtha": "oil", "refinery": "oil", "refining": "oil",
+
+    "gas": "gas", "nat gas": "gas", "natural gas": "gas", "lng": "gas",
+    "henry hub": "gas", "ttf": "gas", "jkm": "gas",
+
+    "gold": "gold", "bullion": "gold",
+    "silver": "silver",
+    "uranium": "uranium", "u3o8": "uranium", "yellowcake": "uranium",
+    "forex": "forex", "fx": "forex", "usd": "forex", "dollar": "forex",
+    "eurusd": "forex", "usdjpy": "forex",
+    "bitcoin": "bitcoin", "btc": "bitcoin",
+    "wheat": "wheat",
+    "corn": "corn", "maize": "corn",
+    "macro": "macro",
+    "weather": "weather",
+}
+
+# Longest alias first, so "crude oil" and "natural gas" win over "oil"/"gas".
+_ALIAS_PATTERNS: List[tuple] = [
+    (
+        alias,
+        canonical,
+        # \b on both sides. Without it "Goldman" matched gold, "Las Vegas"
+        # matched gas, "Cornerstone" matched corn and "spoiled" matched oil --
+        # and since this function chooses WHICH rulebook runs, a wrong answer
+        # here applies the wrong directional rules to the whole article.
+        re.compile(r"\b" + re.escape(alias) + r"\b", re.IGNORECASE),
+    )
+    for alias, canonical in sorted(
+        _COMMODITY_ALIASES.items(), key=lambda kv: -len(kv[0])
+    )
+]
+
+
 def normalize_commodity(commodity: Optional[str], text: Optional[str] = None) -> Optional[str]:
-    """Normalize commodity names and infer one from text if needed."""
-    alias_map = {
-        "oil": "oil",
-        "crude": "oil",
-        "crude oil": "oil",
-        "wti": "oil",
-        "brent": "oil",
-        "gas": "gas",
-        "nat gas": "gas",
-        "natural gas": "gas",
-        "lng": "gas",
-        "gold": "gold",
-        "silver": "silver",
-        "uranium": "uranium",
-        "u3o8": "uranium",
-        "forex": "forex",
-        "fx": "forex",
-        "usd": "forex",
-        "dollar": "forex",
-        "eurusd": "forex",
-        "usdjpy": "forex",
-        "bitcoin": "bitcoin",
-        "btc": "bitcoin",
-        "wheat": "wheat",
-        "corn": "corn",
-        "macro": "macro",
-        "weather": "weather"
-    }
+    """Normalize a commodity name, or infer one from text.
+
+    Inference scores every alias by occurrence count, weighted by alias length
+    so a specific term outranks a generic one, and returns the strongest.
+    Previously it returned the first dict key found anywhere in the text as a
+    bare substring, which produced:
+
+        "Goldman Sachs downgraded..."        -> gold
+        "Las Vegas Sands reported..."        -> gas
+        "Cornerstone Capital raised..."      -> corn
+        "The plan was spoiled by a delay"    -> oil
+
+    Every one of those runs the wrong rulebook over the article.
+    """
     if commodity:
-        return alias_map.get(commodity.strip().lower(), commodity.strip().lower())
+        key = commodity.strip().lower()
+        return _COMMODITY_ALIASES.get(key, key)
     if not text:
         return None
-    text_lower = text.lower()
-    for alias, normalized in alias_map.items():
-        if alias in text_lower:
-            return normalized
-    return None
+
+    scores: Dict[str, float] = {}
+    for alias, canonical, pattern in _ALIAS_PATTERNS:
+        hits = len(pattern.findall(text))
+        if hits:
+            # Length weighting breaks the common tie where an article says
+            # "natural gas" once and "gas" five times -- both point at gas, but
+            # "crude oil" vs "oil" in an article that also mentions "oil prices"
+            # should not let a generic term outvote a specific one.
+            scores[canonical] = scores.get(canonical, 0.0) + hits * (1 + len(alias) / 20.0)
+    if not scores:
+        return None
+    return max(scores.items(), key=lambda kv: kv[1])[0]
+
+
+# Per-signal weight. The rulebook previously treated every match as equal, so
+# "Energy security support" -- a vague policy phrase -- carried exactly the
+# weight of "OPEC supply cut", the most consequential recurring event in crude.
+# Two weak matches outranked one decisive one, and under the dominance rule they
+# could set the label on their own.
+#
+# Anything not listed here is 1.0, so this only records deviations and stays
+# readable. These are analyst priors, not measured coefficients -- the archive
+# is what would turn them into measured ones, by asking what the front month
+# actually did after each signal fired historically.
+# Mirror pairs MUST carry equal weight. An asymmetry here is a directional
+# prior smuggled in through the back door: "Sanctions relief" at 0.80 against
+# "Sanctions imposed" at 0.85 meant imposition cleared the dominance gate on its
+# own and relief did not, so the same event read bullish going in and neutral
+# coming out. test_mirror_pairs_weigh_the_same pins this.
+_MIRROR_PAIRS = (
+    ("OPEC supply cut", "OPEC quota increase"),
+    ("Infrastructure attack", "Supply restored"),
+    ("Sanctions imposed", "Sanctions relief"),
+    ("Supply disruption risk", "De-escalation"),
+    ("Inventory draw", "Inventory build"),
+    ("Storage draw", "Storage surplus"),
+    ("Demand strengthening", "Demand weakness"),
+)
+
+_SIGNAL_WEIGHTS: Dict[str, float] = {
+    # Decisive, market-defining
+    "OPEC supply cut": 1.0,
+    "OPEC quota increase": 1.0,
+    # Strong physical signals
+    "Infrastructure attack": 0.9,
+    "Export halt": 0.85,
+    "Supply restored": 0.9,
+    "SPR release": 0.85,
+    "Inventory draw": 0.8,
+    "Inventory build": 0.8,
+    "Shipping interdiction": 0.8,
+    "Sanctions relief": 0.85,
+    # Sanctions on a major exporter are a decisive supply event, and belong
+    # alongside their bearish mirror rather than with the vaguer
+    # "conflict/war mentioned near oil" pattern, which stays at 0.7.
+    "Sanctions imposed": 0.85,
+    "Storage draw": 0.8,
+    "Storage surplus": 0.8,
+    # Real but slower-acting
+    "Supply disruption risk": 0.7,
+    "Production disruption": 0.7,
+    "Supply growth": 0.7,
+    "De-escalation": 0.7,
+    "Supply constraint": 0.7,
+    "OPEC compliance slippage": 0.6,
+    "Demand strengthening": 0.6,
+    "Demand weakness": 0.6,
+    "Macro demand risk": 0.6,
+    # Directionally suggestive, rarely decisive on its own
+    "Energy security support": 0.3,
+    "Policy headwind": 0.4,
+}
+
+
+def signal_weight(signal: str) -> float:
+    return _SIGNAL_WEIGHTS.get(signal, 1.0)
+
 
 def get_commodity_rulebook() -> Dict[str, Dict[str, List[Dict[str, str]]]]:
     """Commodity-specific directional rules layered on top of VADER tone."""
@@ -1816,7 +1920,13 @@ def get_commodity_rulebook() -> Dict[str, Dict[str, List[Dict[str, str]]]]:
             "bullish": [
                 {"pattern": r"opec\+?.{0,20}(cut|reduce|curb)", "signal": "OPEC supply cut"},
                 {"pattern": r"(inventor\w+|stockpile\w*).{0,26}(draw|drawdown|drop|fall|decline)", "signal": "Inventory draw"},
-                {"pattern": r"(sanctions|embargo|conflict|war).{0,24}(oil|crude|shipping|export)?", "signal": "Supply disruption risk"},
+                # The trailing group was optional, so a bare mention of "sanctions"
+                # matched -- including "sanctions on crude exports were eased",
+                # which is the bearish case. Imposition language is now required,
+                # and relief is handled by the "Sanctions relief" rule below.
+                {"pattern": r"(sanctions?|embargo)\w*.{0,30}(impos\w+|tighten\w*|expand\w*|widen\w*|announc\w+|new)", "signal": "Sanctions imposed"},
+                {"pattern": r"(impos\w+|tighten\w*|expand\w*|widen\w*).{0,30}(sanctions?|embargo)", "signal": "Sanctions imposed"},
+                {"pattern": r"(conflict|war|hostilities).{0,24}(oil|crude|shipping|export|supply)", "signal": "Supply disruption risk"},
                 {"pattern": r"(hurricane|storm|outage|disruption).{0,24}(production|supply|export|offshore)?", "signal": "Production disruption"},
                 # Kinetic supply disruption. The rulebook's vocabulary was
                 # war/conflict/sanctions/embargo/hurricane/storm/outage/disruption,
@@ -1838,7 +1948,21 @@ def get_commodity_rulebook() -> Dict[str, Dict[str, List[Dict[str, str]]]]:
                 {"pattern": r"(production|output|supply).{0,18}(rise|increase|boost|grow)", "signal": "Supply growth"},
                 {"pattern": r"(inventor\w+|stockpile\w*).{0,26}(build|rise|increase|surplus)", "signal": "Inventory build"},
                 {"pattern": r"demand.{0,18}(slow|weak|fall|decline)", "signal": "Demand weakness"},
-                {"pattern": r"(recession|slowdown|demand destruction)", "signal": "Macro demand risk"}
+                {"pattern": r"(recession|slowdown|demand destruction)", "signal": "Macro demand risk"},
+                # Mirror vocabulary for the kinetic/geopolitical patterns above.
+                # Without these the bullish side had nine patterns against four,
+                # and because the dominance gate reads accumulated evidence, an
+                # unbalanced rulebook is a directional prior nobody chose.
+                # Every bullish disruption rule now has a bearish inverse.
+                {"pattern": r"(spr|strategic petroleum reserve|strategic reserve).{0,30}(release|sale|draw|tap)", "signal": "SPR release"},
+                {"pattern": r"(release|sale|tap\w*).{0,30}(spr|strategic petroleum reserve|strategic reserve)", "signal": "SPR release"},
+                {"pattern": r"(sanctions?|embargo).{0,30}(lift\w*|eas\w+|waiv\w+|relax\w*|suspend\w*)", "signal": "Sanctions relief"},
+                {"pattern": r"(waiver|exemption)\w*.{0,30}(oil|crude|export|barrel)", "signal": "Sanctions relief"},
+                {"pattern": r"(ceasefire|cease-fire|truce|peace deal|de-escalat\w+|deescalat\w+)", "signal": "De-escalation"},
+                {"pattern": r"(refinery|refineries|pipeline|terminal|field|port|output|export)\w*.{0,40}(restart\w*|resum\w+|back online|repaired|restored|reopen\w*)", "signal": "Supply restored"},
+                {"pattern": r"(restart\w*|resum\w+|reopen\w*|restor\w+).{0,40}(refinery|refineries|pipeline|terminal|production|output|export)", "signal": "Supply restored"},
+                {"pattern": r"opec\+?.{0,30}(raise|increase|boost|unwind\w*|ease|hike).{0,20}(quota|output|production|target)?", "signal": "OPEC quota increase"},
+                {"pattern": r"(quota|compliance).{0,24}(breach\w*|slip\w*|overproduc\w+|exceed\w*)", "signal": "OPEC compliance slippage"}
             ]
         },
         "gas": {
@@ -1979,7 +2103,14 @@ def analyze_fundamental_direction(text: str, commodity: Optional[str]) -> Dict[s
     for entry in rulebook[normalized]["bearish"]:
         if re.search(entry["pattern"], text_lower):
             bearish_matches.append(entry["signal"])
-    score = SENTIMENT_RULE_COEF * len(bullish_matches) - SENTIMENT_RULE_COEF * len(bearish_matches)
+    # Distinct signals, weighted. Two patterns can emit the same signal name --
+    # "Infrastructure attack" has both an attack-then-noun and a noun-then-attack
+    # form -- and one event described twice is not two pieces of evidence.
+    bullish_unique = list(dict.fromkeys(bullish_matches))
+    bearish_unique = list(dict.fromkeys(bearish_matches))
+    bullish_weight = sum(signal_weight(sig) for sig in bullish_unique)
+    bearish_weight = sum(signal_weight(sig) for sig in bearish_unique)
+    score = SENTIMENT_RULE_COEF * (bullish_weight - bearish_weight)
     score = _clamp(score, -0.9, 0.9)
     if score > 0:
         bias = "BULLISH"
@@ -1988,15 +2119,19 @@ def analyze_fundamental_direction(text: str, commodity: Optional[str]) -> Dict[s
     else:
         bias = "NEUTRAL"
     matched = [
-        {"signal": signal, "direction": "bullish"} for signal in bullish_matches
+        {"signal": signal, "direction": "bullish", "weight": signal_weight(signal)}
+        for signal in bullish_unique
     ] + [
-        {"signal": signal, "direction": "bearish"} for signal in bearish_matches
+        {"signal": signal, "direction": "bearish", "weight": signal_weight(signal)}
+        for signal in bearish_unique
     ]
     return {
         "commodity": normalized,
         "directional_score": round(score, 3),
         "matched_signals": matched[:6],
-        "rule_bias": bias
+        "rule_bias": bias,
+        "bullish_weight": round(bullish_weight, 3),
+        "bearish_weight": round(bearish_weight, 3)
     }
 
 def analyze_market_sentiment(text: str, commodity: Optional[str] = None, scores: Optional[Dict[str, float]] = None) -> Dict[str, Any]:
@@ -2024,11 +2159,12 @@ def analyze_market_sentiment(text: str, commodity: Optional[str] = None, scores:
     # Is the fundamental read one-sided? Conflicting signals mean the situation
     # is genuinely ambiguous and tone deserves an equal vote; agreement across
     # several independent rules does not.
-    directions = {m["direction"] for m in fundamental["matched_signals"]}
-    one_sided = len(directions) == 1
-    n_signals = len(fundamental["matched_signals"])
+    bull_w = fundamental.get("bullish_weight", 0.0)
+    bear_w = fundamental.get("bearish_weight", 0.0)
+    one_sided = (bull_w > 0) != (bear_w > 0)
+    evidence = max(bull_w, bear_w)
 
-    if has_rules and one_sided and n_signals >= SENTIMENT_RULE_DOMINANCE_MIN:
+    if has_rules and one_sided and evidence >= SENTIMENT_RULE_DOMINANCE_WEIGHT:
         # Fundamentals DETERMINE the direction; tone only sets confidence.
         #
         # The 50/50 blend below cannot express commodity reality. Worked example
@@ -2044,10 +2180,20 @@ def analyze_market_sentiment(text: str, commodity: Optional[str] = None, scores:
         # is always grim; the price implication is the opposite. Event type
         # decides direction, tone decides how strongly it is held.
         #
-        # Deliberately gated: one-sided AND at least
-        # SENTIMENT_RULE_DOMINANCE_MIN independent matches. A single keyword
-        # match is not enough to overrule tone.
-        combined_score = fundamental["directional_score"]
+        # Deliberately gated on one-sided evidence of at least
+        # SENTIMENT_RULE_DOMINANCE_WEIGHT. Weight, not match count: counting
+        # made an unbalanced rulebook into a directional prior, and let two
+        # vague matches outrank one decisive one. At 0.85, a single decisive
+        # signal (OPEC cut 1.0, infrastructure attack 0.9) qualifies alone,
+        # while "Energy security support" at 0.3 never does.
+        # The bias direction IS the answer here; comparing a rule-derived
+        # magnitude against a VADER-calibrated threshold would re-introduce the
+        # coupling this branch exists to break. SENTIMENT_THRESHOLD is tuned for
+        # tone in [-1, 1]; rule weight is a different unit entirely.
+        dominant_direction = "BULLISH" if bull_w > bear_w else "BEARISH"
+        combined_score = (1 if dominant_direction == "BULLISH" else -1) * max(
+            abs(fundamental["directional_score"]), SENTIMENT_THRESHOLD
+        )
         method = "commodity_rules_v3"
     elif has_rules:
         combined_score = (
@@ -2080,6 +2226,8 @@ def analyze_market_sentiment(text: str, commodity: Optional[str] = None, scores:
             "base_confidence": round(_clamp(base_confidence, 0.5, 0.95), 3),
             "fundamental_bias": fundamental["rule_bias"],
             "directional_score": fundamental["directional_score"],
+            "bullish_weight": fundamental.get("bullish_weight", 0.0),
+            "bearish_weight": fundamental.get("bearish_weight", 0.0),
             "matched_signals": fundamental["matched_signals"]
         }
     }

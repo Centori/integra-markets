@@ -107,7 +107,7 @@ def test_the_old_blend_could_not_have_reached_bullish(nlp):
     compound = -0.902
     best_case = compound * nlp.SENTIMENT_BLEND_VADER + 0.9 * (
         1 - nlp.SENTIMENT_BLEND_VADER
-    )
+    )  # 0.9 is the directional clamp
     assert best_case < nlp.SENTIMENT_THRESHOLD
 
 
@@ -146,19 +146,41 @@ def test_bare_attack_language_is_not_a_supply_shock(nlp):
 # ------------------------------------------------------------------ the gate
 
 
-def test_a_single_match_does_not_overrule_tone(nlp):
-    """One keyword is not enough evidence to invert a strongly negative read."""
-    f = nlp.analyze_fundamental_direction(JIZAN, "oil")
-    assert len(f["matched_signals"]) >= nlp.SENTIMENT_RULE_DOMINANCE_MIN
+def test_weak_evidence_does_not_overrule_tone(nlp):
+    """The gate reads summed WEIGHT, not match count.
 
+    Counting made an unbalanced rulebook into a directional prior — oil has 9
+    bullish patterns against 13 bearish, so whichever side has more patterns
+    reaches a count threshold more easily. It also let two vague matches
+    outrank one decisive one.
+    """
+    f = nlp.analyze_fundamental_direction(JIZAN, "oil")
+    assert f["bullish_weight"] >= nlp.SENTIMENT_RULE_DOMINANCE_WEIGHT
+
+    # "Supply disruption risk" alone is 0.7 — real, but not decisive.
     r = nlp.analyze_market_sentiment(
-        "A pipeline outage was reported, though details remain scarce and the "
-        "situation is grim, tragic and deeply worrying for everyone involved.",
+        "The war has kept oil shipping routes under review, traders said, "
+        "amid a grim and deeply worrying outlook for everyone involved.",
         "oil",
     )
-    # Whatever this resolves to, it must not have come from the dominance path.
-    if len(r["market_context"]["matched_signals"]) < nlp.SENTIMENT_RULE_DOMINANCE_MIN:
-        assert r["method"] != "commodity_rules_v3"
+    assert r["market_context"]["bullish_weight"] < nlp.SENTIMENT_RULE_DOMINANCE_WEIGHT
+    assert r["method"] != "commodity_rules_v3"
+
+
+def test_a_single_decisive_signal_is_enough(nlp):
+    """An OPEC cut needs no corroboration. Requiring two matches would have
+    made the most consequential recurring event in crude insufficient alone."""
+    r = nlp.analyze_market_sentiment("OPEC+ agreed to cut oil output at its meeting.", "oil")
+    assert r["sentiment"] == "BULLISH"
+    assert r["method"] == "commodity_rules_v3"
+
+
+def test_repeated_signal_counts_once(nlp):
+    """Two patterns emit "Infrastructure attack" (attack-then-noun and
+    noun-then-attack). One event described twice is not two pieces of evidence."""
+    f = nlp.analyze_fundamental_direction(JIZAN, "oil")
+    names = [m["signal"] for m in f["matched_signals"]]
+    assert len(names) == len(set(names))
 
 
 def test_conflicting_signals_fall_back_to_the_blend(nlp):
