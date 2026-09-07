@@ -84,13 +84,90 @@ def test_real_mentions_still_resolve(nlp, text, expected):
     assert nlp.normalize_commodity(None, text) == expected
 
 
-def test_refined_products_route_to_oil_not_natural_gas(nlp):
+def test_refined_products_are_not_natural_gas(nlp):
     """"gasoline" contains "gas". Under substring matching every motor-fuel
-    story was scored against the natural-gas rulebook — two markets that move
-    on entirely different fundamentals, and inversely to each other on a
-    refinery outage."""
-    assert nlp.normalize_commodity(None, "Gasoline demand fell in the shoulder season.") == "oil"
-    assert nlp.normalize_commodity(None, "Diesel cracks widened sharply.") == "oil"
+    story was scored against the natural-gas rulebook — two markets that move on
+    entirely different fundamentals.
+
+    Products now have their own book rather than borrowing crude's, because they
+    move INVERSELY to crude on a refinery outage: crude that cannot be processed
+    backs up while product supply tightens.
+    """
+    assert nlp.normalize_commodity(None, "Gasoline demand fell in the shoulder season.") == "refined_products"
+    assert nlp.normalize_commodity(None, "Diesel crack spreads widened sharply.") == "refined_products"
+
+
+def test_refinery_attacks_stay_with_crude(nlp):
+    """"refinery" deliberately still routes to oil. A refinery being attacked is
+    as much a crude story as a product one, and oil holds the kinetic rules."""
+    assert nlp.normalize_commodity(
+        None,
+        "Saudi Aramco's Jizan refinery was hit in a new attack, threatening oil "
+        "infrastructure along the export route.",
+    ) == "oil"
+
+
+def test_plural_aliases_match(nlp):
+    """\b after "spread" fails on "crack spreads" — the following "s" is a word
+    character — so the alias silently never matched its own commonest form."""
+    assert nlp.normalize_commodity(None, "Crack spreads widened.") == "refined_products"
+
+
+@pytest.mark.parametrize(
+    "text,expected",
+    [
+        ("Copper mine strike halts output as LME stocks fall.", "copper"),
+        ("Lithium oversupply deepened as spodumene capacity came online.", "lithium"),
+        ("Urea plants curtailed output as gas feedstock costs surged.", "fertilizer"),
+        ("Tanker freight rates surged after Red Sea diversions.", "freight"),
+        ("Indonesia suspended tin export licences.", "tin"),
+        ("Helium rationing continued after a plant outage.", "helium"),
+        ("Propane inventories drew below the five-year average.", "lpg"),
+        ("Coltan smuggling tightened tantalum supply.", "coltan"),
+    ],
+)
+def test_newly_covered_markets_resolve(nlp, text, expected):
+    """topic_taxonomy classifies 39 topics; the rulebook covered 11, so the rest
+    were scored on prose tone alone — the mechanism that read a refinery attack
+    as 93% bearish."""
+    assert nlp.normalize_commodity(None, text) == expected
+
+
+@pytest.mark.parametrize(
+    "text,expected",
+    [
+        ("Copper mine strike halts output at the Chilean operation as LME stocks fall to a multi-year low.", "BULLISH"),
+        ("LME copper inventories rose sharply while Chinese property construction contracted further.", "BEARISH"),
+        ("Lithium oversupply deepened as new spodumene capacity came online and EV sales slowed.", "BEARISH"),
+        ("Urea plants curtailed output as gas feedstock costs surged, and India issued a new tender.", "BULLISH"),
+        ("Diesel crack spreads widened sharply after an unplanned refinery outage.", "BULLISH"),
+        ("Wheat ending stocks fell after the WASDE cut production, and crop conditions deteriorated.", "BULLISH"),
+        ("Corn carryout rose as the USDA raised its yield estimate and crop conditions improved.", "BEARISH"),
+        ("The crude curve flipped into backwardation as prompt spreads firmed.", "BULLISH"),
+        ("Crude moved deeper into contango and floating storage economics turned positive.", "BEARISH"),
+    ],
+)
+def test_new_rules_produce_the_right_direction(nlp, text, expected):
+    assert nlp.analyze_market_sentiment(text)["sentiment"] == expected
+
+
+def test_past_tense_matches(nlp):
+    """News is written in the past tense; the rulebook was written in the
+    present. "inventories rose" missed a pattern matching "rise", and "demand
+    strengthened" missed one matching "strong" — so real articles routed to the
+    right market and then matched nothing."""
+    f = nlp.analyze_fundamental_direction("LME copper inventories rose sharply.", "copper")
+    assert "Exchange stock build" in [m["signal"] for m in f["matched_signals"]]
+
+
+def test_curve_rules_reach_every_storable_market(nlp):
+    """Curve structure is defined once and merged, not repeated per commodity."""
+    book = nlp.get_commodity_rulebook()
+    for market in ("oil", "gas", "wheat", "copper", "lithium"):
+        signals = [r["signal"] for r in book[market]["bullish"]]
+        assert "Backwardation" in signals, market
+    # No storage economics in FX or macro, so no curve.
+    assert "Backwardation" not in [r["signal"] for r in book["forex"]["bullish"]]
 
 
 def test_specific_alias_outranks_generic_one(nlp):
