@@ -54,10 +54,10 @@
     "deploy": "npx railway up --service integra-markets",
     "deploy:logs": "npx railway logs --service integra-markets",
     "deploy:status": "npx railway status",
-    "build:ios": "eas build --platform ios --profile production",
-    "build:android": "eas build --platform android --profile production",
-    "submit:ios": "eas submit --platform ios --profile production",
-    "submit:android": "eas submit --platform android --profile production",
+    "build:ios": "npm run check:release && eas build --platform ios --profile production",
+    "build:android": "npm run check:release && eas build --platform android --profile production",
+    "submit:ios": "npm run check:release && eas submit --platform ios --profile production",
+    "submit:android": "npm run check:release && eas submit --platform android --profile production",
     "test": "jest",
     "test:testsprite": "node __tests__/testsprite-runner.js",
     "test:frontend": "node __tests__/testsprite-runner.js frontend",
@@ -65,7 +65,9 @@
     "test:auth": "node __tests__/testsprite-runner.js auth",
     "lint": "eslint . --ext .js,.jsx,.ts,.tsx",
     "lint:fix": "eslint . --ext .js,.jsx,.ts,.tsx --fix",
-    "postinstall": "patch-package"
+    "postinstall": "patch-package",
+    "check:release": "node scripts/check-release-config.mjs",
+    "update:production": "npm run check:release && eas update --channel production"
   },
   "devDependencies": {
     "@expo/ngrok": "^4.1.3",
