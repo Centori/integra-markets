@@ -37,27 +37,34 @@ const MCP_URL = "https://mcp.integramarkets.app/mcp";
  */
 const MCP_URL_FALLBACK = "https://integra-mcp-production.up.railway.app/mcp";
 
+/** Name Claude pre-fills into the connector dialog. */
+const CONNECTOR_NAME = "Integra Markets";
+
 /**
- * Where "Open in Claude" sends the user.
+ * Deep link that opens Claude's Add-custom-connector dialog with the name and
+ * URL already filled in.
  *
- * Claude DOES support a link that pre-fills the custom-connector dialog with a
- * name and URL — other MCP products ship one — but Anthropic does not document
- * the format publicly, and it could not be recovered from a shipped example
- * (the page HTML and all 44 of its JS chunks contain neither the button label
- * nor any claude.ai URL; the dialog is loaded from a chunk that is not
- * reachable without running the page).
+ * Built rather than hard-coded so the URL can never be half-encoded: the
+ * connector URL has to survive as a query parameter, and a raw "https://…"
+ * with unescaped slashes and colon is the kind of thing that works in testing
+ * and breaks on the one address that contains a character someone forgot.
  *
- * So this points at the connectors settings page, which is correct but does not
- * pre-fill. Guessing the parameter names would produce a button that appears to
- * work and silently does nothing.
- *
- * To upgrade: click "Open in Claude" on a site that has it, copy the URL from
- * the address bar of the tab that opens (the control may be a <button> calling
- * window.open, so "Copy link address" can come back empty), and swap it in
- * here. The copy in the dialog below already handles both cases — it tells the
- * user to paste if the fields are not pre-filled.
+ * The trailing fragment is what selects the connectors pane, and matches the
+ * "Customize → Connectors" path in the written steps.
  */
-const CLAUDE_CONNECTORS_URL = "https://claude.ai/settings/connectors";
+function claudeConnectorLink(name: string, url: string): string {
+  const params = new URLSearchParams({
+    modal: "add-custom-connector",
+    connectorName: name,
+    connectorUrl: url,
+  });
+  // URLSearchParams encodes a space as "+", which is correct
+  // form-encoding but renders as a literal plus in any parser that does not
+  // decode it — the dialog would read "Integra+Markets". %20 is unambiguous
+  // in both readings.
+  const query = params.toString().replace(/\+/g, "%20");
+  return `https://claude.ai/new?${query}#settings/customize-connectors`;
+}
 
 /**
  * Setup dialog, modelled on how other MCP products present this.
@@ -128,14 +135,17 @@ function ConnectDialog({
             n={2}
             text={
               <>
-                Open Claude&rsquo;s custom connector dialog, then enter{" "}
-                <span className="text-text-primary">&ldquo;Integra Markets&rdquo;</span>{" "}
+                Open Claude&rsquo;s custom connector dialog. The name and URL
+                should be prefilled — if not, enter{" "}
+                <span className="text-text-primary">
+                  &ldquo;{CONNECTOR_NAME}&rdquo;
+                </span>{" "}
                 and paste the URL.
               </>
             }
           >
             <a
-              href={CLAUDE_CONNECTORS_URL}
+              href={claudeConnectorLink(CONNECTOR_NAME, url)}
               target="_blank"
               rel="noopener noreferrer"
               className="mt-3 inline-flex items-center gap-2 rounded-lg bg-text-primary px-4 py-2.5 text-sm font-medium text-bg-primary transition hover:opacity-90"
