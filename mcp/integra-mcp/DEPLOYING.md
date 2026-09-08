@@ -25,16 +25,50 @@ the caller's own key — so there is no private coupling to protect.
 
 ---
 
+## Identifiers
+
+From `~/.railway/config.json`; the project id matches the `18e783a9` prefix
+recorded in `.github/workflows/deploy.yml`, which is how it was confirmed to be
+the right project rather than one of the other five linked Railway projects on
+this machine.
+
+| | |
+|---|---|
+| Project | `18e783a9-f02d-4396-b49c-98a7a99bbc72` (`integra-markets-backend`) |
+| Environment | `de3d0dd8-5cd7-43af-9570-1e18fd4788b5` (`production`) |
+| Existing API service | `29cd17ce-b9f5-4d6f-a4fd-4cfb89125ca0` |
+
+---
+
 ## One-time setup
 
 ### 1. Create the service in the existing project
 
-Railway dashboard → **integra-markets-backend** (the existing project, not a new
-one) → **New** → **GitHub Repo** → `Centori/integra-markets`.
+**→ [Open the project canvas](https://railway.com/project/18e783a9-f02d-4396-b49c-98a7a99bbc72?environmentId=de3d0dd8-5cd7-43af-9570-1e18fd4788b5)**
+
+Then **New** → **GitHub Repo** → `Centori/integra-markets`.
+
+Railway has no deep link to the "New service" modal, so this lands on the canvas
+with the production environment already selected. Confirm the header reads
+**integra-markets-backend** before clicking New — creating this in a new project
+is the one mistake that is annoying to undo, because the domain follows the
+project.
+
+Once the service exists, its id appears in the address bar:
+
+```
+https://railway.com/project/18e783a9-.../service/<THIS>/...
+                                               ^^^^^^^^
+```
+
+Substitute it into the links below. They cannot be generated in advance — the
+service does not exist yet.
 
 ### 2. Point it at this config
 
-Service → **Settings** → **Config-as-code** → set the path to:
+**→ `https://railway.com/project/18e783a9-f02d-4396-b49c-98a7a99bbc72/service/<SERVICE_ID>/settings?environmentId=de3d0dd8-5cd7-43af-9570-1e18fd4788b5`**
+
+Under **Config-as-code**, set the path to:
 
 ```
 railway.mcp.json
@@ -47,7 +81,10 @@ the repo root so it can read both `mcp/integra-mcp/package.json` and
 
 ### 3. Environment
 
-Only one variable is needed, and only if the API moves:
+**→ `https://railway.com/project/18e783a9-f02d-4396-b49c-98a7a99bbc72/service/<SERVICE_ID>/variables?environmentId=de3d0dd8-5cd7-43af-9570-1e18fd4788b5`**
+
+Nothing is required — every variable has a working default and Railway injects
+`PORT`. Set these only to override:
 
 | Variable | Default | Notes |
 |---|---|---|
@@ -64,8 +101,11 @@ could not tell them apart. Each request carries its own
 
 ### 4. Domain
 
-Service → **Settings** → **Networking** → **Custom Domain** →
-`mcp.integramarkets.app`, then add the CNAME Railway shows you.
+**→ `https://railway.com/project/18e783a9-f02d-4396-b49c-98a7a99bbc72/service/<SERVICE_ID>/settings/networking?environmentId=de3d0dd8-5cd7-43af-9570-1e18fd4788b5`**
+
+**Custom Domain** → `mcp.integramarkets.app`, then add the CNAME Railway shows
+you at your DNS provider. Railway issues the certificate once the CNAME
+resolves, which usually takes a few minutes and occasionally an hour.
 
 A subdomain rather than a path on the API, so the URL a customer pastes into
 their connector settings never changes if the backend is restructured later.
