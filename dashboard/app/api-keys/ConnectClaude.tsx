@@ -37,80 +37,176 @@ const MCP_URL = "https://mcp.integramarkets.app/mcp";
  */
 const MCP_URL_FALLBACK = "https://integra-mcp-production.up.railway.app/mcp";
 
-function CopyBlock({ label, code }: { label: string; code: string }) {
+/**
+ * Where "Open in Claude" sends the user.
+ *
+ * Claude DOES support a link that pre-fills the custom-connector dialog with a
+ * name and URL — other MCP products ship one — but Anthropic does not document
+ * the format publicly, and it could not be recovered from a shipped example
+ * (the page HTML and all 44 of its JS chunks contain neither the button label
+ * nor any claude.ai URL; the dialog is loaded from a chunk that is not
+ * reachable without running the page).
+ *
+ * So this points at the connectors settings page, which is correct but does not
+ * pre-fill. Guessing the parameter names would produce a button that appears to
+ * work and silently does nothing.
+ *
+ * To upgrade: click "Open in Claude" on a site that has it, copy the URL from
+ * the address bar of the tab that opens (the control may be a <button> calling
+ * window.open, so "Copy link address" can come back empty), and swap it in
+ * here. The copy in the dialog below already handles both cases — it tells the
+ * user to paste if the fields are not pre-filled.
+ */
+const CLAUDE_CONNECTORS_URL = "https://claude.ai/settings/connectors";
+
+/**
+ * Setup dialog, modelled on how other MCP products present this.
+ *
+ * A card of instructions on a settings page gets skimmed. The steps only matter
+ * at the moment someone is actually connecting, so they live behind one button
+ * and appear in order, with the URL copyable at the point it is needed.
+ */
+function ConnectDialog({
+  url,
+  fallbackUrl,
+  onClose,
+}: {
+  url: string;
+  fallbackUrl: string;
+  onClose: () => void;
+}) {
   const [copied, setCopied] = useState(false);
 
   const copy = async () => {
     try {
-      await navigator.clipboard.writeText(code);
+      await navigator.clipboard.writeText(url);
       setCopied(true);
-      setTimeout(() => setCopied(false), 1600);
+      setTimeout(() => setCopied(false), 2400);
     } catch {
-      // clipboard blocked — no-op; user can select manually
+      // clipboard blocked — the URL is visible and selectable
     }
   };
 
   return (
-    <div>
-      <div className="mb-2 flex items-center justify-between">
-        <span className="text-sm font-medium">{label}</span>
+    <div
+      className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 p-4"
+      role="dialog"
+      aria-modal="true"
+      aria-label="Connect Integra to Claude"
+      onClick={onClose}
+    >
+      <div
+        className="relative max-h-[90vh] w-full max-w-lg overflow-y-auto rounded-2xl border border-divider bg-bg-secondary p-8"
+        onClick={(e) => e.stopPropagation()}
+      >
         <button
-          onClick={copy}
-          className="text-xs text-accent-primary hover:underline"
+          onClick={onClose}
+          aria-label="Close"
+          className="absolute right-5 top-5 flex h-8 w-8 items-center justify-center rounded-full border border-divider text-text-secondary hover:text-text-primary"
         >
-          {copied ? "Copied" : "Copy"}
+          &times;
         </button>
+
+        <p className="text-xs font-medium uppercase tracking-widest text-text-secondary">
+          Claude
+        </p>
+
+        <ol className="mt-6 space-y-6">
+          <Step n={1} text="Copy the server URL below.">
+            <div className="mt-3 flex items-center justify-between gap-3 rounded-lg bg-bg-primary px-4 py-3">
+              <code className="truncate text-xs text-text-primary">{url}</code>
+              <button
+                onClick={copy}
+                className="shrink-0 text-xs text-accent-primary hover:underline"
+              >
+                {copied ? "Copied" : "Copy"}
+              </button>
+            </div>
+          </Step>
+
+          <Step
+            n={2}
+            text={
+              <>
+                Open Claude&rsquo;s custom connector dialog, then enter{" "}
+                <span className="text-text-primary">&ldquo;Integra Markets&rdquo;</span>{" "}
+                and paste the URL.
+              </>
+            }
+          >
+            <a
+              href={CLAUDE_CONNECTORS_URL}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="mt-3 inline-flex items-center gap-2 rounded-lg bg-text-primary px-4 py-2.5 text-sm font-medium text-bg-primary transition hover:opacity-90"
+            >
+              Open in Claude
+              <span aria-hidden="true">&#8599;</span>
+            </a>
+          </Step>
+
+          <Step
+            n={3}
+            text={
+              <>
+                Set <span className="text-text-primary">Authentication</span> to{" "}
+                <span className="text-text-primary">None</span>, then add a
+                request header:{" "}
+                <code className="text-accent-primary">Authorization</code> with
+                the value{" "}
+                <code className="text-accent-primary">Bearer ik_live_…</code>{" "}
+                using a key from this page.
+              </>
+            }
+          >
+            <p className="mt-2 text-xs text-text-secondary">
+              Claude may suggest &ldquo;Always required&rdquo;. That means OAuth,
+              which this server does not use — <span className="text-text-primary">None</span>{" "}
+              is the option for API-key servers. Leave Transport on{" "}
+              <span className="text-text-primary">Streamable HTTP</span>.
+            </p>
+          </Step>
+
+          <Step n={4} text="Tap Add to save the connector, then enable it in a conversation from the + menu." />
+        </ol>
+
+        <details className="mt-8 text-xs text-text-secondary">
+          <summary className="cursor-pointer hover:text-text-primary">
+            Connector not reachable?
+          </summary>
+          <p className="mt-3">
+            The address above uses a custom domain whose certificate is issued
+            automatically. If it was set up very recently, this alternate address
+            reaches the identical service:
+          </p>
+          <code className="mt-2 block break-all rounded-lg bg-bg-primary p-3 text-[11px] text-text-primary">
+            {fallbackUrl}
+          </code>
+        </details>
       </div>
-      <pre className="overflow-x-auto rounded-lg bg-bg-primary p-4 text-xs leading-relaxed">
-        <code>{code}</code>
-      </pre>
     </div>
   );
 }
 
-/**
- * Copies the connector URL, then opens Claude's connector settings.
- *
- * Claude has NO deep link that pre-fills the "Add custom connector" dialog —
- * Anthropic's own documentation describes manual navigation and manual URL
- * entry as the only routes, and there is no documented query parameter or URL
- * scheme for it. So this is not a one-click install and is not presented as
- * one: it removes the two steps that can actually be removed (finding the page,
- * and getting the URL onto the clipboard) and leaves the paste.
- *
- * Falls back to opening the page anyway if the clipboard is blocked, because
- * arriving at the right screen without the URL is still better than arriving
- * nowhere.
- */
-function AddToClaudeButton({ url }: { url: string }) {
-  const [copied, setCopied] = useState(false);
-
-  const go = async () => {
-    try {
-      await navigator.clipboard.writeText(url);
-      setCopied(true);
-      setTimeout(() => setCopied(false), 4000);
-    } catch {
-      // clipboard blocked — the URL is shown above, so it can be copied by hand
-    }
-    window.open("https://claude.ai/settings/connectors", "_blank", "noopener");
-  };
-
+function Step({
+  n,
+  text,
+  children,
+}: {
+  n: number;
+  text: React.ReactNode;
+  children?: React.ReactNode;
+}) {
   return (
-    <div>
-      <button
-        onClick={go}
-        className="inline-flex items-center gap-2 rounded-lg bg-accent-primary px-4 py-2.5 text-sm font-medium text-bg-primary transition hover:opacity-90"
-      >
-        Add to Claude
-        <span aria-hidden="true">&rarr;</span>
-      </button>
-      <p className="mt-2 text-xs text-text-secondary">
-        {copied
-          ? "URL copied. In the tab that just opened, choose Add custom connector and paste it."
-          : "Copies the URL and opens Claude's connector settings. Claude has no link that fills the dialog in for you, so the paste is manual."}
-      </p>
-    </div>
+    <li className="flex gap-4">
+      <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full border border-divider text-xs text-text-secondary">
+        {n}
+      </span>
+      <div className="min-w-0 flex-1">
+        <p className="text-sm text-text-primary">{text}</p>
+        {children}
+      </div>
+    </li>
   );
 }
 
@@ -119,6 +215,8 @@ type Props = {
 };
 
 export function ConnectClaude({ hasHistoryTier = false }: Props) {
+  const [open, setOpen] = useState(false);
+
   return (
     <div className="rounded-xl border border-divider bg-bg-secondary p-6">
       <div>
@@ -129,95 +227,21 @@ export function ConnectClaude({ hasHistoryTier = false }: Props) {
         </p>
       </div>
 
-      <div className="mt-6 space-y-6">
-        <AddToClaudeButton url={MCP_URL} />
+      <button
+        onClick={() => setOpen(true)}
+        className="mt-5 inline-flex items-center gap-2 rounded-lg bg-accent-primary px-4 py-2.5 text-sm font-medium text-bg-primary transition hover:opacity-90"
+      >
+        Start on Claude
+        <span aria-hidden="true">&rarr;</span>
+      </button>
 
-        <CopyBlock label="Connector URL" code={MCP_URL} />
-
-        <ol className="space-y-2 text-sm text-text-secondary">
-          <li>
-            <span className="font-medium text-text-primary">1.</span> In Claude,
-            open <span className="text-text-primary">Customize → Connectors</span>{" "}
-            (Team and Enterprise owners:{" "}
-            <span className="text-text-primary">
-              Organization settings → Connectors
-            </span>
-            ).
-          </li>
-          <li>
-            <span className="font-medium text-text-primary">2.</span> Choose{" "}
-            <span className="text-text-primary">Add custom connector</span> and
-            paste the URL above.
-          </li>
-          <li>
-            <span className="font-medium text-text-primary">3.</span> Set{" "}
-            <span className="text-text-primary">Authentication</span> to{" "}
-            <span className="text-text-primary">None</span> — see the note below
-            — and add your key as a request header.
-          </li>
-          <li>
-            <span className="font-medium text-text-primary">4.</span> Turn it on
-            in a conversation from the{" "}
-            <span className="text-text-primary">+</span> menu, under Connectors.
-          </li>
-        </ol>
-
-        <div className="rounded-lg border border-divider bg-bg-primary p-4">
-          <h3 className="text-sm font-semibold">What to select</h3>
-          <dl className="mt-3 space-y-2 text-sm">
-            <div className="flex flex-wrap gap-x-3">
-              <dt className="w-40 shrink-0 text-text-secondary">Authentication</dt>
-              <dd className="text-text-primary">
-                <span className="font-medium">None</span>
-                <span className="ml-2 text-xs text-text-secondary">
-                  Claude may suggest &ldquo;Always required&rdquo; — that means
-                  OAuth, which this server does not use. None is the option for
-                  API-key servers.
-                </span>
-              </dd>
-            </div>
-            <div className="flex flex-wrap gap-x-3">
-              <dt className="w-40 shrink-0 text-text-secondary">Header name</dt>
-              <dd>
-                <code className="text-accent-primary">Authorization</code>
-              </dd>
-            </div>
-            <div className="flex flex-wrap gap-x-3">
-              <dt className="w-40 shrink-0 text-text-secondary">Header value</dt>
-              <dd>
-                <code className="text-accent-primary">Bearer ik_live_…</code>
-                <span className="ml-2 text-xs text-text-secondary">
-                  The word <span className="font-medium">Bearer</span> and a
-                  space are required.
-                </span>
-              </dd>
-            </div>
-            <div className="flex flex-wrap gap-x-3">
-              <dt className="w-40 shrink-0 text-text-secondary">Transport</dt>
-              <dd className="text-text-primary">
-                Streamable HTTP
-                <span className="ml-2 text-xs text-text-secondary">
-                  detected from the URL; leave it. Not SSE.
-                </span>
-              </dd>
-            </div>
-          </dl>
-        </div>
-
-        <details className="text-xs text-text-secondary">
-          <summary className="cursor-pointer hover:text-text-primary">
-            Connector not reachable?
-          </summary>
-          <div className="mt-3 space-y-2">
-            <p>
-              The address above uses a custom domain whose certificate is issued
-              automatically. If it was set up very recently, this alternate
-              address reaches the identical service:
-            </p>
-            <CopyBlock label="Alternate URL" code={MCP_URL_FALLBACK} />
-          </div>
-        </details>
-      </div>
+      {open && (
+        <ConnectDialog
+          url={MCP_URL}
+          fallbackUrl={MCP_URL_FALLBACK}
+          onClose={() => setOpen(false)}
+        />
+      )}
 
       <div className="mt-8">
         <h3 className="text-sm font-semibold">Available tools</h3>
