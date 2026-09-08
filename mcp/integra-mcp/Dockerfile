@@ -1,0 +1,47 @@
+# Remote MCP server — Streamable HTTP transport.
+#
+# Runs as its own Railway service inside the SAME project as the backend, the
+# way railway.backfill.json already does. Separate service rather than a route
+# on the FastAPI app for two reasons: it is Node against a Python backend, and
+# an MCP client holding a long-lived connection should not be able to affect
+# the API's own capacity.
+#
+# Multi-stage so the runtime image carries no TypeScript compiler and no dev
+# dependencies — the published package is 9 kB of JavaScript, and the image
+# should reflect that rather than shipping the toolchain that produced it.
+
+# ---- build ----------------------------------------------------------------
+FROM node:20-alpine AS build
+WORKDIR /app
+
+# Copy manifests first so `npm ci` is cached independently of source changes.
+COPY mcp/integra-mcp/package.json mcp/integra-mcp/package-lock.json ./
+RUN npm ci
+
+COPY mcp/integra-mcp/tsconfig.json ./
+COPY mcp/integra-mcp/src ./src
+RUN npm run build
+
+# ---- runtime --------------------------------------------------------------
+FROM node:20-alpine AS runtime
+WORKDIR /app
+
+ENV NODE_ENV=production
+
+COPY mcp/integra-mcp/package.json mcp/integra-mcp/package-lock.json ./
+# --omit=dev drops typescript and @types, which exist only to produce dist/.
+RUN npm ci --omit=dev && npm cache clean --force
+
+COPY --from=build /app/dist ./dist
+
+# node:alpine ships an unprivileged `node` user. Running as root buys nothing
+# here and costs the usual.
+USER node
+
+# Railway injects PORT; http.ts defaults to 8080 when it is absent.
+EXPOSE 8080
+
+# Not `npm start` — that resolves to dist/index.js, the STDIO entrypoint, which
+# would sit waiting on a stdin that never arrives and fail the health check with
+# no error in the logs.
+CMD ["node", "dist/http.js"]
