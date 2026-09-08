@@ -42,17 +42,30 @@ this machine.
 
 ## One-time setup
 
-### 1. Create the service in the existing project
+### 1. Add a second SERVICE to the existing project
+
+Railway has two levels, and the wording matters here:
+
+| | |
+|---|---|
+| **Project** | The container. `integra-markets-backend`. **Do not create one.** |
+| **Service** | A deployable unit *inside* a project. The API is one today. **Create a second.** |
+
+The button labelled **New** on the project canvas adds a **service to the
+project you are already inside**. It does not create a project. You should end
+up with two services side by side on one canvas — the same shape
+`railway.backfill.json` already produces.
 
 **→ [Open the project canvas](https://railway.com/project/18e783a9-f02d-4396-b49c-98a7a99bbc72?environmentId=de3d0dd8-5cd7-43af-9570-1e18fd4788b5)**
 
-Then **New** → **GitHub Repo** → `Centori/integra-markets`.
+Confirm the header reads **integra-markets-backend**, then:
 
-Railway has no deep link to the "New service" modal, so this lands on the canvas
-with the production environment already selected. Confirm the header reads
-**integra-markets-backend** before clicking New — creating this in a new project
-is the one mistake that is annoying to undo, because the domain follows the
-project.
+**New** → **GitHub Repo** → `Centori/integra-markets`
+
+Railway offers no deep link to that modal, which is why step 1 stops at the
+canvas. If you instead land on a screen asking you to *name a project*, you have
+gone one level too high — back out. A service created in the wrong project is
+annoying to undo, because the custom domain follows the project.
 
 Once the service exists, its id appears in the address bar:
 
