@@ -19,8 +19,8 @@ export default function McpDocsPage() {
         <h1 className="text-3xl font-semibold">Integra MCP</h1>
         <p className="mt-2 text-text-secondary">
           A Model Context Protocol connector that lets you query Integra&apos;s
-          commodity intelligence directly from Claude Desktop or Claude Code —
-          no code required.
+          commodity intelligence directly from Claude — on the web, desktop and
+          mobile. Nothing to install.
         </p>
       </div>
 
@@ -36,9 +36,9 @@ export default function McpDocsPage() {
             .
           </li>
           <li>
-            <span className="text-text-primary">2.</span> Install the{" "}
-            <code className="text-accent-primary">@integra/mcp</code> connector
-            in Claude Desktop or Claude Code using the snippet below.
+            <span className="text-text-primary">2.</span> Add Integra as a
+            custom connector using the button below — it is a URL, not an
+            install.
           </li>
           <li>
             <span className="text-text-primary">3.</span> Ask Claude questions
@@ -90,12 +90,15 @@ export default function McpDocsPage() {
               &ldquo;Integra API key rejected&rdquo;
             </div>
             <p className="mt-1">
-              The key in your MCP config is invalid or revoked. Create a new
-              one at{" "}
+              The key sent in the connector&apos;s{" "}
+              <code className="text-accent-primary">Authorization</code> header
+              is invalid or revoked. Create a new one at{" "}
               <Link href="/api-keys" className="text-accent-primary underline">
                 /api-keys
               </Link>{" "}
-              and restart Claude Desktop.
+              and update the header — the value must read{" "}
+              <code className="text-accent-primary">Bearer ik_live_…</code>,
+              including the word Bearer.
             </p>
           </div>
           <div>
@@ -112,12 +115,13 @@ export default function McpDocsPage() {
           </div>
           <div>
             <div className="text-text-primary">
-              MCP server not appearing in Claude
+              Connector added, but every tool call fails
             </div>
             <p className="mt-1">
-              Ensure you have Node 18+ installed (
-              <code className="text-accent-primary">node --version</code>) and
-              restart Claude Desktop after editing the config file.
+              The connector accepts any key at setup — the handshake and tool
+              list succeed before a key is ever checked, so a wrong key only
+              surfaces when a tool actually runs. If the tools are listed but
+              each call errors, the header value is the thing to check.
             </p>
           </div>
         </div>
