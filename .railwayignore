@@ -3,7 +3,6 @@ assets/
 app-store-assets/
 dashboard/
 docs/
-sdk/
 public/
 dist/
 coverage/
