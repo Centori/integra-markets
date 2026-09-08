@@ -73,6 +73,7 @@ def run() -> Dict[str, Any]:
         ("card_content", _check_card_content),
         ("summarize_endpoint", _check_summarize_endpoint),
         ("tier_depth_contract", _check_tier_depth_contract),
+        ("rulebook_coverage", _check_rulebook_coverage),
         ("archive_backfill_progress", _check_backfill_progress),
         ("archive_scoring_progress", _check_scoring_progress),
         ("archive_depth", _check_archive_depth),
@@ -617,6 +618,95 @@ def _check_tier_depth_contract():
                 f"{upper} queries less deeply ({detail[upper]['query']}d) than "
                 f"{lower} ({detail[lower]['query']}d)"
             )
+
+# How much of the live feed the directional rulebook can actually speak about.
+# Both failures this guards against are silent: an article that resolves to no
+# commodity, and one that resolves but matches no rule, are scored on prose tone
+# alone and look completely normal on the card.
+MIN_COMMODITY_RESOLUTION = float(os.getenv("HEALTH_MIN_COMMODITY_RESOLUTION", "0.45"))
+MIN_RULEBOOK_SIGNAL_RATIO = float(os.getenv("HEALTH_MIN_RULEBOOK_SIGNAL", "0.20"))
+
+
+def _check_rulebook_coverage():
+    """Is the directional rulebook still reaching live articles?
+
+    Two regressions this catches, both of which degrade quietly to tone-only
+    scoring rather than erroring:
+
+      * ROUTING. `normalize_commodity` decides which rulebook runs. It once
+        matched bare substrings -- "Goldman Sachs" resolved to gold, "Las Vegas"
+        to gas -- and tightening it to word boundaries could equally overshoot,
+        leaving articles resolving to nothing at all. Either way the card looks
+        fine and the direction comes from prose tone.
+      * VOCABULARY. Patterns were written in the present tense while news is
+        written in the past, so "inventories rose" missed a rule matching
+        "rise". An article can route to the right market and still match
+        nothing.
+
+    Also asserts the invariant that mirror pairs weigh the same, because an
+    asymmetry there is a directional prior applied to every future article.
+    """
+    articles = _live_articles()
+    if not articles:
+        return False, {"articles": 0, "reason": "feed returned nothing"}
+
+    try:
+        import main_simple_nlp as nlp
+    except Exception as exc:  # noqa: BLE001
+        return False, {"reason": f"main_simple_nlp not importable: {exc}"}
+
+    resolved = 0
+    with_signal = 0
+    markets: Dict[str, int] = {}
+    for article in articles:
+        text = f"{article.get('title', '')}. {article.get('summary', '')}"
+        try:
+            commodity = nlp.normalize_commodity(None, text)
+            if not commodity:
+                continue
+            resolved += 1
+            markets[commodity] = markets.get(commodity, 0) + 1
+            fundamental = nlp.analyze_fundamental_direction(text, commodity)
+            if fundamental.get("matched_signals"):
+                with_signal += 1
+        except Exception:  # noqa: BLE001 — one bad article must not fail the tick
+            continue
+
+    total = len(articles)
+    detail = {
+        "articles": total,
+        "resolved_to_commodity": resolved,
+        "resolution_ratio": round(resolved / total, 2),
+        "with_rulebook_signal": with_signal,
+        "signal_ratio": round(with_signal / total, 2),
+        "markets_seen": dict(sorted(markets.items(), key=lambda kv: -kv[1])[:8]),
+    }
+
+    problems = []
+    if detail["resolution_ratio"] < MIN_COMMODITY_RESOLUTION:
+        problems.append(
+            f"only {round(detail['resolution_ratio'] * 100)}% of articles resolve to a "
+            f"commodity (need >={round(MIN_COMMODITY_RESOLUTION * 100)}%) — routing may "
+            f"have overshot, and unresolved articles are scored on tone alone"
+        )
+    if detail["signal_ratio"] < MIN_RULEBOOK_SIGNAL_RATIO:
+        problems.append(
+            f"only {round(detail['signal_ratio'] * 100)}% match any rulebook signal "
+            f"(need >={round(MIN_RULEBOOK_SIGNAL_RATIO * 100)}%) — the rulebook is not "
+            f"reaching real articles"
+        )
+
+    unbalanced = [
+        f"{a}={nlp.signal_weight(a)} vs {b}={nlp.signal_weight(b)}"
+        for a, b in getattr(nlp, "_MIRROR_PAIRS", ())
+        if nlp.signal_weight(a) != nlp.signal_weight(b)
+    ]
+    if unbalanced:
+        detail["unbalanced_mirrors"] = unbalanced
+        problems.append(
+            f"{len(unbalanced)} mirror pair(s) weigh differently — a directional "
+            f"prior applied to every future article"
+        )
 
     if problems:
         detail["reason"] = "; ".join(problems)
