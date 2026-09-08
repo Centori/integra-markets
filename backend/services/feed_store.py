@@ -137,6 +137,51 @@ def _searchable_text(row: Dict[str, Any]) -> str:
     return " ".join(parts)
 
 
+def _driver_terms(row: Dict[str, Any]) -> List[str]:
+    """The article's extracted market drivers, as plain strings.
+
+    `raw_payload.keywords` is written by the ingest but was never emitted by
+    this reader, so `item.key_drivers || item.keywords || []` in NewsFeed.js
+    resolved to [] on every card. Tolerant of the shapes older rows carry:
+    a list, a comma-joined string, or absent.
+    """
+    payload = row.get("raw_payload")
+    if not isinstance(payload, dict):
+        return []
+    raw = payload.get("keywords")
+    if isinstance(raw, str):
+        raw = [p.strip() for p in raw.split(",")]
+    if not isinstance(raw, (list, tuple)):
+        return []
+    seen: Set[str] = set()
+    out: List[str] = []
+    for item in raw:
+        term = str(item).strip()
+        key = term.lower()
+        if term and key not in seen:
+            seen.add(key)
+            out.append(term)
+    return out[:5]
+
+
+def _drivers(row: Dict[str, Any]) -> List[Dict[str, Any]]:
+    """Drivers in the {word, score} shape AIAnalysisOverlay maps.
+
+    Score is positional rather than modelled: the ingest's extractor returns an
+    ordered list with no weights attached, and inventing a number here would
+    assert a precision the pipeline does not have. Leading terms rank higher
+    because `extract_keywords` orders commodities first.
+    """
+    terms = _driver_terms(row)
+    if not terms:
+        return []
+    step = 0.5 / max(len(terms), 1)
+    return [
+        {"word": term, "score": round(0.9 - i * step, 2)}
+        for i, term in enumerate(terms)
+    ]
+
+
 def _title_key(title: str) -> str:
     """Normalised title, for catching the same story syndicated twice."""
     return re.sub(r"\W+", " ", str(title or "")).strip().lower()
@@ -180,6 +225,16 @@ def _to_article(row: Dict[str, Any],
         # on the articles that genuinely have no image. Rows archived before
         # image capture landed carry no image and still fall back — correctly.
         "image_url": (row.get("raw_payload") or {}).get("image_url") or None,
+        # Key Sentiment Drivers. The ingest already extracts these into
+        # raw_payload.keywords, but the store reader never emitted them, so
+        # `item.key_drivers || item.keywords || []` in NewsFeed.js resolved to
+        # [] on every card — on every tier, not only free. Same shape of bug as
+        # the image: captured at ingest, dropped on read.
+        #
+        # Emitted under both names because the two consumers disagree:
+        # NewsFeed.js reads plain strings, AIAnalysisOverlay maps {word, score}.
+        "keywords": _driver_terms(row),
+        "key_drivers": _drivers(row),
         # ISO 8601 UTC, always. The old response mixed '-0500', ' EST ',
         # 'GMT' and 'Aug 17, 2026 07:37 GMT' in one payload.
         "published": published,
