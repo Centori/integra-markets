@@ -1818,6 +1818,10 @@ _COMMODITY_ALIASES: Dict[str, str] = {
     "niobium": "coltan",
 }
 
+# Cross-cutting factors rather than markets. Demoted in resolution so a real
+# commodity mentioned in the same article always wins.
+_PSEUDO_COMMODITIES = frozenset({"weather", "macro", "forex"})
+
 # Longest alias first, so "crude oil" and "natural gas" win over "oil"/"gas".
 _ALIAS_PATTERNS: List[tuple] = [
     (
@@ -1867,7 +1871,15 @@ def normalize_commodity(commodity: Optional[str], text: Optional[str] = None) ->
             # "natural gas" once and "gas" five times -- both point at gas, but
             # "crude oil" vs "oil" in an article that also mentions "oil prices"
             # should not let a generic term outvote a specific one.
-            scores[canonical] = scores.get(canonical, 0.0) + hits * (1 + len(alias) / 20.0)
+            weight = hits * (1 + len(alias) / 20.0)
+            # "weather" and "macro" are cross-cutting factors, not markets. They
+            # remain as fallback books for articles that resolve to nothing
+            # else, but must never outrank a real commodity that is also
+            # present: a drought story about wheat is a WHEAT story, and only
+            # wheat's book knows a drought is bullish there.
+            if canonical in _PSEUDO_COMMODITIES:
+                weight *= 0.4
+            scores[canonical] = scores.get(canonical, 0.0) + weight
     if not scores:
         return None
     return max(scores.items(), key=lambda kv: kv[1])[0]
@@ -1919,6 +1931,11 @@ _MIRROR_PAIRS = (
     ("Electronics demand", "Electronics demand weakness"),
     ("Petrochemical demand", "Petrochemical demand weakness"),
     ("Port congestion", "Congestion easing"),
+    ("Adverse crop weather", "Favourable crop weather"),
+    ("Heating demand surge", "Weak heating demand"),
+    ("Dollar weakness", "Dollar strength"),
+    ("Growth-supportive macro", "Growth downside risk"),
+    ("Safe-haven demand", "Reduced defensive demand"),
 )
 
 _SIGNAL_WEIGHTS: Dict[str, float] = {
@@ -2017,6 +2034,20 @@ _SIGNAL_WEIGHTS: Dict[str, float] = {
     "NGL supply growth": 0.7,
     "Export constraint": 0.7,
     # Directionally suggestive, rarely decisive on its own
+    "Adverse crop weather": 0.8,
+    "Favourable crop weather": 0.8,
+    "Heating demand surge": 0.8,
+    "Weak heating demand": 0.8,
+    "Gulf production shut-in": 0.85,
+    "Refinery weather outage": 0.85,
+    "Hydro shortfall": 0.7,
+    "Cooling demand": 0.6,
+    "Dollar weakness": 0.7,
+    "Dollar strength": 0.7,
+    "Growth-supportive macro": 0.7,
+    "Growth downside risk": 0.7,
+    "Safe-haven demand": 0.7,
+    "Reduced defensive demand": 0.7,
     "Energy security support": 0.3,
     "Policy headwind": 0.4,
 }
@@ -2066,9 +2097,116 @@ def _merge_curve_rules(book: Dict[str, Dict[str, List[Dict[str, str]]]]) -> Dict
     return book
 
 
+# Weather and macro are MODIFIERS, not commodities.
+#
+# They sat in the rulebook alongside oil and gold with fixed directional signs,
+# but neither has a direction of its own -- only a direction with respect to a
+# commodity:
+#
+#                  wheat / corn      natural gas         gold
+#   drought        bullish (yield)   bullish (hydro)     --
+#   cold snap      ~neutral          bullish (heating)   --
+#   warm winter    ~neutral          BEARISH             --
+#   hurricane      --                bullish (shut-ins)  --
+#   strong dollar  bearish           bearish             BEARISH
+#   recession      bearish (demand)  bearish             BULLISH (safe haven)
+#
+# A single sign per event is wrong for at least one market in every row. The
+# handoff already recorded the symptom -- drought scored -0.07, hurricane -0.07,
+# both wrong for wheat.
+#
+# These merge into each commodity's book with that commodity's sign, the same
+# way curve rules do. The standalone "weather" and "macro" books are kept only
+# as a fallback for articles that resolve to no real commodity.
+_WEATHER_MODIFIERS: Dict[str, Dict[str, List[Dict[str, str]]]] = {
+    "wheat": {
+        "bullish": [{"pattern": r"(drought|heatwave|frost|freeze|flood|excessive rain|dry spell)", "signal": "Adverse crop weather"}],
+        "bearish": [{"pattern": r"(timely rain|favou?rable weather|beneficial rain|ideal conditions)", "signal": "Favourable crop weather"}],
+    },
+    "corn": {
+        "bullish": [{"pattern": r"(drought|heatwave|frost|freeze|flood|excessive rain|dry spell)", "signal": "Adverse crop weather"}],
+        "bearish": [{"pattern": r"(timely rain|favou?rable weather|beneficial rain|ideal conditions)", "signal": "Favourable crop weather"}],
+    },
+    "gas": {
+        "bullish": [
+            {"pattern": r"(cold snap|arctic|polar vortex|freeze|winter storm|colder[- ]than[- ]normal|below[- ]normal temperatures?)", "signal": "Heating demand surge"},
+            {"pattern": r"(hurricane|tropical storm).{0,30}(gulf|offshore|platform|shut[- ]?in)", "signal": "Gulf production shut-in"},
+            # Verb order varies ("drought cut hydro output" vs "hydro output fell
+            # on drought"), so anchor on the two nouns co-occurring rather than
+            # on a verb between them.
+            {"pattern": r"(drought|low water|dry conditions).{0,40}(hydro|reservoir)", "signal": "Hydro shortfall"},
+            {"pattern": r"(hydro|reservoir).{0,40}(drought|low water|dry conditions)", "signal": "Hydro shortfall"},
+            {"pattern": r"(heatwave|hotter[- ]than[- ]normal).{0,26}(power|cooling|electricity|burn)", "signal": "Cooling demand"},
+        ],
+        "bearish": [
+            {"pattern": r"(mild|warm|warmer[- ]than[- ]normal|above[- ]normal temperatures?).{0,24}(winter|weather|forecast)", "signal": "Weak heating demand"},
+        ],
+    },
+    "oil": {
+        "bullish": [
+            {"pattern": r"(hurricane|tropical storm).{0,30}(gulf|offshore|platform|refinery|shut[- ]?in|evacuat\w+)", "signal": "Gulf production shut-in"},
+        ],
+        "bearish": [],
+    },
+    "refined_products": {
+        "bullish": [
+            {"pattern": r"(hurricane|freeze|winter storm).{0,30}(refinery|refineries|gulf coast)", "signal": "Refinery weather outage"},
+        ],
+        "bearish": [],
+    },
+}
+
+# Macro modifiers. The dollar leg is the important one: commodities are priced
+# in USD, so dollar strength is a headwind for ALL of them -- not only for the
+# metals where it happened to be coded.
+_MACRO_MODIFIERS: Dict[str, Dict[str, List[Dict[str, str]]]] = {
+    "_usd_priced": {
+        "bullish": [{"pattern": r"(dollar|usd|greenback).{0,20}(weak\w*|fall\w*|fell|declin\w+|slid\w*|softer)", "signal": "Dollar weakness"}],
+        "bearish": [{"pattern": r"(dollar|usd|greenback).{0,20}(strong\w*|strengthen\w*|rall\w+|rose|ris\w*|firmer)", "signal": "Dollar strength"}],
+    },
+    "_cyclical": {
+        # Growth-sensitive: industrial metals, energy, freight.
+        "bullish": [{"pattern": r"(soft landing|stimulus|pmi.{0,16}(expand\w*|beat)|growth.{0,16}(accelerat\w+|beat))", "signal": "Growth-supportive macro"}],
+        "bearish": [{"pattern": r"(recession|hard landing|demand destruction|pmi.{0,16}(contract\w+|miss))", "signal": "Growth downside risk"}],
+    },
+    "_defensive": {
+        # Gold and silver invert the cyclical leg: a recession brings rate cuts.
+        "bullish": [{"pattern": r"(recession|hard landing|risk[- ]off|flight to safety)", "signal": "Safe-haven demand"}],
+        "bearish": [{"pattern": r"(risk[- ]on|soft landing|strong payrolls)", "signal": "Reduced defensive demand"}],
+    },
+}
+
+_USD_PRICED = ("oil", "gas", "gold", "silver", "copper", "wheat", "corn",
+               "uranium", "lithium", "tin", "refined_products", "lpg",
+               "fertilizer", "coltan", "helium")
+_CYCLICAL = ("oil", "copper", "lithium", "tin", "freight", "refined_products", "lpg")
+_DEFENSIVE = ("gold", "silver")
+
+
+def _merge_modifier_rules(book: Dict[str, Dict[str, List[Dict[str, str]]]]) -> Dict[str, Dict[str, List[Dict[str, str]]]]:
+    """Attach weather and macro modifiers with each commodity's own sign."""
+
+    def attach(name: str, rules: Dict[str, List[Dict[str, str]]]) -> None:
+        entry = book.get(name)
+        if not entry:
+            return
+        for side in ("bullish", "bearish"):
+            entry[side] = list(entry.get(side, [])) + list(rules.get(side, []))
+
+    for name, rules in _WEATHER_MODIFIERS.items():
+        attach(name, rules)
+    for name in _USD_PRICED:
+        attach(name, _MACRO_MODIFIERS["_usd_priced"])
+    for name in _CYCLICAL:
+        attach(name, _MACRO_MODIFIERS["_cyclical"])
+    for name in _DEFENSIVE:
+        attach(name, _MACRO_MODIFIERS["_defensive"])
+    return book
+
+
 def get_commodity_rulebook() -> Dict[str, Dict[str, List[Dict[str, str]]]]:
     """Commodity-specific directional rules layered on top of VADER tone."""
-    return _merge_curve_rules({
+    return _merge_modifier_rules(_merge_curve_rules({
         "oil": {
             "bullish": [
                 {"pattern": r"opec\+?.{0,20}(cut\w*|reduce|curb)", "signal": "OPEC supply cut"},
@@ -2380,7 +2518,7 @@ def get_commodity_rulebook() -> Dict[str, Dict[str, List[Dict[str, str]]]]:
                 {"pattern": r"(recycl\w+|substitut\w+).{0,24}(tantalum|capacitor)", "signal": "Demand substitution"},
             ]
         }
-    })
+    }))
 
 def analyze_fundamental_direction(text: str, commodity: Optional[str]) -> Dict[str, Any]:
     """Interpret whether the text is fundamentally bullish or bearish for a commodity."""
