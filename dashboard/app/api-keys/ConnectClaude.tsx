@@ -68,6 +68,52 @@ function CopyBlock({ label, code }: { label: string; code: string }) {
   );
 }
 
+/**
+ * Copies the connector URL, then opens Claude's connector settings.
+ *
+ * Claude has NO deep link that pre-fills the "Add custom connector" dialog —
+ * Anthropic's own documentation describes manual navigation and manual URL
+ * entry as the only routes, and there is no documented query parameter or URL
+ * scheme for it. So this is not a one-click install and is not presented as
+ * one: it removes the two steps that can actually be removed (finding the page,
+ * and getting the URL onto the clipboard) and leaves the paste.
+ *
+ * Falls back to opening the page anyway if the clipboard is blocked, because
+ * arriving at the right screen without the URL is still better than arriving
+ * nowhere.
+ */
+function AddToClaudeButton({ url }: { url: string }) {
+  const [copied, setCopied] = useState(false);
+
+  const go = async () => {
+    try {
+      await navigator.clipboard.writeText(url);
+      setCopied(true);
+      setTimeout(() => setCopied(false), 4000);
+    } catch {
+      // clipboard blocked — the URL is shown above, so it can be copied by hand
+    }
+    window.open("https://claude.ai/settings/connectors", "_blank", "noopener");
+  };
+
+  return (
+    <div>
+      <button
+        onClick={go}
+        className="inline-flex items-center gap-2 rounded-lg bg-accent-primary px-4 py-2.5 text-sm font-medium text-bg-primary transition hover:opacity-90"
+      >
+        Add to Claude
+        <span aria-hidden="true">&rarr;</span>
+      </button>
+      <p className="mt-2 text-xs text-text-secondary">
+        {copied
+          ? "URL copied. In the tab that just opened, choose Add custom connector and paste it."
+          : "Copies the URL and opens Claude's connector settings. Claude has no link that fills the dialog in for you, so the paste is manual."}
+      </p>
+    </div>
+  );
+}
+
 type Props = {
   hasHistoryTier?: boolean;
 };
@@ -84,6 +130,8 @@ export function ConnectClaude({ hasHistoryTier = false }: Props) {
       </div>
 
       <div className="mt-6 space-y-6">
+        <AddToClaudeButton url={MCP_URL} />
+
         <CopyBlock label="Connector URL" code={MCP_URL} />
 
         <ol className="space-y-2 text-sm text-text-secondary">
@@ -102,9 +150,10 @@ export function ConnectClaude({ hasHistoryTier = false }: Props) {
             paste the URL above.
           </li>
           <li>
-            <span className="font-medium text-text-primary">3.</span> When asked
-            to authenticate, use a key from this page — the one beginning{" "}
-            <code className="text-accent-primary">ik_live_</code>.
+            <span className="font-medium text-text-primary">3.</span> Set{" "}
+            <span className="text-text-primary">Authentication</span> to{" "}
+            <span className="text-text-primary">None</span> — see the note below
+            — and add your key as a request header.
           </li>
           <li>
             <span className="font-medium text-text-primary">4.</span> Turn it on
@@ -112,6 +161,48 @@ export function ConnectClaude({ hasHistoryTier = false }: Props) {
             <span className="text-text-primary">+</span> menu, under Connectors.
           </li>
         </ol>
+
+        <div className="rounded-lg border border-divider bg-bg-primary p-4">
+          <h3 className="text-sm font-semibold">What to select</h3>
+          <dl className="mt-3 space-y-2 text-sm">
+            <div className="flex flex-wrap gap-x-3">
+              <dt className="w-40 shrink-0 text-text-secondary">Authentication</dt>
+              <dd className="text-text-primary">
+                <span className="font-medium">None</span>
+                <span className="ml-2 text-xs text-text-secondary">
+                  Claude may suggest &ldquo;Always required&rdquo; — that means
+                  OAuth, which this server does not use. None is the option for
+                  API-key servers.
+                </span>
+              </dd>
+            </div>
+            <div className="flex flex-wrap gap-x-3">
+              <dt className="w-40 shrink-0 text-text-secondary">Header name</dt>
+              <dd>
+                <code className="text-accent-primary">Authorization</code>
+              </dd>
+            </div>
+            <div className="flex flex-wrap gap-x-3">
+              <dt className="w-40 shrink-0 text-text-secondary">Header value</dt>
+              <dd>
+                <code className="text-accent-primary">Bearer ik_live_…</code>
+                <span className="ml-2 text-xs text-text-secondary">
+                  The word <span className="font-medium">Bearer</span> and a
+                  space are required.
+                </span>
+              </dd>
+            </div>
+            <div className="flex flex-wrap gap-x-3">
+              <dt className="w-40 shrink-0 text-text-secondary">Transport</dt>
+              <dd className="text-text-primary">
+                Streamable HTTP
+                <span className="ml-2 text-xs text-text-secondary">
+                  detected from the URL; leave it. Not SSE.
+                </span>
+              </dd>
+            </div>
+          </dl>
+        </div>
 
         <details className="text-xs text-text-secondary">
           <summary className="cursor-pointer hover:text-text-primary">
