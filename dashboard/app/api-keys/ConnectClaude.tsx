@@ -1,29 +1,41 @@
 "use client";
 
 import { useState } from "react";
+import { MCP_TOOLS } from "@/lib/mcpTools";
 
-// These instructions used to run `npx -y @integra/mcp`. That package is NOT
-// published to npm, so the command failed for every user who copied it. Until
-// it is published, the working path is a local build — verified end to end
-// against the live API.
-const CLAUDE_CODE_CMD = `git clone https://github.com/Centori/integra-markets.git
-cd integra-markets/mcp/integra-mcp && npm install && npm run build
+/**
+ * Connector setup.
+ *
+ * This page has been wrong twice, in opposite directions:
+ *
+ *   1. It told users to run `npx -y @integra/mcp`. That package is not
+ *      published, so the command failed for everyone who copied it.
+ *   2. It was corrected to a local build — `git clone`, `npm install`, and an
+ *      absolute path to dist/index.js. That worked, but required cloning the
+ *      whole product repo to obtain one connector, and only ever worked in
+ *      Claude Desktop and Claude Code.
+ *
+ * Both were consequences of the stdio transport: it runs as a process on the
+ * user's machine, so the user has to obtain and launch a binary. Claude on the
+ * WEB and on MOBILE cannot spawn a process, so neither instruction reached
+ * those surfaces at all.
+ *
+ * The remote server removes the whole category. A custom connector is a URL,
+ * added once at the account level and live everywhere.
+ */
 
-claude mcp add integra \\
-  --env INTEGRA_API_KEY=ik_live_your_key_here \\
-  -- node $(pwd)/dist/index.js`;
+/** Custom domain. Preferred, and what a customer should keep. */
+const MCP_URL = "https://mcp.integramarkets.app/mcp";
 
-const CLAUDE_DESKTOP_JSON = `{
-  "mcpServers": {
-    "integra": {
-      "command": "node",
-      "args": ["/absolute/path/to/integra-markets/mcp/integra-mcp/dist/index.js"],
-      "env": {
-        "INTEGRA_API_KEY": "ik_live_your_key_here"
-      }
-    }
-  }
-}`;
+/**
+ * Railway-issued hostname for the same service.
+ *
+ * Shown as a fallback because a custom domain's certificate takes time to issue
+ * after the DNS record lands, and a reader arriving in that window would
+ * otherwise conclude the product is broken. Both addresses reach the identical
+ * deployment.
+ */
+const MCP_URL_FALLBACK = "https://integra-mcp-production.up.railway.app/mcp";
 
 function CopyBlock({ label, code }: { label: string; code: string }) {
   const [copied, setCopied] = useState(false);
@@ -45,7 +57,6 @@ function CopyBlock({ label, code }: { label: string; code: string }) {
         <button
           onClick={copy}
           className="text-xs text-accent-primary hover:underline"
-          type="button"
         >
           {copied ? "Copied" : "Copy"}
         </button>
@@ -64,71 +75,78 @@ type Props = {
 export function ConnectClaude({ hasHistoryTier = false }: Props) {
   return (
     <div className="rounded-xl border border-divider bg-bg-secondary p-6">
-      <div className="flex items-baseline justify-between">
-        <div>
-          <h2 className="text-lg font-semibold">Connect to Claude</h2>
-          <p className="mt-1 text-sm text-text-secondary">
-            Use Integra from Claude Desktop or Claude Code with no code.
-            Replace <code className="text-accent-primary">ik_live_your_key_here</code> with a key created above.
-          </p>
-        </div>
+      <div>
+        <h2 className="text-lg font-semibold">Connect to Claude</h2>
+        <p className="mt-1 text-sm text-text-secondary">
+          Integra runs as a custom connector. Nothing to install — add the URL
+          once and it works in Claude on the web, desktop and mobile.
+        </p>
       </div>
 
       <div className="mt-6 space-y-6">
-        <CopyBlock label="Claude Code (terminal)" code={CLAUDE_CODE_CMD} />
-        <div>
-          <p className="mb-2 text-sm text-text-secondary">
-            <span className="font-medium text-text-primary">Claude Desktop:</span>{" "}
-            add to{" "}
-            <code className="text-accent-primary">
-              ~/Library/Application Support/Claude/claude_desktop_config.json
-            </code>{" "}
-            (macOS) or{" "}
-            <code className="text-accent-primary">
-              %APPDATA%\Claude\claude_desktop_config.json
-            </code>{" "}
-            (Windows), then restart Claude.
-          </p>
-          <CopyBlock label="Claude Desktop config" code={CLAUDE_DESKTOP_JSON} />
-        </div>
+        <CopyBlock label="Connector URL" code={MCP_URL} />
+
+        <ol className="space-y-2 text-sm text-text-secondary">
+          <li>
+            <span className="font-medium text-text-primary">1.</span> In Claude,
+            open <span className="text-text-primary">Customize → Connectors</span>{" "}
+            (Team and Enterprise owners:{" "}
+            <span className="text-text-primary">
+              Organization settings → Connectors
+            </span>
+            ).
+          </li>
+          <li>
+            <span className="font-medium text-text-primary">2.</span> Choose{" "}
+            <span className="text-text-primary">Add custom connector</span> and
+            paste the URL above.
+          </li>
+          <li>
+            <span className="font-medium text-text-primary">3.</span> When asked
+            to authenticate, use a key from this page — the one beginning{" "}
+            <code className="text-accent-primary">ik_live_</code>.
+          </li>
+          <li>
+            <span className="font-medium text-text-primary">4.</span> Turn it on
+            in a conversation from the{" "}
+            <span className="text-text-primary">+</span> menu, under Connectors.
+          </li>
+        </ol>
+
+        <details className="text-xs text-text-secondary">
+          <summary className="cursor-pointer hover:text-text-primary">
+            Connector not reachable?
+          </summary>
+          <div className="mt-3 space-y-2">
+            <p>
+              The address above uses a custom domain whose certificate is issued
+              automatically. If it was set up very recently, this alternate
+              address reaches the identical service:
+            </p>
+            <CopyBlock label="Alternate URL" code={MCP_URL_FALLBACK} />
+          </div>
+        </details>
       </div>
 
       <div className="mt-8">
         <h3 className="text-sm font-semibold">Available tools</h3>
         <ul className="mt-3 space-y-2 text-sm text-text-secondary">
-          <li>
-            <code className="text-accent-primary">get_sentiment</code> — aggregate sentiment for a commodity over a window
-          </li>
-          <li>
-            <code className="text-accent-primary">market_brief</code> — sentiment + narratives + divergence + price in one call
-          </li>
-          <li>
-            <code className="text-accent-primary">find_emerging_narratives</code> — themes in recent news
-          </li>
-          <li>
-            <code className="text-accent-primary">compare_human_vs_ai</code> — AI vs prediction-market divergence
-          </li>
-          <li>
-            <code className="text-accent-primary">screen_high_conviction_markets</code> — top trade candidates by divergence
-          </li>
-          <li>
-            <code className="text-accent-primary">find_historical_analogs</code>
-            {hasHistoryTier ? (
-              " — similar past setups + realized moves"
-            ) : (
-              <>
-                {" "}— similar past setups + realized moves{" "}
+          {MCP_TOOLS.map((tool) => (
+            <li key={tool.name}>
+              <code className="text-accent-primary">{tool.name}</code> —{" "}
+              {tool.blurb}
+              {tool.historyTier && !hasHistoryTier && (
                 <span className="ml-1 rounded bg-bg-primary px-1.5 py-0.5 text-[10px] uppercase tracking-wide text-text-secondary">
                   API + History tier
                 </span>
-              </>
-            )}
-          </li>
+              )}
+            </li>
+          ))}
         </ul>
       </div>
 
       <div className="mt-6 border-t border-divider pt-4 text-xs text-text-secondary">
-        Once installed, try asking Claude:{" "}
+        Once connected, try asking Claude:{" "}
         <span className="italic text-text-primary">
           &ldquo;Give me a market brief for Brent.&rdquo;
         </span>{" "}
