@@ -3,6 +3,12 @@
 import { useState } from "react";
 import { useSearchParams } from "next/navigation";
 import { browserClient } from "@/lib/supabase";
+import {
+  GOOGLE_CLIENT_ID,
+  createNonce,
+  loadGoogleIdentity,
+  requestGoogleIdToken,
+} from "@/lib/googleIdentity";
 
 // Apple sign-in, enabled. It sat behind NEXT_PUBLIC_ENABLE_APPLE_AUTH, which
 // was never set on the integra-dashboard Vercel project — so the dashboard
@@ -50,21 +56,74 @@ export default function LoginForm() {
   const callbackUrl = () =>
     `${window.location.origin}/auth/callback?next=${encodeURIComponent(redirect)}`;
 
+  /**
+   * Supabase's redirect flow. Still the path for Apple, and the fallback for
+   * Google whenever the in-page flow cannot run.
+   */
+  const oauthRedirect = async (provider: "google" | "apple") => {
+    const { error: oauthError } = await browserClient().auth.signInWithOAuth({
+      provider,
+      options: {
+        redirectTo: callbackUrl(),
+        ...(provider === "google"
+          ? { queryParams: { prompt: "select_account" } }
+          : {}),
+      },
+    });
+    if (oauthError) throw oauthError;
+    // Browser is being redirected to the provider — leave pending on.
+  };
+
+  /**
+   * Google without leaving the page, matching what the mobile app does.
+   *
+   * The redirect flow sends the browser to the Supabase project host, so
+   * Google's consent screen reads "zhdcpiopihqwcmicjpca.supabase.co". Google
+   * Identity Services returns an ID token in-page instead, which goes through
+   * the same signInWithIdToken call the mobile app uses — so the consent screen
+   * shows this origin, and both platforms share one code path.
+   *
+   * Falls back to the redirect on ANY failure. Google Identity is blocked by
+   * some extensions and networks, One Tap can be suppressed by a previous
+   * dismissal, and the client may not have this origin authorised. None of
+   * those should mean a user cannot sign in — a working ugly URL beats a
+   * pretty broken one.
+   */
+  const googleInPage = async (): Promise<boolean> => {
+    if (!GOOGLE_CLIENT_ID) return false;
+    try {
+      await loadGoogleIdentity();
+      const nonce = await createNonce();
+      let unavailable: string | null = null;
+      const token = await requestGoogleIdToken(
+        GOOGLE_CLIENT_ID,
+        nonce,
+        (reason) => {
+          unavailable = reason;
+        }
+      );
+      if (unavailable) return false;
+
+      const { error: idError } = await browserClient().auth.signInWithIdToken({
+        provider: "google",
+        token,
+        nonce: nonce.raw,
+      });
+      if (idError) throw idError;
+
+      window.location.assign(redirect);
+      return true;
+    } catch {
+      return false;
+    }
+  };
+
   const onOAuth = async (provider: "google" | "apple") => {
     setError(null);
     setPending(provider);
     try {
-      const { error: oauthError } = await browserClient().auth.signInWithOAuth({
-        provider,
-        options: {
-          redirectTo: callbackUrl(),
-          ...(provider === "google"
-            ? { queryParams: { prompt: "select_account" } }
-            : {}),
-        },
-      });
-      if (oauthError) throw oauthError;
-      // Browser is being redirected to the provider — leave pending on.
+      if (provider === "google" && (await googleInPage())) return;
+      await oauthRedirect(provider);
     } catch (err) {
       setError(err instanceof Error ? err.message : "Sign in failed");
       setPending(null);
