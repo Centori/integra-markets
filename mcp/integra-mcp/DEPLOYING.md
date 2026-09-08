@@ -77,20 +77,43 @@ https://railway.com/project/18e783a9-.../service/<THIS>/...
 Substitute it into the links below. They cannot be generated in advance — the
 service does not exist yet.
 
-### 2. Point it at this config
+### 2. Service settings — NOT config-as-code
 
-**→ `https://railway.com/project/18e783a9-f02d-4396-b49c-98a7a99bbc72/service/<SERVICE_ID>/settings?environmentId=de3d0dd8-5cd7-43af-9570-1e18fd4788b5`**
-
-Under **Config-as-code**, set the path to:
+**Railway has deprecated config-as-code.** `railway.json` / `railway.toml` still
+*work* where they already exist, but the API now refuses to point a service at
+one:
 
 ```
-railway.mcp.json
+Config as Code (railway.json / railway.toml) is deprecated.
+Use Infrastructure as Code (.railway/railway.ts) instead.
 ```
 
-That file pins the Dockerfile at `mcp/integra-mcp/Dockerfile` and the health
-check at `/health`. Leave **Root Directory** empty — the Dockerfile copies from
-the repo root so it can read both `mcp/integra-mcp/package.json` and
-`package-lock.json` in one build context.
+So `railway.mcp.json` was never going to be applied, and has been removed rather
+than left as a file that looks like configuration and is not.
+
+This service is configured through **service settings** instead, which the CLI
+cannot set but the public API can:
+
+```bash
+T=$(python3 -c "import json;print(json.load(open('$HOME/.railway/config.json'))['user']['token'])")
+curl -s https://backboard.railway.com/graphql/v2 \
+  -H "Content-Type: application/json" -H "Authorization: Bearer $T" \
+  -d '{"query":"mutation{serviceInstanceUpdate(serviceId:\"<SERVICE_ID>\",environmentId:\"de3d0dd8-5cd7-43af-9570-1e18fd4788b5\",input:{rootDirectory:\"mcp/integra-mcp\",healthcheckPath:\"/health\",healthcheckTimeout:60,restartPolicyType:ON_FAILURE,restartPolicyMaxRetries:5})}"}'
+```
+
+**`rootDirectory` is the load-bearing setting.** Without it Railway reads the
+repo-root `railway.toml`, which declares `rootDirectory = "backend"` — and the
+first deploy of this service duly built and ran the **FastAPI backend** on
+`mcp.integramarkets.app`. The logs were unmistakable: `python3.11`, `nltk`,
+`routers mounted: 17/17`.
+
+Setting the root directory to `mcp/integra-mcp` scopes the build to this folder,
+so the root `railway.toml` is out of scope and Railway auto-detects the
+`Dockerfile` here. Note there is no `DOCKERFILE` value in Railway's `Builder`
+enum — detection is automatic when a Dockerfile is present.
+
+Because the build context is this folder, the Dockerfile's `COPY` paths are
+relative to it, not to the repo root.
 
 ### 3. Environment
 
@@ -105,6 +128,10 @@ Nothing is required — every variable has a working default and Railway injects
 | `MCP_PATH` | `/mcp` | Endpoint path |
 | `MCP_MAX_BODY_BYTES` | `1000000` | Request body cap |
 | `PORT` | injected by Railway | `http.ts` falls back to 8080 |
+
+`RAILWAY_DOCKERFILE_PATH` was tried first and **did not work** — the root
+`railway.toml` won. It is harmless but redundant now that `rootDirectory` is
+set, and can be removed.
 
 **Do not set `INTEGRA_API_KEY` on this service.** The stdio entrypoint reads it;
 the HTTP one deliberately does not. If it were set here every caller would share

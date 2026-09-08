@@ -15,11 +15,11 @@ FROM node:20-alpine AS build
 WORKDIR /app
 
 # Copy manifests first so `npm ci` is cached independently of source changes.
-COPY mcp/integra-mcp/package.json mcp/integra-mcp/package-lock.json ./
+COPY package.json package-lock.json ./
 RUN npm ci
 
-COPY mcp/integra-mcp/tsconfig.json ./
-COPY mcp/integra-mcp/src ./src
+COPY tsconfig.json ./
+COPY src ./src
 RUN npm run build
 
 # ---- runtime --------------------------------------------------------------
@@ -28,7 +28,7 @@ WORKDIR /app
 
 ENV NODE_ENV=production
 
-COPY mcp/integra-mcp/package.json mcp/integra-mcp/package-lock.json ./
+COPY package.json package-lock.json ./
 # --omit=dev drops typescript and @types, which exist only to produce dist/.
 RUN npm ci --omit=dev && npm cache clean --force
 
