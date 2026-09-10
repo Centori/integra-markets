@@ -77,7 +77,15 @@ def _label_for(score: Optional[float]) -> str:
 
 @router.get("/sentiment")
 async def sentiment(
-    commodity: str = Query(..., description="Commodity ticker, e.g. 'brent'"),
+    commodity: str = Query(
+        ...,
+        description=(
+            "Canonical commodity name, e.g. 'oil', 'gas', 'copper'. This is "
+            "matched against entity_mentions.entity, which stores the name the "
+            "sentiment engine normalises to — not a market ticker, so 'brent' "
+            "matches nothing."
+        ),
+    ),
     window: str = Query("7d", description="One of 24h, 7d, 30d, 90d"),
     auth: Dict[str, Any] = Depends(verify_api_key),
 ) -> Dict[str, Any]:

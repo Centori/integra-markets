@@ -50,3 +50,18 @@ lxml==4.9.3  # Required by newspaper3k
 
 # Bulk export (write-only XLSX; constant_memory mode keeps peak RAM flat)
 XlsxWriter==3.2.0
+
+# Stripe — REQUIRED, not optional.
+#
+# This is the file the deployed image installs. Railway's `backend` service has
+# no rootDirectory set, so it builds the repo-root Dockerfile, and that
+# Dockerfile does `COPY backend/requirements.txt` — not requirements-light.txt,
+# which is where `stripe` had been listed and where nothing reads it.
+#
+# The failure was invisible from the outside. backend/api/stripe.py imports the
+# SDK lazily inside _stripe(), specifically so the app can boot without it, so
+# the service came up healthy, mounted its routers and answered every other
+# request — and POST /api/stripe/checkout alone returned
+# 503 "stripe SDK not installed on backend". Checkout was the only broken
+# thing, so nothing that monitors uptime could have caught it.
+stripe==11.4.1
