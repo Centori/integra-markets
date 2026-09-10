@@ -4,27 +4,47 @@
  * The redirect flow sends the browser to
  * `https://<project>.supabase.co/auth/v1/authorize`, so Google's consent screen
  * shows **zhdcpiopihqwcmicjpca.supabase.co** — the project's generated
- * hostname, not the product's. That is what a user sees when they sign in on
- * the web today.
+ * hostname, not the product's. Verified live on 2026-09-10:
  *
- * The mobile app does not have this problem, and its own source says why
- * (app/services/authService.ts):
+ *     GET /auth/v1/authorize?provider=google  ->  302 accounts.google.com
+ *       client_id    1039046627332-btsk2dvtdui7onof4tieaqvk3koq99fo…
+ *       redirect_uri https://zhdcpiopihqwcmicjpca.supabase.co/auth/v1/callback
  *
- *     "On iOS we use the native Google Sign-In SDK — pops the iOS account
- *      picker sheet, returns an idToken without ever opening a browser, then
- *      exchanges it for a Supabase session via signInWithIdToken. Result: the
- *      user never sees the Supabase project URL... On web we fall back to
- *      Supabase's redirect-based OAuth (no native SDK available there)."
+ * Google Identity Services returns an ID token in-page instead, with no
+ * navigation. The token goes through `signInWithIdToken({ provider: "google" })`
+ * — the same exchange the iOS build performs with the token from the native
+ * sheet — so the consent screen names the origin the user is actually on.
  *
- * There is a web equivalent: Google Identity Services returns an ID token
- * in-page, with no navigation. The token then goes through the *same*
- * `signInWithIdToken({ provider: "google" })` call the mobile app already uses,
- * so both platforms converge on one code path and the consent screen shows the
- * origin the user is actually on.
+ * WHICH GOOGLE CLIENT. The client above is a **Web application** client, and it
+ * is the one to use here: it is already the Google provider's configured client
+ * in Supabase (proven by the probe above), so Supabase accepts its ID tokens
+ * with nothing further added to "Authorized Client IDs". The iOS client that
+ * app.json registers — 1039046627332-nk0jejccajfd9u63p5kas0l5ps53nlsq, via
+ * `iosUrlScheme` — is a different client and cannot serve this flow: an
+ * iOS-type OAuth client has no Authorized JavaScript origins field at all.
+ * Configuring Google for the mobile app therefore does not carry over to the
+ * web; the origin has to be added to the *web* client.
  *
  * NONCE. Google is given the SHA-256 hash of a random nonce; Supabase is given
  * the raw value and re-hashes it to compare. Sending the same string to both
  * makes the check tautological, which is the usual way this is got wrong.
+ *
+ * ONE TAP IS NOT USED. The first version of this file called
+ * `google.accounts.id.prompt()`. Two problems, one of them fatal:
+ *
+ *   1. `prompt()` reports suppression through a notification callback, not
+ *      through the promise. The caller awaited a promise that, on every
+ *      suppressed path, never settled — so a user whose One Tap was in
+ *      cooldown got a button stuck on "Redirecting…" forever. The fallback the
+ *      design promised could not run, because nothing ever returned.
+ *   2. One Tap is suppressed by design after a dismissal, and Chrome now
+ *      routes it through FedCM, which deprecates the very notification methods
+ *      that were being read. The pretty prompt would have appeared once and
+ *      then quietly stopped appearing.
+ *
+ * `renderButton` has neither property. It is a click on a real Google button,
+ * it is not rate-limited, and — closest to the point — it is the web analogue
+ * of what mobile does: tap, account sheet, token.
  */
 
 const GIS_SRC = "https://accounts.google.com/gsi/client";
@@ -103,48 +123,109 @@ export function loadGoogleIdentity(): Promise<void> {
   return scriptPromise;
 }
 
+/** Google rejects widths outside this range. */
+const MIN_WIDTH = 200;
+const MAX_WIDTH = 400;
+
 /**
- * Prompt for a Google account and resolve with the returned ID token.
+ * How long to wait for the button to appear before giving up on GIS.
  *
- * `prompt()` shows One Tap. It is dismissible and can be suppressed entirely by
- * browser settings or a previous dismissal, so `onUnavailable` fires and the
- * caller falls back rather than the user pressing a button that does nothing.
+ * An unauthorised JavaScript origin is the case this exists for: GIS accepts
+ * `renderButton`, logs its complaint to the console, and simply never fills the
+ * container. Nothing rejects and no callback fires, so without a deadline the
+ * page would sit on an empty space where a sign-in button belongs.
  */
-export function requestGoogleIdToken(
-  clientId: string,
-  nonce: GoogleNonce,
-  onUnavailable: (reason: string) => void
-): Promise<string> {
-  return new Promise<string>((resolve, reject) => {
-    const id = (window as any).google?.accounts?.id;
-    if (!id) return reject(new Error("google identity: not initialised"));
+const RENDER_TIMEOUT_MS = 4000;
 
-    id.initialize({
-      client_id: clientId,
-      nonce: nonce.hashed,
-      callback: (response: { credential?: string }) => {
-        if (response?.credential) resolve(response.credential);
-        else reject(new Error("google identity: no credential returned"));
-      },
-      // The token is exchanged for a Supabase session immediately; there is
-      // nothing to auto-select into on a later visit.
-      auto_select: false,
-      cancel_on_tap_outside: true,
-    });
+function waitForButton(container: HTMLElement): Promise<void> {
+  if (container.childElementCount > 0) return Promise.resolve();
 
-    id.prompt((notification: any) => {
-      if (
-        notification?.isNotDisplayed?.() ||
-        notification?.isSkippedMoment?.() ||
-        notification?.isDismissedMoment?.()
-      ) {
-        onUnavailable(
-          notification?.getNotDisplayedReason?.() ??
-            notification?.getSkippedReason?.() ??
-            notification?.getDismissedReason?.() ??
-            "dismissed"
-        );
+  return new Promise<void>((resolve, reject) => {
+    const observer = new MutationObserver(() => {
+      if (container.childElementCount > 0) {
+        clearTimeout(timer);
+        observer.disconnect();
+        resolve();
       }
     });
+    const timer = setTimeout(() => {
+      observer.disconnect();
+      reject(
+        new Error(
+          "google identity: button did not render within " +
+            `${RENDER_TIMEOUT_MS}ms — the usual cause is that this origin ` +
+            "is not listed under Authorized JavaScript origins on the web " +
+            "OAuth client"
+        )
+      );
+    }, RENDER_TIMEOUT_MS);
+    observer.observe(container, { childList: true });
   });
+}
+
+export type GoogleButtonOptions = {
+  container: HTMLElement;
+  clientId: string;
+  /** The SHA-256 hash. The raw value goes to Supabase, never to Google. */
+  nonceHashed: string;
+  onCredential: (idToken: string) => void;
+  /** Container width in px; clamped to what Google accepts. */
+  width?: number;
+};
+
+/**
+ * Render Google's own sign-in button and resolve once it is actually on screen.
+ *
+ * Resolving on *render* rather than on init is the whole point: every way this
+ * can fail — script blocked, origin not authorised, API missing — has to end in
+ * a rejection the caller can fall back from, because a sign-in button that is
+ * present but inert is worse than the redirect it replaced.
+ *
+ * `theme: "outline"` is a white button with dark text, which is what sits
+ * beside it in the form; picking Google's dark themes would have made the two
+ * providers look like different classes of thing.
+ */
+export async function renderGoogleButton(
+  options: GoogleButtonOptions
+): Promise<void> {
+  await loadGoogleIdentity();
+  const id = (window as any).google?.accounts?.id;
+  if (!id) throw new Error("google identity: not initialised");
+
+  id.initialize({
+    client_id: options.clientId,
+    nonce: options.nonceHashed,
+    callback: (response: { credential?: string }) => {
+      if (response?.credential) options.onCredential(response.credential);
+    },
+    // The token is exchanged for a Supabase session immediately; there is
+    // nothing to auto-select into on a later visit.
+    auto_select: false,
+    itp_support: true,
+  });
+
+  clearContainer(options.container);
+  id.renderButton(options.container, {
+    type: "standard",
+    theme: "outline",
+    size: "large",
+    text: "continue_with",
+    shape: "rectangular",
+    logo_alignment: "left",
+    ...(options.width
+      ? {
+          width: Math.min(
+            MAX_WIDTH,
+            Math.max(MIN_WIDTH, Math.round(options.width))
+          ),
+        }
+      : {}),
+  });
+
+  await waitForButton(options.container);
+}
+
+/** Clear any button left by a previous render (StrictMode mounts twice). */
+function clearContainer(el: HTMLElement): void {
+  while (el.firstChild) el.removeChild(el.firstChild);
 }
