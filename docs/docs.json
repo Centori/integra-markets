@@ -20,11 +20,18 @@
         "groups": [
           {
             "group": "Get started",
-            "pages": ["quickstart", "quickstart-beta", "authentication"]
+            "pages": [
+              "quickstart",
+              "quickstart-beta",
+              "authentication"
+            ]
           },
           {
             "group": "Concepts",
-            "pages": ["pricing", "limits"]
+            "pages": [
+              "pricing",
+              "limits"
+            ]
           }
         ]
       },
@@ -52,15 +59,6 @@
               "api-reference/keys-list",
               "api-reference/keys-revoke"
             ]
-          }
-        ]
-      },
-      {
-        "tab": "SDKs",
-        "groups": [
-          {
-            "group": "Clients",
-            "pages": ["sdks/python", "sdks/typescript"]
           }
         ]
       },
@@ -97,7 +95,10 @@
       {
         "header": "Support",
         "items": [
-          { "label": "Contact", "href": "mailto:contact@integramarkets.app" }
+          {
+            "label": "Contact",
+            "href": "mailto:contact@integramarkets.app"
+          }
         ]
       }
     ]

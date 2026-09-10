@@ -71,7 +71,10 @@ async def create_key(
 
     _enforce_key_quota(supabase, user_id)
 
-    ent = resolve_entitlement(supabase, user_id)
+    # Email is passed so a comp grant listed by email — the only identifier a
+    # person actually knows about themselves — unlocks key creation and not
+    # merely the dashboard that offers it.
+    ent = resolve_entitlement(supabase, user_id, auth.get("email"))
     if not ent.scopes:
         raise HTTPException(
             status_code=403,

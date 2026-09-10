@@ -24,6 +24,8 @@ import time
 from dataclasses import dataclass
 from typing import Any, Dict, Optional, Set
 
+from services.comp_access import comp_tier_for
+
 logger = logging.getLogger(__name__)
 
 HISTORY_SCOPE = "history"
@@ -218,17 +220,34 @@ def _looks_like_uuid(value: str) -> bool:
     return True
 
 
-def resolve(supabase: Any, user_id: Optional[str]) -> Entitlement:
+def resolve(
+    supabase: Any,
+    user_id: Optional[str],
+    email: Optional[str] = None,
+) -> Entitlement:
     """Resolve a user's live entitlement.
 
     Fails CLOSED: any error yields the zero-privilege entitlement rather than
     a permissive default. The previous behaviour ('free_trial' on error) was
     permissive for mobile limits but produced *silently wrong data* on the API
     surface — a paying customer clamped to 24h with a 200 response.
+
+    ``email`` is optional because only JWT-authenticated callers have one; an
+    API-key request knows the key row's user_id and nothing else. It is used
+    solely to match a comp grant (services/comp_access), never to authorize
+    anything on its own.
     """
     now = time.monotonic()
     if not user_id:
         return Entitlement("expired", set(), now)
+
+    # Comp grants precede both the cache and the RPC. Before the cache because
+    # a grant must take effect on the next request rather than after the TTL,
+    # and before the RPC because the whole point is that no subscription row
+    # exists to find.
+    comped = comp_tier_for(user_id, email)
+    if comped:
+        return Entitlement(comped, scopes_for_tier(comped), now)
 
     hit = _cached(user_id)
     if hit is not None:

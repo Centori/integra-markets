@@ -18,6 +18,8 @@ import math
 from dataclasses import dataclass
 from typing import Any, Optional
 
+from services.comp_access import comp_tier_for
+
 logger = logging.getLogger(__name__)
 
 # Sentinel — matches JS's Infinity handling
@@ -192,11 +194,22 @@ def can_query_historical(tier: str) -> bool:
     return tier == "api_history"
 
 
-def get_effective_tier(supabase, user_id: str) -> str:
+def get_effective_tier(supabase, user_id: str, email: Optional[str] = None) -> str:
     """Reads `public.effective_tier(user_id)` — the DB function that accounts
     for trial + subscription expiration. Falls back to 'free_trial' if
     supabase is unavailable or the row doesn't exist.
+
+    A comp grant short-circuits the lookup. This has to be checked in BOTH tier
+    resolvers: this one answers /api/subscriptions/entitlement, which is what
+    the dashboard renders from, while services.entitlement.resolve answers the
+    API-key path that actually mints and authorizes keys. Comping only one of
+    them produces the worst version of the bug — a dashboard that offers key
+    management and a create call that returns 403.
     """
+    comped = comp_tier_for(user_id, email)
+    if comped:
+        return comped
+
     # Every fallback below is `free`, never `free_trial`: free_trial now grants
     # full Pro, so failing open to it would hand Pro to every caller during a
     # Supabase outage.

@@ -25,12 +25,13 @@
 import { Suspense } from "react";
 import { redirect } from "next/navigation";
 import { serverClient } from "@/lib/supabase-server";
-import { fetchTier, isApiTier, tierLabel } from "@/lib/entitlement";
+import { fetchEntitlementSummary, isApiTier, tierLabel } from "@/lib/entitlement";
 import { listKeysAction } from "@/app/api-keys/actions";
 import { KeysPanel } from "@/app/api-keys/KeysPanel";
 import { ConnectClaude } from "@/app/api-keys/ConnectClaude";
 import ApiTierPanel from "@/app/api-tier/ApiTierPanel";
 import { TryIt } from "./TryIt";
+import { QuickStart } from "./QuickStart";
 import type { KeyRow } from "@/lib/api";
 
 export const dynamic = "force-dynamic";
@@ -58,7 +59,7 @@ async function TierSections({
   jwt: string;
   userEmail: string;
 }) {
-  const tier = await fetchTier(jwt);
+  const { tier, userId } = await fetchEntitlementSummary(jwt);
   // NOT `tier === "api"`. The shipping plan is `api_basic`, so that check
   // hid the keys panel from every paying customer.
   const hasApiTier = isApiTier(tier);
@@ -112,7 +113,9 @@ async function TierSections({
           </>
         ) : (
           <div className="rounded-lg border border-divider bg-bg-secondary p-4 text-sm text-text-secondary">
-            Key management unlocks with the API tier.
+            Key management unlocks with the API tier. If you already subscribed
+            and still see this, quote your account ID below — the tier is looked
+            up by ID, not by email.
           </div>
         )}
       </section>
@@ -124,6 +127,31 @@ async function TierSections({
             Fire a real request without leaving the dashboard.
           </p>
           <TryIt />
+        </section>
+      ) : null}
+
+      {/* Shown at every tier. Someone deciding whether to subscribe needs to
+          see what calling this actually looks like, and it costs nothing to
+          show — the key is what is gated, not the shape of the request. */}
+      <section className="space-y-3">
+        <h2 className="text-lg font-semibold">Using your key</h2>
+        <p className="text-text-secondary text-sm">
+          Plain HTTP, no SDK to install. Any language that can set a header can
+          call this.
+        </p>
+        <QuickStart />
+      </section>
+
+      {userId ? (
+        <section className="space-y-3">
+          <h2 className="text-lg font-semibold">Account ID</h2>
+          <p className="text-text-secondary text-sm">
+            Quote this in any support request — it is how entitlements are
+            looked up.
+          </p>
+          <code className="block break-all rounded-lg border border-divider bg-bg-secondary px-4 py-3 text-xs text-text-primary">
+            {userId}
+          </code>
         </section>
       ) : null}
     </>
