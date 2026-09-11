@@ -91,3 +91,14 @@ jobs:
           A=$(node -p "require('./app.json').expo.version")
           P=$(node -p "require('./package.json').version")
           [ "$A" = "$P" ] || (echo "::error::version mismatch: app.json=$A package.json=$P" && exit 1)
+
+      # The dashboard's advertised tool list and the MCP server's TOOLS export
+      # are separate files in separate packages, so they can only be compared
+      # somewhere that has both — which is here, and was previously nowhere.
+      #
+      # It was wired into the MCP package's `build` script instead. That ran on
+      # a developer's machine and inside the Docker build, where scripts/ is not
+      # copied and dashboard/ does not exist, so it failed every Railway deploy
+      # from the day it was added while never once running as a check.
+      - name: MCP tool lists in sync with the dashboard
+        run: node mcp/integra-mcp/scripts/check-tool-parity.mjs

@@ -13,7 +13,7 @@
     "README.md"
   ],
   "scripts": {
-    "build": "npm run check:tools && tsc",
+    "build": "tsc",
     "dev": "tsc --watch",
     "start": "node dist/index.js",
     "prepublishOnly": "npm run build",
