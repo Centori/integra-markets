@@ -151,7 +151,7 @@ feature. If this has not passed, do not say it is live.
 **2. Confirm which checkout you are in before analysing.**
 
 ```bash
-bash scripts/where-am-i.sh
+node scripts/where-am-i.mjs
 ```
 
 Several checkouts of this project exist on one machine and two are traps:

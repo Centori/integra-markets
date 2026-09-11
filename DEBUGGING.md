@@ -12,7 +12,7 @@ person would otherwise re-derive.
 
 ```bash
 node scripts/verify-production.mjs     # every surface, live, exits non-zero on failure
-bash  scripts/where-am-i.sh            # which repo + which lineage you are in
+node  scripts/where-am-i.mjs            # which repo + which lineage you are in
 node  scripts/find-bug-shapes.mjs      # the failure shapes below, hunted automatically
 ```
 

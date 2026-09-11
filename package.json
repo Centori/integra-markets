@@ -69,7 +69,7 @@
     "check:release": "node scripts/check-release-config.mjs",
     "update:production": "npm run check:release && eas update --channel production",
     "verify:prod": "node scripts/verify-production.mjs",
-    "where": "bash scripts/where-am-i.sh",
+    "where": "node scripts/where-am-i.mjs",
     "find:shapes": "node scripts/find-bug-shapes.mjs"
   },
   "devDependencies": {
