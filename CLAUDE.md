@@ -178,6 +178,25 @@ what was asked. A request to move something left was implemented as a move
 right, with a confident comment explaining why — the rationale won without
 anyone noticing it had overruled the instruction.
 
+## Known-broken things must age, not linger
+
+`known-issues.json` holds what is deliberately unfixed. Every entry carries
+`firstSeen`, an `owner`, a `nextAction`, and `escalateAfterDays`.
+`verify-production.mjs` reads it: before the deadline an entry is a WARN, after
+it the run **fails** and prints the next action.
+
+This exists because a warning that repeats forever stops being read. The MCP
+certificate was reported on every check for three days and nothing was decided
+— "known issue" becomes indistinguishable from "no check" once it has scrolled
+past a few times. A failing run means a decision is overdue, not that something
+new broke.
+
+To silence an entry: fix it and delete it, or change the deadline deliberately.
+Either is visible in a diff. Drifting is not an option the tooling offers.
+
+Entries also carry `verifiedNotOurs` — what has already been ruled out — so the
+next person does not re-run the same checks before reaching the same wall.
+
 ## Known failure shapes in this codebase
 
 These have each shipped more than once. `DEBUGGING.md` carries the detail.

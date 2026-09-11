@@ -105,15 +105,14 @@ check("mcp", "does not advertise OAuth on 401", async () => {
   return wa ? `still sends WWW-Authenticate: ${wa}` : true;
 });
 
-// Informational: the custom domain's certificate has never issued. Not a
-// failure, because nothing depends on it — but silence here would let it stay
-// broken indefinitely.
-check("mcp", "custom domain certificate (informational)", async () => {
+// Tracked in known-issues.json, which gives it a deadline. See the
+// known-issues section at the bottom of this file.
+check("mcp", "custom domain certificate", async () => {
   try {
     await req(`${MCP_CUSTOM}/health`);
     return true;
-  } catch (err) {
-    return { warn: `${MCP_CUSTOM} not serving TLS — Railway cert still not issued` };
+  } catch {
+    return { warn: `${MCP_CUSTOM} not serving TLS — tracked as mcp-custom-domain-cert` };
   }
 });
 
@@ -186,6 +185,44 @@ for (const c of selected) {
   else {
     failed++;
     console.log(`  FAIL  ${c.name}\n        ${result}`);
+  }
+}
+
+// --- known issues: things that are broken on purpose, and must age ---------
+//
+// A warning that repeats forever stops being read. The MCP certificate was
+// reported on every check for three days and nothing was decided, because
+// "known issue" is indistinguishable from "no check" once it has scrolled past
+// a few times. So each entry carries a deadline: past it, this run FAILS and
+// prints the next action. Nothing new has broken — a decision is overdue.
+if (!only) {
+  const { readFileSync } = await import("node:fs");
+  let registry;
+  try {
+    registry = JSON.parse(readFileSync(new URL("../known-issues.json", import.meta.url), "utf8"));
+  } catch (err) {
+    console.log(`\nknown issues\n  FAIL  cannot read known-issues.json: ${err.message}`);
+    failed++;
+    registry = { issues: [] };
+  }
+
+  if (registry.issues?.length) console.log("\nknown issues");
+  const today = new Date();
+  for (const issue of registry.issues ?? []) {
+    const ageDays = Math.floor((today - new Date(issue.firstSeen)) / 86_400_000);
+    const overdue = ageDays >= issue.escalateAfterDays;
+    const line = `${issue.id} — ${issue.summary} (${ageDays}d old, owner: ${issue.owner})`;
+    if (!overdue) {
+      console.log(`  WARN  ${line}`);
+      continue;
+    }
+    failed++;
+    console.log(
+      `  FAIL  ${line}\n` +
+        `        overdue by ${ageDays - issue.escalateAfterDays}d.\n` +
+        `        NEXT: ${issue.nextAction}\n` +
+        `        Fix it, or change escalateAfterDays on purpose — in a diff, not by drifting.`
+    );
   }
 }
 

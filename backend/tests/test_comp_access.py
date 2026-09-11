@@ -106,3 +106,31 @@ def test_a_stranger_is_unaffected(monkeypatch):
     ent = resolve_entitlement(None, "99999999-8888-7777-6666-555555555555", "x@y.io")
     assert ent.tier == "expired"
     assert not ent.scopes
+
+
+def test_an_identifier_in_the_wrong_variable_still_works(monkeypatch):
+    """Putting an email in the UUID variable must not silently do nothing.
+
+    The two variable names document which identifier reaches which surface.
+    Treating them as two separate matches meant a value in the "wrong" one
+    matched nothing at all — a grant that looks configured and isn't, which is
+    the exact failure this module exists to avoid.
+    """
+    monkeypatch.setenv("INTEGRA_COMP_USER_IDS", EMAIL)
+    assert comp_tier_for(UID, EMAIL) == DEFAULT_COMP_TIER
+
+    monkeypatch.delenv("INTEGRA_COMP_USER_IDS")
+    monkeypatch.setenv("INTEGRA_COMP_EMAILS", UID)
+    assert comp_tier_for(UID, None) == DEFAULT_COMP_TIER
+
+
+def test_api_key_requests_still_need_the_uuid(monkeypatch):
+    """The interchangeability is convenience, not magic.
+
+    An API-key request carries only api_keys.user_id. If the only listed
+    identifier is an email, that request cannot be comped by anything — which
+    is a real constraint, not a bug, and the reason both variables are
+    documented separately even though they are matched together.
+    """
+    monkeypatch.setenv("INTEGRA_COMP_EMAILS", EMAIL)
+    assert comp_tier_for(UID, None) is None
