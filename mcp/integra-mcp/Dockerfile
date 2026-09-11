@@ -20,6 +20,12 @@ RUN npm ci
 
 COPY tsconfig.json ./
 COPY src ./src
+# `npm run build` is plain tsc. It used to be `npm run check:tools && tsc`, and
+# scripts/ is not copied into this image — so every deploy since that change
+# failed at this line with "Cannot find module /app/scripts/check-tool-parity.mjs".
+# Copying the script would not have helped: it compares against
+# dashboard/lib/mcpTools.ts, which is outside this build context by design.
+# The parity check belongs in CI, where both files exist, and it now runs there.
 RUN npm run build
 
 # ---- runtime --------------------------------------------------------------
