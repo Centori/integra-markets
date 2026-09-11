@@ -65,3 +65,21 @@ XlsxWriter==3.2.0
 # 503 "stripe SDK not installed on backend". Checkout was the only broken
 # thing, so nothing that monitors uptime could have caught it.
 stripe==11.4.1
+
+# PyJWT — REQUIRED. Every authenticated endpoint depends on it.
+#
+# services/supabase_jwt.py imports it lazily inside verify_supabase_jwt() and
+# answers 503 "auth library unavailable" when the import fails. It was declared
+# in neither requirements file, so that 503 was the response to EVERY
+# JWT-authenticated request in production:
+#
+#     GET /api/subscriptions/entitlement -> 503  (dashboard then falls back to
+#                                                 free_trial, locking the API
+#                                                 sections for every user)
+#     GET /api/keys                      -> 503  (no key could be listed…)
+#     POST /api/keys                     -> 503  (…or created)
+#
+# /health returned 200 throughout, because it touches none of this. Same shape
+# as the missing `stripe` above: a lazy import that lets the app boot healthy
+# and fail only on the path that needs it.
+PyJWT==2.10.1
