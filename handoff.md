@@ -1,3 +1,167 @@
+# Handoff — 2026-09-11
+
+> Latest session. Everything below this heading supersedes older sections where
+> they conflict. Read sections A and B before writing any code.
+
+## A. The two traps that cost the most time
+
+**1. There are three checkouts and two of them lie.**
+
+| Path | What it is |
+|---|---|
+| `~/integra-markets` | a FORK (jeremiahMshelia), frozen in June |
+| `~/Desktop/integra/integra-markets-2` | the shipped mobile lineage, not `main` |
+| `Centori/integra-markets` | the real repo |
+
+Reading the wrong one does not error. It returns plausible source describing a
+different program. Two confident and entirely wrong analyses came from this in
+one session. Run `npm run where` first, every time.
+
+**2. The App Store app has never been built from `main`.**
+
+`main` is missing 49 commits of mobile work including the whole paywall, and
+five files the shipped app imports do not exist there — so `main`'s mobile
+bundle cannot resolve. `main` is authoritative for backend, dashboard and web;
+it has never been authoritative for the app. Build and OTA only from
+`build64-exact`. Reconciling the two is outstanding and should not happen under
+release pressure.
+
+## B. What was actually broken, and the shape it shared
+
+Four separate production failures, one shape: **a dependency or check that lets
+the app boot healthy and fail on exactly one path.**
+
+- `stripe` was declared only in `requirements-light.txt`, which nothing
+  installs. Checkout answered 503; everything else worked.
+- `PyJWT` was declared in **neither** requirements file. **Every authenticated
+  request answered 503** while `/health` returned 200. The dashboard caught
+  that failure and fell back to `free_trial`, so an outage rendered as a
+  correctly locked account — reported as a billing bug, not an outage.
+- The MCP tool-parity check was wired into `npm run build`, which the Dockerfile
+  runs, and `scripts/` is not in that image. **Three days of failed deploys**
+  while PRs merged cleanly on top.
+- The MCP server sent `WWW-Authenticate: Bearer` on 401. In MCP that is the
+  OAuth signal, so Claude hunted a sign-in service that does not exist and every
+  tool call failed with "No approval received".
+
+All four are fixed. `backend/tests/test_declared_dependencies.py` and
+`/health`'s `dependencies` block now make the first two impossible to repeat
+silently.
+
+## C. Tooling added this session — use it, do not re-derive it
+
+```bash
+npm run verify:prod     # probe every live surface; exits non-zero
+npm run where           # which repo, branch and mobile lineage
+npm run find:shapes     # hunt the failure shapes that have bitten twice
+```
+
+`verify-production.mjs` covers the gap local checks cannot:
+
+```
+written -> committed -> merged -> CI -> deployed -> cached -> their data
+             tsc/pytest ^                  every real miss ^
+```
+
+`known-issues.json` holds things broken on purpose. Each entry has a deadline;
+past it the verifier **fails** and prints the next action. This exists because
+the MCP certificate sat as a "known issue" for three days and nothing was
+decided — a warning that repeats forever stops being read.
+
+`CLAUDE.md` carries the four operating rules. The one that is not automatable:
+**re-read the request before shipping UI; if your reasoning contradicts it, say
+so in a sentence and build what was asked.** A request to move something left
+was implemented as a move right, with a confident comment justifying it.
+
+## D. Shipped and verified live this session
+
+Fourteen PRs merged (#79–#87, plus #28/#31/#32/#60/#61/#65/#66/#67/#69 from the
+backlog). Backend tests 594 -> 739.
+
+- **#85** PyJWT — unblocked key generation, the API tier and the comp grant
+- **#81** stripe + comp access by config (`INTEGRA_COMP_EMAILS` is set to
+  `centori1@gmail.com` on Railway; both comp variables now accept either
+  identifier)
+- **#83/#84** MCP: no OAuth signal, working URL, deploys unblocked
+- **#31** Google News HTML summaries — **written 25 Aug, merged today**. It was
+  blocked for 18 days by a CI failure that had nothing to do with it (an August
+  workflow running `npm install` in an `app/` directory that no longer exists).
+  Rebased onto current main, it passed first time.
+- **#86** avatar and profile panel both left, on `web/`
+- **iOS 1.0.3 (91)** built from `build64-exact` + the prefs-sync files, uploaded
+  to App Store Connect, awaiting review. runtimeVersion deliberately left at
+  1.0.4 so one future OTA can reach build 90 *and* 1.0.3.
+
+## E. Open right now
+
+**#88 — Google News redirect resolution.** Verified 8/8 resolved in 1.9s
+against the live feed. This is one cause behind four reported symptoms:
+`summary == title`, empty `image_url`, generic `key_drivers`, and a rotting
+archive URL. It fails safe (returns the original URL), so breakage is silent —
+`pipeline_health.gnews_urls_resolved` watches the unresolved ratio for exactly
+that reason. **Merge this first**; the sentiment work below depends on it,
+because the engine currently scores bare headlines.
+
+**#89 — Google consent-screen suffix, visibility only.** Established by grepping
+the deployed bundle: `NEXT_PUBLIC_GOOGLE_CLIENT_ID` is **unset on Vercel**, so
+the in-page flow from #80 has never run once. #89 makes that state loud and
+adds a verifier check for it.
+
+**#68 — npm packaging for the MCP.** Probably superseded by the remote
+connector; needs a decision to close or rebase.
+
+## F. The Google suffix — what is actually true
+
+The consent screen reads `to continue to zhdcpiopihqwcmicjpca.supabase.co`.
+
+- `auth.integramarkets.app` is **not** a Supabase custom auth domain. A wildcard
+  DNS record points `*.integramarkets.app` at Vercel, so every subdomain
+  resolves and returns `DEPLOYMENT_NOT_FOUND`. The string appears nowhere in
+  either lineage.
+- Mobile avoids the problem by not using a browser: `GoogleSignin.signIn()`
+  returns an idToken natively, then `signInWithIdToken`. No redirect, no host.
+  The same file falls back to `signInWithOAuth` on `Platform.OS === 'web'`, so
+  even the mobile codebase shows the Supabase host on web.
+- The browser equivalent is Google Identity Services — which #80 built and which
+  is switched off.
+
+Ranked next steps: (1) check the OAuth consent screen's **App name**, free and
+fixes every surface if it is unset; (2) set `NEXT_PUBLIC_GOOGLE_CLIENT_ID` plus
+the JS origin on client `1039046627332-btsk2dvt…`; (3) port GIS to `web/`,
+which still calls `signInWithOAuth` in `SocialAuthButtons.tsx` and was never
+touched by #80.
+
+## G. Not started — the product list
+
+Reported and unfixed. The sentiment items are the core value.
+
+1. **Sentiment misreads**, with live examples:
+   - "Oil Prices Near $100 After Fresh Attacks on Saudi Energy Sites" scored
+     **BEARISH 0.83**. A supply disruption is bullish for crude; this is an
+     inverted sign, not a confidence problem.
+   - "China's Crude Buying Rebounds as Fuel Exports Jump 29%" scored
+     **NEUTRAL 0.61**. Imports up 6.2% m/m for a second month.
+   - "Oil Prices Surge to Four-Month Highs as War Risks Mount" scored
+     **NEUTRAL 0.57**, 33/33/34, key drivers `oil`, `price`.
+   Approach: sweep for the shape before fixing instances. Expect #88 to change
+   the inputs, since the engine has been scoring headlines only.
+2. Copy/paste button does not work on mobile.
+3. Community sentiment poll does not match the mobile poll.
+4. Divergence read/output differs between web and mobile.
+5. Refresh button under Integra analysis does nothing.
+
+## H. Known-broken, tracked with a deadline
+
+`mcp-custom-domain-cert` — `mcp.integramarkets.app` has served no certificate
+since 2026-09-08. DNS propagated, CAA permits letsencrypt.org, port 80 reaches
+Railway, domain deleted and recreated once. **Not fixable from our side; it
+needs a Railway support ticket** quoting project
+`18e783a9-f02d-4396-b49c-98a7a99bbc72` and domain
+`d27eb5a5-008f-49f1-bfc4-1ada1be18a85`. The verifier fails on it daily until
+someone files it or moves the deadline in a diff.
+
+---
+
 # Handoff — 2026-09-03
 
 > Supersedes the 2026-08-23 handoff. Sections 3 onward are carried forward
