@@ -46,12 +46,13 @@ const GROUPS: { group: string; blurb: string; endpoints: Endpoint[] }[] = [
   {
     group: "Sentiment",
     blurb:
-      "Commodity sentiment scored from the news pipeline. Scores run 0–1 where 0.5 is neutral.",
+      "Commodity sentiment scored from the news pipeline. Scores are signed −1…+1 where 0 is neutral.",
     endpoints: [
       { method: "GET", path: "/v1/sentiment", summary: "Recent scored articles across all commodities." },
       { method: "GET", path: "/v1/sentiment/{commodity}/now", summary: "Latest reading plus a 24h rolling mean." },
       { method: "GET", path: "/v1/sentiment/{commodity}/history", summary: "Raw observations over a time range." },
       { method: "GET", path: "/v1/sentiment/{commodity}/daily", summary: "Daily aggregates for charting or backtests." },
+      { method: "GET", path: "/v1/export/sentiment", summary: "Bulk export as CSV or XLSX.", tier: "History" },
     ],
   },
   {
@@ -115,8 +116,10 @@ export default function DocsPage() {
         <h1 className="text-3xl font-semibold">API Documentation</h1>
         <p className="mt-2 text-text-secondary">
           REST access to Integra&apos;s sentiment archive and divergence signals.
-          Base URL <code className="text-text-primary">{BASE}</code>. All
-          responses are JSON.
+          Base URL <code className="text-text-primary">{BASE}</code>. Responses
+          are JSON, except{" "}
+          <code className="text-text-primary">/v1/export/sentiment</code>, which
+          streams CSV or XLSX.
         </p>
       </header>
 
@@ -199,12 +202,13 @@ curl "${BASE}/v1/markets/divergence" \\
       <section>
         <h2 className="text-xl font-semibold">Reading a sentiment score</h2>
         <p className="mt-2 text-text-secondary">
-          Scores are <code className="text-text-primary">0–1</code> with{" "}
-          <code className="text-text-primary">0.5</code> neutral;{" "}
-          <code className="text-text-primary">sentiment</code> is one of{" "}
-          <code>bullish</code>, <code>bearish</code>, <code>neutral</code>.
-          Divergence deltas use a signed <code>−1…+1</code> scale on both sides,
-          so a delta is in <code>−2…+2</code>: positive means the news is more
+          Scores are signed <code className="text-text-primary">−1…+1</code>{" "}
+          where <code className="text-text-primary">0</code> is neutral —
+          negative is bearish, positive is bullish. The{" "}
+          <code className="text-text-primary">sentiment</code> field labels the
+          same reading as <code>bullish</code>, <code>bearish</code> or{" "}
+          <code>neutral</code>. Divergence compares both sides on that scale, so
+          a delta lands in <code>−2…+2</code>: positive means the news is more
           bullish than the market, negative means the market is ahead of the news.
         </p>
       </section>
