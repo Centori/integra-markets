@@ -10,11 +10,12 @@ from __future__ import annotations
 import hashlib
 import hmac
 import logging
+import math
 import secrets
 import time
 from typing import Any, Dict, Optional
 
-from fastapi import Depends, Header, HTTPException, Request
+from fastapi import Depends, Header, HTTPException, Request, Response
 
 logger = logging.getLogger(__name__)
 
@@ -32,7 +33,14 @@ from services.entitlement import (  # noqa: E402  (kept beside the scope model i
     ARCHIVE_SCOPE,
     HISTORY_DEPTH_CAP_DAYS,
     HISTORY_SCOPE,
+    export_depth_days,
+    query_depth_days,
     resolve as resolve_entitlement,
+)
+from services.rate_limit import (  # noqa: E402
+    check_and_consume,
+    rate_limit_headers,
+    retry_after_seconds,
 )
 
 
@@ -46,22 +54,77 @@ def effective_scopes(auth_row: Dict[str, Any]) -> set:
     return set(ent.scopes) if ent is not None else set()
 
 
-def assert_history_depth(auth_row: Dict[str, Any], lookback_days: float) -> None:
-    """Raise 403 if the OLDEST point requested is beyond the key's depth cap.
+# The tier that grants the deepest access, named in 403s as the upgrade path.
+ARCHIVE_TIER = "api_history"
+
+
+def tier_of(auth_row: Dict[str, Any]) -> str:
+    """The caller's live tier, resolved during verify_api_key.
+
+    Returns "" when no entitlement was attached, which every depth lookup
+    treats as the most restrictive tier rather than the least.
+    """
+    ent = auth_row.get("_entitlement")
+    return getattr(ent, "tier", "") if ent is not None else ""
+
+
+def _assert_depth(
+    auth_row: Dict[str, Any], lookback_days: float, axis: str, allowed: float
+) -> None:
+    """Shared body for the query and export depth gates.
 
     ``lookback_days`` must be the AGE of the earliest requested timestamp
     (now - start), not the WIDTH of the window (end - start). Width let
     ``from=2015-01-01&to=2015-03-01`` — 59 days wide — pass a 90-day cap and
     reach eleven-year-old data.
     """
-    if lookback_days > HISTORY_DEPTH_CAP_DAYS and ARCHIVE_SCOPE not in effective_scopes(auth_row):
-        raise HTTPException(
-            status_code=403,
-            detail=(
-                f"history beyond {HISTORY_DEPTH_CAP_DAYS} days requires the "
-                f"'{ARCHIVE_SCOPE}' scope (Archive tier)"
-            ),
+    if lookback_days <= allowed:
+        return
+    if allowed == math.inf:  # pragma: no cover — unreachable, kept explicit
+        return
+
+    if allowed == 0:
+        detail = f"{axis} is not available on this plan"
+    else:
+        detail = (
+            f"{axis} beyond {int(allowed)} days is not available on this plan "
+            f"(requested {int(lookback_days)} days)"
         )
+
+    # Name the plan that WOULD serve the request. A 403 that only says "no"
+    # makes the caller guess, and the guess is usually "the API is broken".
+    # Only suggested when it is actually an upgrade: telling an archive
+    # customer to buy the archive tier is worse than saying nothing.
+    if query_depth_days(ARCHIVE_TIER) > allowed:
+        detail += f". The {ARCHIVE_SCOPE} tier ({ARCHIVE_TIER}) reaches further"
+
+    raise HTTPException(
+        status_code=403,
+        detail=f"{detail}. See https://dashboard.integramarkets.app/api-tier",
+    )
+
+
+def assert_history_depth(auth_row: Dict[str, Any], lookback_days: float) -> None:
+    """Raise 403 if the oldest point QUERIED is beyond the key's query depth.
+
+    Previously this compared against one global constant and exempted anything
+    holding the archive scope. Depth is now per tier, so api_trial can be 24
+    hours while api_basic is 30 days without a second mechanism — and the
+    archive tier's allowance is expressed as its own unlimited query depth
+    rather than as a scope that bypasses the check.
+    """
+    _assert_depth(auth_row, lookback_days, "history", query_depth_days(tier_of(auth_row)))
+
+
+def assert_export_depth(auth_row: Dict[str, Any], lookback_days: float) -> None:
+    """Raise 403 if the oldest point EXPORTED is beyond the key's export depth.
+
+    Deliberately separate from assert_history_depth. An archive key may query
+    the full archive and export only the last year of it: the point is that a
+    customer can ask any question and cannot carry the database away. Calling
+    the query gate here would reopen exactly that.
+    """
+    _assert_depth(auth_row, lookback_days, "export", export_depth_days(tier_of(auth_row)))
 
 
 def require_scopes(*required: str):
@@ -105,6 +168,7 @@ def _extract_bearer(authorization: Optional[str]) -> Optional[str]:
 
 async def verify_api_key(
     request: Request,
+    response: Response,
     authorization: Optional[str] = Header(default=None),
 ) -> Dict[str, Any]:
     """FastAPI dependency: validate Authorization header against api_keys table.
@@ -148,6 +212,38 @@ async def verify_api_key(
         )
     row["_entitlement"] = ent
     row["_tier"] = ent.tier
+
+    # Metering. api_key_usage has recorded every request since launch and
+    # nothing has ever read it — one key could issue unlimited calls, and at
+    # 1,000 rows per /history call the whole archive was extractable by
+    # anyone willing to write a loop.
+    #
+    # Deliberately AFTER the entitlement check (no point metering a request
+    # we are about to 403) and BEFORE the usage write, so the request that
+    # trips the limit is itself refused rather than counted and served.
+    allowed, meter = check_and_consume(supabase, row["id"], ent.tier)
+    headers = rate_limit_headers(meter)
+    if not allowed:
+        retry = retry_after_seconds(meter)
+        logger.info(
+            "metering: key %s exhausted %s allowance (%s/%s)",
+            row.get("key_prefix"), ent.tier, meter.get("used"), meter.get("limit"),
+        )
+        raise HTTPException(
+            status_code=429,
+            detail=(
+                f"monthly request limit reached for the {ent.tier} tier "
+                f"({meter.get('limit')} requests). The allowance resets at the "
+                f"start of next month (UTC). Raise it at "
+                f"https://dashboard.integramarkets.app/api-tier"
+            ),
+            headers={**headers, "Retry-After": str(retry)},
+        )
+
+    # Success path carries the same headers so clients can self-throttle
+    # instead of discovering the ceiling by hitting it.
+    for header, value in headers.items():
+        response.headers[header] = value
 
     _record_usage_async(supabase, row, request, int((time.monotonic() - started) * 1000))
     return row

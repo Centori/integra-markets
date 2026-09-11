@@ -1,13 +1,29 @@
 "use client";
 
-import { useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { useSearchParams } from "next/navigation";
 import { browserClient } from "@/lib/supabase";
+import {
+  GOOGLE_CLIENT_ID,
+  createNonce,
+  renderGoogleButton,
+  type GoogleNonce,
+} from "@/lib/googleIdentity";
 
-// Web Apple sign-in needs a Services ID configured in Supabase (separate from
-// the iOS App ID). Flip NEXT_PUBLIC_ENABLE_APPLE_AUTH=1 in Vercel once that
-// exists — no code change needed.
-const APPLE_ENABLED = process.env.NEXT_PUBLIC_ENABLE_APPLE_AUTH === "1";
+// Apple sign-in, enabled. It sat behind NEXT_PUBLIC_ENABLE_APPLE_AUTH, which
+// was never set on the integra-dashboard Vercel project — so the dashboard
+// offered only Google and a magic link, while www.integramarkets.app/login
+// offered Apple, Google AND email/password. Anyone who created their account
+// with Apple could not reach their own API keys at all.
+//
+// Verified against production 2026-09-02, using the DASHBOARD's own callback:
+//   GET /auth/v1/authorize?provider=apple&redirect_to=<dashboard>  -> 302
+//   GET /auth/v1/authorize?provider=google&redirect_to=<dashboard> -> 302
+// which proves both that the Services ID exists and that this callback is in
+// Supabase's redirect allowlist. Apple redirects to Supabase's own
+// /auth/v1/callback, never to this host, so Apple's return-URL list is not
+// involved beyond what already works.
+const APPLE_ENABLED = process.env.NEXT_PUBLIC_ENABLE_APPLE_AUTH !== "0";
 
 function GoogleIcon() {
   return (
@@ -40,21 +56,123 @@ export default function LoginForm() {
   const callbackUrl = () =>
     `${window.location.origin}/auth/callback?next=${encodeURIComponent(redirect)}`;
 
+  /**
+   * Supabase's redirect flow. Still the path for Apple, and the fallback for
+   * Google whenever the in-page flow cannot run.
+   */
+  const oauthRedirect = async (provider: "google" | "apple") => {
+    const { error: oauthError } = await browserClient().auth.signInWithOAuth({
+      provider,
+      options: {
+        redirectTo: callbackUrl(),
+        ...(provider === "google"
+          ? { queryParams: { prompt: "select_account" } }
+          : {}),
+      },
+    });
+    if (oauthError) throw oauthError;
+    // Browser is being redirected to the provider — leave pending on.
+  };
+
+  /**
+   * Google without leaving the page, matching what the iOS build does.
+   *
+   * The redirect flow sends the browser to the Supabase project host, so
+   * Google's consent screen reads "zhdcpiopihqwcmicjpca.supabase.co". Google
+   * Identity Services returns an ID token in-page instead, which goes through
+   * the same signInWithIdToken exchange the app performs with the token from
+   * the native sheet — so the consent screen shows this origin.
+   *
+   * Google's own button is rendered rather than One Tap. One Tap goes into
+   * cooldown after a dismissal and reports that through a callback rather than
+   * its promise, which is how the first version of this ended up awaiting
+   * something that never settled. See lib/googleIdentity.ts.
+   *
+   * `googleMode` drives which control the user sees:
+   *   "pending"  — deciding; the redirect button is shown so there is never a
+   *                gap where the form has no way to sign in with Google
+   *   "gis"      — Google's button rendered; the redirect button is removed
+   *   "redirect" — GIS unavailable for any reason; the existing flow stands
+   */
+  const [googleMode, setGoogleMode] = useState<"pending" | "gis" | "redirect">(
+    GOOGLE_CLIENT_ID ? "pending" : "redirect"
+  );
+  const googleSlot = useRef<HTMLDivElement | null>(null);
+  const nonceRef = useRef<GoogleNonce | null>(null);
+
+  /**
+   * Exchange Google's ID token for a Supabase session.
+   *
+   * A failure here is NOT a fallback case. The token is already issued and the
+   * nonce is spent; retrying through the redirect would re-prompt a user who
+   * has just consented. Show the error instead.
+   */
+  const onGoogleCredential = useCallback(
+    async (idToken: string) => {
+      const nonce = nonceRef.current;
+      setError(null);
+      setPending("google");
+      try {
+        const { error: idError } = await browserClient().auth.signInWithIdToken({
+          provider: "google",
+          token: idToken,
+          ...(nonce ? { nonce: nonce.raw } : {}),
+        });
+        if (idError) throw idError;
+        window.location.assign(redirect);
+      } catch (err) {
+        setError(err instanceof Error ? err.message : "Sign in failed");
+        setPending(null);
+      }
+    },
+    [redirect]
+  );
+
+  useEffect(() => {
+    if (!GOOGLE_CLIENT_ID) return;
+    let cancelled = false;
+
+    (async () => {
+      try {
+        const slot = googleSlot.current;
+        if (!slot) throw new Error("google identity: no container");
+        const nonce = await createNonce();
+        if (cancelled) return;
+        nonceRef.current = nonce;
+
+        await renderGoogleButton({
+          container: slot,
+          clientId: GOOGLE_CLIENT_ID,
+          nonceHashed: nonce.hashed,
+          onCredential: (token) => {
+            void onGoogleCredential(token);
+          },
+          width: slot.getBoundingClientRect().width || undefined,
+        });
+        if (!cancelled) setGoogleMode("gis");
+      } catch (err) {
+        // Deliberately loud. A silent fallback here looks identical to a
+        // working setup from the outside — the button still signs you in, just
+        // through the URL this change exists to remove — so the one signal
+        // that the origin or the client ID is wrong is this line.
+        console.warn(
+          "[auth] Google in-page sign-in unavailable, using redirect:",
+          err instanceof Error ? err.message : err
+        );
+        if (!cancelled) setGoogleMode("redirect");
+      }
+    })();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [onGoogleCredential]);
+
   const onOAuth = async (provider: "google" | "apple") => {
     setError(null);
     setPending(provider);
     try {
-      const { error: oauthError } = await browserClient().auth.signInWithOAuth({
-        provider,
-        options: {
-          redirectTo: callbackUrl(),
-          ...(provider === "google"
-            ? { queryParams: { prompt: "select_account" } }
-            : {}),
-        },
-      });
-      if (oauthError) throw oauthError;
-      // Browser is being redirected to the provider — leave pending on.
+      await oauthRedirect(provider);
     } catch (err) {
       setError(err instanceof Error ? err.message : "Sign in failed");
       setPending(null);
@@ -90,14 +208,20 @@ export default function LoginForm() {
       </div>
 
       <div className="space-y-3">
-        <button
-          onClick={() => onOAuth("google")}
-          disabled={pending !== null}
-          className="w-full flex items-center justify-center gap-3 rounded-md bg-white text-black font-medium px-4 py-2.5 text-sm disabled:opacity-50"
-        >
-          <GoogleIcon />
-          {pending === "google" ? "Redirecting…" : "Continue with Google"}
-        </button>
+        {/* Google renders its button into this slot. It stays mounted in
+            every mode: the ref has to exist before the effect runs, and an
+            empty div has no height, so nothing shifts when the swap happens. */}
+        <div ref={googleSlot} className="flex justify-center [color-scheme:light]" />
+        {googleMode === "gis" ? null : (
+          <button
+            onClick={() => onOAuth("google")}
+            disabled={pending !== null}
+            className="w-full flex items-center justify-center gap-3 rounded-md bg-white text-black font-medium px-4 py-2.5 text-sm disabled:opacity-50"
+          >
+            <GoogleIcon />
+            {pending === "google" ? "Redirecting…" : "Continue with Google"}
+          </button>
+        )}
         {APPLE_ENABLED ? (
           <button
             onClick={() => onOAuth("apple")}

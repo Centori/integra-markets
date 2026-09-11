@@ -69,6 +69,25 @@ async def _fetch_and_archive() -> Dict[str, Any]:
     if not articles:
         return {"articles_observed": 0}
 
+    # RSS media fields cover Yahoo and almost nothing else — measured 2026-09-07,
+    # oilprice/CNBC/Bloomberg/investing.com ship none — so most articles arrive
+    # with an empty image_url and the client falls back to the brand mark on
+    # every card.
+    #
+    # This runs HERE, at ingest, rather than on the request path where the
+    # original og:image scrape lived. There it cost every user a round trip per
+    # card; here it costs a background job that already takes seconds, the
+    # result is persisted, and it is paid once per article rather than once per
+    # view. Bounded on timeout, bytes, concurrency and total batch time, so a
+    # hostile publisher cannot stall the tick.
+    try:
+        from services.feed_images import enrich_missing_images
+
+        image_counters = await enrich_missing_images(articles)
+    except Exception as exc:  # noqa: BLE001 — images must never block archiving
+        logger.warning("news_fetcher: og:image enrichment skipped: %s", exc)
+        image_counters = {"error": str(exc)}
+
     enhanced = _score(articles)
 
     try:
@@ -83,6 +102,7 @@ async def _fetch_and_archive() -> Dict[str, Any]:
 
     return {
         "articles_observed": len(enhanced),
+        "images": image_counters,
         **write_result,
     }
 
@@ -100,8 +120,16 @@ def _score(articles: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
             extract_commodity_tickers,
             extract_keywords,
             normalize_commodity,
-            vader_analyzer,
         )
+        # NOT `vader_analyzer` — that global is None at import time and only
+        # assigned inside FastAPI's lifespan(). This job runs in the scheduler
+        # process, so the from-import copied None, `if vader_analyzer:` failed,
+        # and every LIVE article was scored by a 20-word keyword list. Same bug
+        # as jobs/archive_scorer.py; this one was corrupting new data, not just
+        # the backfill.
+        from services.sentiment_engine import get_analyzer
+
+        vader_analyzer = get_analyzer()
     except ImportError as exc:
         logger.warning("news_fetcher: sentiment functions not importable: %s", exc)
         # Return articles unscored — archive_writer will skip sentiment rows.
@@ -113,6 +141,11 @@ def _score(articles: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
                 "url": a.get("url"),
                 "time_published": a.get("published"),
                 "categories": [a.get("category", "general")],
+                # archive_writer reads `image_url` (line ~125). This loop
+                # rebuilds the dict from scratch, so anything not named here is
+                # dropped — which silently discarded every image captured at
+                # fetch time, on both this path and the scored one below.
+                "image_url": a.get("image_url") or "",
             }
             for a in articles
         ]
@@ -138,5 +171,8 @@ def _score(articles: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
             "tickers": extract_commodity_tickers(text),
             "keywords": extract_keywords(text),
             "commodity": commodity,
+            # See the note on the unscored path above: omit this and the image
+            # captured at fetch time never reaches archive_writer.
+            "image_url": article.get("image_url") or "",
         })
     return scored

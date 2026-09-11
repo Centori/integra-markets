@@ -44,10 +44,15 @@ async def get_entitlement(auth: Dict[str, Any] = Depends(verify_supabase_jwt)) -
     # First launch (or first-ever entitlement fetch) → ensure a trial exists.
     # Idempotent — existing users' rows are untouched.
     ensure_trial_started(supabase, user_id)
-    tier = get_effective_tier(supabase, user_id)
+    tier = get_effective_tier(supabase, user_id, auth.get("email"))
     lim = limits_for(tier)
     # Return only what the client cares about (numbers, not internals).
     return {
+        # The caller's own Supabase UUID. Echoed back because there is no other
+        # way for an account holder to discover it — it never appears in the
+        # dashboard, and it is what INTEGRA_COMP_USER_IDS and any support
+        # request have to be given.
+        "user_id": user_id,
         "tier": tier,
         # The trial clock. Previously the client had no way to know a trial was
         # running or when it ended, so it could not warn anyone — the app simply
