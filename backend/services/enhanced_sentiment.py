@@ -19,6 +19,24 @@ import json
 import re
 from textblob import TextBlob
 
+# Word-boundary patterns for the financial keyword lists below.
+#
+# These were matched with unanchored `word in text_lower` containment, which
+# made every one of them fire on unrelated vocabulary:
+#
+#     "supply"     contains "up"    -> bullish
+#     "bullion"    contains "bull"  -> bullish   (on gold articles)
+#     "shutdown"   contains "down"  -> bearish
+#     "downstream" contains "down"  -> bearish
+#     "against"    contains "gain"  -> bullish
+#     "bearing"    contains "bear"  -> bearish
+#
+# Boundary-anchored keyword matching lives in services.keyword_forms so it
+# is testable without the torch/textblob imports at the top of this module.
+# See that module for why unanchored substring containment was wrong.
+from services.keyword_forms import count_hits as _count_hits  # noqa: E402
+
+
 # Real ML implementations using available APIs
 class KeywordDQN:
     def __init__(self, *args, **kwargs):
@@ -79,9 +97,10 @@ class KeywordDQN:
         # Extract financial keywords with sentiment
         for sentiment, words in self.financial_keywords.items():
             for word in words:
-                if word in text_lower:
+                hits = _count_hits(word, text_lower)
+                if hits:
                     # Calculate importance based on context
-                    importance = text_lower.count(word) * 0.1
+                    importance = hits * 0.1
                     keywords.append({
                         'word': word,
                         'sentiment': sentiment,

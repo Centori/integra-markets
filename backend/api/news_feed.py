@@ -257,6 +257,7 @@ async def get_news_feed(
         for art in articles:
             for k in (
                 "divergenceStatus", "divergenceProvider", "divergenceDelta", "divergenceTopic",
+                "divergenceMarketQuestion", "divergenceMarketUrl", "divergenceMarketId",
                 "crossMarketStatus", "crossMarketDelta", "crossMarketTopic",
                 "polymarketImplied", "kalshiImplied",
             ):

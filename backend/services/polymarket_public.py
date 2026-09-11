@@ -73,6 +73,36 @@ def _normalize_market(raw: Dict[str, Any]) -> Dict[str, Any]:
         except (ValueError, TypeError):
             return None
 
+    # Implied probability = mid of the book, not the bid.
+    #
+    # `yes_price` was `bestBid or lastTradePrice`, which is wrong twice over.
+    # bestBid is the highest price a *buyer* will pay, so it sits below fair
+    # value by half the spread on every market. Divergence is computed as
+    # (sentiment - market_implied), so understating the market inflated the
+    # delta positively on every reading -- which is why cards systematically
+    # said "the market is underpricing this" rather than splitting both ways.
+    #
+    # The `or` was also evaluated on the *raw* value before coercion, and
+    # gamma-api returns prices as strings: "0" is truthy and survived, while
+    # "" fell through to last trade. And no_price was derived from bestBid
+    # even when yes_price had come from lastTradePrice, so the pair could
+    # disagree with itself.
+    bid = _f(raw.get("bestBid"))
+    ask = _f(raw.get("bestAsk"))
+    last = _f(raw.get("lastTradePrice"))
+
+    if bid is not None and ask is not None:
+        yes_price = (bid + ask) / 2.0
+        spread = abs(ask - bid)
+    elif bid is not None or ask is not None:
+        # One-sided book: the single quote is the best estimate available,
+        # but it is a bound rather than a mid, so treat it as wide.
+        yes_price = bid if bid is not None else ask
+        spread = None
+    else:
+        yes_price = last
+        spread = None
+
     return {
         "provider": "polymarket",
         "id": raw.get("id"),
@@ -86,8 +116,11 @@ def _normalize_market(raw: Dict[str, Any]) -> Dict[str, Any]:
         "active": raw.get("active"),
         "closed": raw.get("closed"),
         "end_date": raw.get("endDate"),
-        "yes_price": _f(raw.get("bestBid") or raw.get("lastTradePrice")),
-        "no_price": (1.0 - _f(raw.get("bestBid"))) if _f(raw.get("bestBid")) is not None else None,
+        "yes_price": round(yes_price, 6) if yes_price is not None else None,
+        "no_price": round(1.0 - yes_price, 6) if yes_price is not None else None,
+        # Surfaced so aggregation can down-weight illiquid, wide-spread
+        # markets instead of treating every quote as equally informative.
+        "spread": round(spread, 6) if spread is not None else None,
         "volume_24h": _f(raw.get("volume24hr")),
         "liquidity": _f(raw.get("liquidity")),
         "outcome": raw.get("umaResolutionStatus"),
