@@ -117,6 +117,15 @@ try:
 except ImportError:
     market_sentiment_available = False
 
+# Own try/except, not bundled with market_sentiment: sharing one block means a
+# failure in either silently removes BOTH surfaces, and the export endpoint
+# imports xlsxwriter transitively.
+try:
+    from api.export import router as export_router
+    export_available = True
+except ImportError:
+    export_available = False
+
 try:
     from api.kalshi import router as kalshi_router
     kalshi_available = True
@@ -221,6 +230,8 @@ if v1_public_available:
     app.include_router(v1_public_router)
 if market_sentiment_available:
     app.include_router(market_sentiment_router)
+if export_available:
+    app.include_router(export_router)
 
 # Every router above is imported under `except ImportError: <n>_available =
 # False`, which means a typo'd import silently deletes an entire API surface
@@ -342,9 +353,41 @@ def read_root():
         ]
     }
 
+def _optional_import_ok(module: str) -> bool:
+    """Whether a lazily-imported dependency is actually installed."""
+    import importlib.util
+    try:
+        return importlib.util.find_spec(module) is not None
+    except (ImportError, ValueError):
+        return False
+
+
 @app.get('/health')
 def health_check():
-    return {"status": "healthy", "supabase_connected": bool(supabase_url and supabase_key)}
+    """Liveness, plus the dependencies that fail silently when absent.
+
+    Several modules import third-party packages lazily so the app can boot
+    without them. That is deliberate, but it means a missing package shows up
+    only as a 503 on one route while this endpoint keeps answering 200 — which
+    is how the backend ran in production with PyJWT absent, returning
+    "auth library unavailable" to every authenticated request while every
+    health check passed.
+
+    Reporting them here does not change any behaviour; it makes the failure
+    visible to anything that already polls /health.
+    """
+    auth_ok = _optional_import_ok("jwt")
+    return {
+        # Unhealthy when no request can authenticate. A backend that answers
+        # 503 to every signed-in user is not serving, whatever else works.
+        "status": "healthy" if auth_ok else "degraded",
+        "supabase_connected": bool(supabase_url and supabase_key),
+        "dependencies": {
+            "auth_jwt": auth_ok,
+            "stripe": _optional_import_ok("stripe"),
+            "xlsx_export": _optional_import_ok("xlsxwriter"),
+        },
+    }
 
 _SENTIMENT_MAP = {"positive": "bullish", "negative": "bearish", "neutral": "neutral"}
 _KEYWORD_BULLISH = {"bullish", "gain", "profit", "surge", "rally", "rise", "increase", "boost", "strong", "growth"}

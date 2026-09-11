@@ -18,6 +18,8 @@ import math
 from dataclasses import dataclass
 from typing import Any, Optional
 
+from services.comp_access import comp_tier_for
+
 logger = logging.getLogger(__name__)
 
 # Sentinel — matches JS's Infinity handling
@@ -40,6 +42,27 @@ class TierLimits:
     # trial. False on the 30-day trial; True on the paid API tiers. Defaults
     # False so any tier that doesn't opt in cannot export.
     exports_enabled: bool = False
+
+
+def _api_query_depth(tier: str) -> float:
+    """Query depth for an API tier, read from the one table in entitlement.py.
+
+    These three tiers are defined in BOTH modules: this one drives
+    clamp_hours_back (used by /v1/sentiment and the feed), entitlement drives
+    assert_history_depth (used by export). Two literals for one policy is how
+    they drift, and which number applied would depend on the path a request
+    happened to take. One table, read twice.
+
+    Falls back to the previous literals if entitlement cannot be imported, so a
+    bad import degrades to the old behaviour rather than to no access.
+    """
+    try:
+        from services.entitlement import query_depth_days
+
+        return query_depth_days(tier)
+    except Exception:  # noqa: BLE001
+        logger.warning("entitlement unavailable; using literal depth for %s", tier)
+        return {"api_trial": 30.0, "api_basic": 30.0}.get(tier, UNLIMITED)
 
 
 LIMITS: dict[str, TierLimits] = {
@@ -125,7 +148,7 @@ LIMITS: dict[str, TierLimits] = {
         commodities=UNLIMITED,
         custom_rss_urls=UNLIMITED,
         ai_overlay_per_day=UNLIMITED,
-        history_days=30,
+        history_days=_api_query_depth("api_trial"),
         articles_per_session=UNLIMITED,
         alert_types=("news", "sentiment", "divergence"),
         push_mode="realtime",
@@ -138,7 +161,7 @@ LIMITS: dict[str, TierLimits] = {
         commodities=UNLIMITED,
         custom_rss_urls=UNLIMITED,
         ai_overlay_per_day=UNLIMITED,
-        history_days=30,
+        history_days=_api_query_depth("api_basic"),
         articles_per_session=UNLIMITED,
         alert_types=("news", "sentiment", "divergence"),
         push_mode="realtime",
@@ -151,7 +174,7 @@ LIMITS: dict[str, TierLimits] = {
         commodities=UNLIMITED,
         custom_rss_urls=UNLIMITED,
         ai_overlay_per_day=UNLIMITED,
-        history_days=UNLIMITED,
+        history_days=_api_query_depth("api_history"),
         articles_per_session=UNLIMITED,
         alert_types=("news", "sentiment", "divergence"),
         push_mode="realtime",
@@ -171,11 +194,22 @@ def can_query_historical(tier: str) -> bool:
     return tier == "api_history"
 
 
-def get_effective_tier(supabase, user_id: str) -> str:
+def get_effective_tier(supabase, user_id: str, email: Optional[str] = None) -> str:
     """Reads `public.effective_tier(user_id)` — the DB function that accounts
     for trial + subscription expiration. Falls back to 'free_trial' if
     supabase is unavailable or the row doesn't exist.
+
+    A comp grant short-circuits the lookup. This has to be checked in BOTH tier
+    resolvers: this one answers /api/subscriptions/entitlement, which is what
+    the dashboard renders from, while services.entitlement.resolve answers the
+    API-key path that actually mints and authorizes keys. Comping only one of
+    them produces the worst version of the bug — a dashboard that offers key
+    management and a create call that returns 403.
     """
+    comped = comp_tier_for(user_id, email)
+    if comped:
+        return comped
+
     # Every fallback below is `free`, never `free_trial`: free_trial now grants
     # full Pro, so failing open to it would hand Pro to every caller during a
     # Supabase outage.

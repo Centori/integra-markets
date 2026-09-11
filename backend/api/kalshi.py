@@ -1,9 +1,25 @@
-from fastapi import APIRouter, HTTPException, Query
+from fastapi import APIRouter, Depends, HTTPException, Query
 from typing import Optional, List, Dict, Any
 from pydantic import BaseModel
 import os
 import logging
 from kalshi_client import KalshiClient, RateLimitConfig
+from services.api_key_auth import verify_api_key
+
+# Routes that move money or disclose the account MUST carry this.
+#
+# `get_kalshi_client()` authenticates with KALSHI_API_KEY_ID / KALSHI_PRIVATE_KEY
+# read from the server's own environment — this process trades on ONE account,
+# Integra's. Until 2026-09-02 every route below was mounted with no dependency
+# at all, so an anonymous caller could place, amend and cancel real orders on
+# that account and read its full position book. Several of the handlers even
+# carry the docstring "(requires authentication)"; the requirement was written
+# down and never enforced.
+#
+# Applied per-route rather than on the router because the read-only market-data
+# endpoints (/markets, /events, orderbooks) serve public Kalshi data to the
+# mobile app without a key, and locking those would break market browsing.
+REQUIRE_KEY = [Depends(verify_api_key)]
 
 # Configure logging
 logging.basicConfig(level=logging.INFO)
@@ -267,7 +283,7 @@ async def search_markets(request: MarketSearchRequest):
 
 # Authenticated Endpoints (require API key and private key)
 
-@router.get("/portfolio")
+@router.get("/portfolio", dependencies=REQUIRE_KEY)
 async def get_portfolio():
     """Get portfolio information (requires authentication)"""
     try:
@@ -280,7 +296,7 @@ async def get_portfolio():
         logger.error(f"Error fetching portfolio: {str(e)}")
         raise HTTPException(status_code=500, detail=f"Failed to fetch portfolio: {str(e)}")
 
-@router.get("/portfolio/positions")
+@router.get("/portfolio/positions", dependencies=REQUIRE_KEY)
 async def get_positions(
     limit: int = Query(default=100, le=1000),
     cursor: Optional[str] = Query(default=None)
@@ -296,7 +312,7 @@ async def get_positions(
         logger.error(f"Error fetching positions: {str(e)}")
         raise HTTPException(status_code=500, detail=f"Failed to fetch positions: {str(e)}")
 
-@router.get("/portfolio/orders")
+@router.get("/portfolio/orders", dependencies=REQUIRE_KEY)
 async def get_orders(
     limit: int = Query(default=100, le=1000),
     cursor: Optional[str] = Query(default=None),
@@ -313,7 +329,7 @@ async def get_orders(
         logger.error(f"Error fetching orders: {str(e)}")
         raise HTTPException(status_code=500, detail=f"Failed to fetch orders: {str(e)}")
 
-@router.post("/trade")
+@router.post("/trade", dependencies=REQUIRE_KEY)
 async def place_trade(request: TradeRequest):
     """Place a trade order with simplified interface matching UI mockup"""
     try:
@@ -339,7 +355,7 @@ async def place_trade(request: TradeRequest):
         logger.error(f"Error placing trade: {str(e)}")
         raise HTTPException(status_code=500, detail=f"Failed to place trade: {str(e)}")
 
-@router.post("/portfolio/orders")
+@router.post("/portfolio/orders", dependencies=REQUIRE_KEY)
 async def create_order(request: OrderRequest):
     """Create a new order (requires authentication)"""
     try:
@@ -361,7 +377,7 @@ async def create_order(request: OrderRequest):
         logger.error(f"Error creating order: {str(e)}")
         raise HTTPException(status_code=500, detail=f"Failed to create order: {str(e)}")
 
-@router.get("/portfolio/orders/{order_id}")
+@router.get("/portfolio/orders/{order_id}", dependencies=REQUIRE_KEY)
 async def get_order(order_id: str):
     """Get specific order by ID (requires authentication)"""
     try:
@@ -374,7 +390,7 @@ async def get_order(order_id: str):
         logger.error(f"Error fetching order {order_id}: {str(e)}")
         raise HTTPException(status_code=500, detail=f"Failed to fetch order: {str(e)}")
 
-@router.delete("/portfolio/orders/{order_id}")
+@router.delete("/portfolio/orders/{order_id}", dependencies=REQUIRE_KEY)
 async def cancel_order(order_id: str):
     """Cancel an order (requires authentication)"""
     try:
@@ -387,7 +403,7 @@ async def cancel_order(order_id: str):
         logger.error(f"Error canceling order {order_id}: {str(e)}")
         raise HTTPException(status_code=500, detail=f"Failed to cancel order: {str(e)}")
 
-@router.put("/portfolio/orders/{order_id}")
+@router.put("/portfolio/orders/{order_id}", dependencies=REQUIRE_KEY)
 async def amend_order(order_id: str, request: OrderAmendRequest):
     """Amend an existing order (requires authentication)"""
     try:
@@ -427,7 +443,7 @@ async def health_check():
             "kalshi_api": "disconnected"
         }
 
-@router.post("/cache/clear")
+@router.post("/cache/clear", dependencies=REQUIRE_KEY)
 async def clear_cache():
     """Clear API cache"""
     try:

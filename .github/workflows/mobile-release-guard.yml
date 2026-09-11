@@ -1,0 +1,56 @@
+name: Mobile release guard
+
+# Runs `scripts/check-release-config.mjs`, which catches the class of failure
+# where a release command exits 0 and nothing reaches production:
+#
+#   * a version that Apple will reject at ingestion because the train is closed
+#     (build 89 died this way, after the build and the upload had run)
+#   * a runtimeVersion no shipped build uses, so `eas update` publishes to
+#     nobody while reporting success — the failure mode that would make an
+#     emergency OTA rollback silently do nothing
+#   * an EAS projectId this account cannot reach, so builds and updates land in
+#     an unrelated project
+#
+# Path-filtered rather than run on everything: this repo holds the backend, the
+# dashboard and the web app too, and none of them can change these answers.
+
+on:
+  pull_request:
+    branches: [main]
+    paths:
+      - "app.json"
+      - "eas.json"
+      - "scripts/check-release-config.mjs"
+      - ".github/workflows/mobile-release-guard.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: mobile-release-guard-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  check:
+    name: Release config
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          # Node 20 for built-in fetch and AbortSignal.timeout. The script has
+          # no dependencies, so there is nothing to install and no lockfile to
+          # go stale — it runs in about a second.
+          node-version: "20"
+
+      - name: Check release config
+        env:
+          # Optional. Without it the App Store train check still runs (the
+          # iTunes lookup API needs no credentials), but the live EAS
+          # comparison is skipped and says so. Add the secret at
+          # Settings -> Secrets -> Actions, from
+          # https://expo.dev/settings/access-tokens
+          EXPO_TOKEN: ${{ secrets.EXPO_TOKEN }}
+        run: node scripts/check-release-config.mjs

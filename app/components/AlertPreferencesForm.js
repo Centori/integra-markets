@@ -13,6 +13,7 @@ import {
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { MaterialIcons } from '@expo/vector-icons';
 import { DEFAULT_WEBSITE_SOURCES, getSuggestedWebsiteURLs } from '../config/default_sources';
+import { pullAlertPreferences, pushAlertPreferences } from '../services/alertPreferencesSync';
 
 // Color palette
 const colors = {
@@ -49,26 +50,52 @@ const AlertPreferencesForm = ({ onComplete, onSkip, showSkipOption = false, isEd
     }
   }, [isEditMode]);
 
+  // Frequency and threshold are stored lowercase on the server but the
+  // buttons are capitalised, so match case-insensitively and keep the
+  // button's own spelling — otherwise a synced preference highlights nothing.
+  const matchOption = (options, value) => {
+    const lowered = String(value ?? '').trim().toLowerCase();
+    return options.find((o) => o.toLowerCase() === lowered);
+  };
+
+  const applyPreferences = (prefs) => {
+    if (prefs.commodities) setSelectedCommodities(prefs.commodities);
+    if (prefs.regions) setSelectedRegions(prefs.regions);
+    if (prefs.currencies) setSelectedCurrencies(prefs.currencies);
+    if (prefs.keywords) setKeywords(prefs.keywords);
+    if (prefs.websiteURLs) setWebsiteURLs(prefs.websiteURLs);
+
+    const freq = matchOption(['Real-time', 'Daily', 'Weekly'], prefs.alertFrequency);
+    if (freq) setAlertFrequency(freq);
+    const threshold = matchOption(['Low', 'Medium', 'High'], prefs.alertThreshold);
+    if (threshold) setAlertThreshold(threshold);
+
+    if (prefs.pushNotifications !== undefined) setPushNotifications(prefs.pushNotifications);
+    if (prefs.emailAlerts !== undefined) setEmailAlerts(prefs.emailAlerts);
+  };
+
   const loadExistingPreferences = async () => {
+    // Local first, so the form is filled in immediately and still works with
+    // no network. This is a cache, not the record.
     try {
       const storedPrefs = await AsyncStorage.getItem('alert_preferences');
-      if (storedPrefs) {
-        const prefs = JSON.parse(storedPrefs);
-        console.log('Loading existing preferences:', prefs);
-        
-        // Update state with existing preferences
-        if (prefs.commodities) setSelectedCommodities(prefs.commodities);
-        if (prefs.regions) setSelectedRegions(prefs.regions);
-        if (prefs.currencies) setSelectedCurrencies(prefs.currencies);
-        if (prefs.keywords) setKeywords(prefs.keywords);
-        if (prefs.websiteURLs) setWebsiteURLs(prefs.websiteURLs);
-        if (prefs.alertFrequency) setAlertFrequency(prefs.alertFrequency);
-        if (prefs.alertThreshold) setAlertThreshold(prefs.alertThreshold);
-        if (prefs.pushNotifications !== undefined) setPushNotifications(prefs.pushNotifications);
-        if (prefs.emailAlerts !== undefined) setEmailAlerts(prefs.emailAlerts);
-      }
+      if (storedPrefs) applyPreferences(JSON.parse(storedPrefs));
     } catch (error) {
       console.error('Error loading preferences:', error);
+    }
+
+    // Then the account, which is what the web reads and what a new device has
+    // instead of local state. Returns null when there is nothing to apply —
+    // signed out, offline, or no row yet — so a good local copy is never
+    // overwritten with an empty remote one.
+    try {
+      const remote = await pullAlertPreferences();
+      if (remote) {
+        applyPreferences(remote);
+        await AsyncStorage.setItem('alert_preferences', JSON.stringify(remote));
+      }
+    } catch (error) {
+      console.warn('Could not load account preferences:', error?.message ?? error);
     }
   };
 
@@ -215,6 +242,17 @@ const AlertPreferencesForm = ({ onComplete, onSkip, showSkipOption = false, isEd
     } catch (error) {
       console.error('Error saving to AsyncStorage:', error);
     }
+
+    // Mirror to the account. This is the write that was missing entirely:
+    // nothing in the app wrote public.alert_preferences, so the web read an
+    // empty table for every user no matter what they had set here.
+    //
+    // Deliberately not awaited into the success path — the local copy is
+    // already written and the user has finished the form. A network failure
+    // logs and is retried by the next save, which upserts the whole row.
+    pushAlertPreferences(preferences).then((synced) => {
+      if (!synced) console.warn('Preferences saved locally but not synced to the account');
+    });
 
     const totalItems = selectedCommodities.length + selectedRegions.length + selectedCurrencies.length + keywords.length + websiteURLs.length;
     

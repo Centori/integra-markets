@@ -26,7 +26,15 @@ logger = logging.getLogger(__name__)
 # threshold, model swap). PRs touching `analyze_market_sentiment`,
 # `SENTIMENT_RULE_COEF`, or the lexicon loaders must update this.
 ACTIVE_MODEL_NAME = "vader_v2_commodity"
-ACTIVE_MODEL_VERSION = "2026-06-23"  # date of PR #9 landing
+# 2026-09-02: the previous version, "2026-06-23", is a LIE for 96% of the rows
+# carrying it. The scoring jobs imported a `vader_analyzer` global that was
+# None at import time, so 60,225 of 62,771 rows were produced by
+# basic_sentiment_analysis (a 20-word keyword list) while stamped
+# vader_v2_commodity. This version marks rows genuinely scored by the
+# lexicon-enriched engine, with commodity-name polarity neutralised
+# (see services/sentiment_engine.py and services/lexicons/domain_neutral.py).
+# Keeping the old string distinguishable is the point: do not reuse it.
+ACTIVE_MODEL_VERSION = "2026-09-02"
 
 
 def _url_hash(url: str) -> str:
@@ -45,13 +53,25 @@ def _to_iso(value: Any) -> Optional[str]:
     return parse_published_iso(value)
 
 
-def _normalize_sentiment(label: Any) -> Optional[str]:
+def normalize_sentiment(label: Any) -> Optional[str]:
+    """Coerce a scorer's label to the lowercase form entity_mentions accepts.
+
+    `analyze_market_sentiment` returns UPPERCASE ("BULLISH"), while both
+    `sentiment_scores.sentiment` and `entity_mentions.sentiment` carry a CHECK
+    constraint for the lowercase form. Public because archive_scorer must
+    apply exactly the same rule — it originally reimplemented the membership
+    test without the .lower() and silently discarded every score it computed.
+    """
     if not label:
         return None
     s = str(label).lower()
     if s in ("bullish", "bearish", "neutral"):
         return s
     return None
+
+
+# Back-compat alias for in-module callers.
+_normalize_sentiment = normalize_sentiment
 
 
 def persist_articles(
@@ -98,6 +118,11 @@ def persist_articles(
                 "enhanced": article.get("enhanced", False),
                 "word_count": article.get("word_count"),
                 "enhancement_method": article.get("enhancement_method"),
+                # Card image, captured at ingest. It was dropped here before,
+                # so no amount of work on the read path could recover it and
+                # every card fell back to the brand mark. Costs nothing --
+                # feedparser has already parsed the field.
+                "image_url": article.get("image_url") or None,
                 # Recorded so an unreadable upstream date is visible in the
                 # data rather than indistinguishable from a real one.
                 "published_estimated": published is None,
@@ -271,10 +296,14 @@ def persist_articles(
             #   entity_mentions (document_id, entity, entity_type, coalesce(model_version,''))
             (
                 supabase.table("entity_mentions")
+                # See jobs/archive_scorer.py for the full rationale: model_version
+                # in the conflict key means a model bump duplicates the archive,
+                # and DO NOTHING makes a re-score a silent no-op. This is the
+                # live ingest path, so it duplicated on every tick.
                 .upsert(
                     entity_rows,
-                    on_conflict="document_id,entity,entity_type,model_version",
-                    ignore_duplicates=True,
+                    on_conflict="document_id,entity,entity_type",
+                    ignore_duplicates=False,
                 )
                 .execute()
             )

@@ -7,6 +7,8 @@ import asyncio
 import aiohttp
 from aiohttp import AsyncResolver, TCPConnector, ClientTimeout, ClientError
 import feedparser
+
+from services.feed_images import extract_image_url
 import json
 import re
 from datetime import datetime, timedelta, timezone
@@ -244,6 +246,7 @@ class NewsDataSources:
                         'source': 'Reuters',
                         'title': entry.title,
                         'summary': getattr(entry, 'summary', ''),
+                        'image_url': extract_image_url(entry),
                         'url': entry.link,
                         'published': self._parse_date(getattr(entry, 'published', '')),
                         'category': 'commodities'
@@ -294,6 +297,7 @@ class NewsDataSources:
                     'source': 'OilPrice.com',
                     'title': entry.title,
                     'summary': getattr(entry, 'summary', ''),
+                    'image_url': extract_image_url(entry),
                     'url': entry.link,
                     'published': self._parse_date(entry.published),
                     'category': 'energy'
@@ -334,6 +338,7 @@ class NewsDataSources:
                         'source': 'Yahoo Finance',
                         'title': entry.title,
                         'summary': getattr(entry, 'summary', ''),
+                        'image_url': extract_image_url(entry),
                         'url': entry.link,
                         'published': self._parse_date(entry.published),
                         'category': 'commodities'
@@ -370,6 +375,7 @@ class NewsDataSources:
                     'source': 'U.S. EIA',
                     'title': entry.title,
                     'summary': getattr(entry, 'summary', ''),
+                    'image_url': extract_image_url(entry),
                     'url': entry.link,
                     'published': self._parse_date(entry.published),
                     'category': 'energy_data'
@@ -403,6 +409,7 @@ class NewsDataSources:
                     'source': 'IEA',
                     'title': entry.title,
                     'summary': getattr(entry, 'summary', ''),
+                    'image_url': extract_image_url(entry),
                     'url': entry.link,
                     'published': self._parse_date(entry.published),
                     'category': 'energy_policy'
@@ -451,6 +458,7 @@ class NewsDataSources:
                         'source': 'Bloomberg',
                         'title': entry.title,
                         'summary': getattr(entry, 'summary', ''),
+                        'image_url': extract_image_url(entry),
                         'url': entry.link,
                         'published': self._parse_date(entry.published),
                         'category': 'markets'
@@ -491,6 +499,7 @@ class NewsDataSources:
                                     'source': 'Trading Economics',
                                     'title': entry.title,
                                     'summary': getattr(entry, 'summary', ''),
+                                    'image_url': extract_image_url(entry),
                                     'url': entry.link,
                                     'published': self._parse_date(entry.published),
                                     'category': category
@@ -552,6 +561,7 @@ class NewsDataSources:
                             'source': 'Investing.com',
                             'title': entry.title,
                             'summary': getattr(entry, 'summary', ''),
+                            'image_url': extract_image_url(entry),
                             'url': entry.link,
                             'published': self._parse_date(entry.published),
                             'category': 'commodities'
@@ -581,6 +591,7 @@ class NewsDataSources:
                             'source': 'Mining Weekly',
                             'title': entry.title,
                             'summary': getattr(entry, 'summary', ''),
+                            'image_url': extract_image_url(entry),
                             'url': entry.link,
                             'published': self._parse_date(entry.published),
                             'category': 'mining'
@@ -624,6 +635,7 @@ class NewsDataSources:
                     'source': 'Natural Gas Intelligence',
                     'title': entry.title,
                     'summary': getattr(entry, 'summary', ''),
+                    'image_url': extract_image_url(entry),
                     'url': entry.link,
                     'published': self._parse_date(entry.published),
                     'category': 'natural_gas'
@@ -665,6 +677,7 @@ class NewsDataSources:
                             'source': 'Kitco News',
                             'title': entry.title,
                             'summary': getattr(entry, 'summary', ''),
+                            'image_url': extract_image_url(entry),
                             'url': entry.link,
                             'published': self._parse_date(entry.published),
                             'category': category
@@ -712,6 +725,7 @@ class NewsDataSources:
                     'source': 'Metal Bulletin',
                     'title': entry.title,
                     'summary': getattr(entry, 'summary', ''),
+                    'image_url': extract_image_url(entry),
                     'url': entry.link,
                     'published': self._parse_date(entry.published),
                     'category': 'metals'
@@ -767,6 +781,7 @@ class NewsDataSources:
                         'source': 'Energy.gov',
                         'title': entry.title,
                         'summary': getattr(entry, 'summary', ''),
+                        'image_url': extract_image_url(entry),
                         'url': entry.link,
                         'published': self._parse_date(entry.published),
                         'category': 'energy_policy'

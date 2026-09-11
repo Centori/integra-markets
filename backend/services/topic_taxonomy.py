@@ -385,8 +385,68 @@ TOPICS: Dict[str, Dict[str, Any]] = {
         "category": "logistics",
         "market_coverage": False,
         "news_keywords": [
+            # Rate-desk terms (original set).
             "freight", "shipping rates", "baltic dry", "tanker rates", "vlcc",
             "container rates", "suez canal", "panama canal", "port strike",
+            # General maritime. The original list only covered rates, so 630
+            # unmatched documents about ports, vessels and ship recycling —
+            # a quarter of the Hellenic Shipping archive — matched nothing.
+            # Safe as substrings because _pattern_for wraps them in \b...\b:
+            # "port" cannot match "report", "export" or "important".
+            "shipping", "maritime", "port", "ports", "vessel", "vessels",
+            "ship", "ships",
+            "tanker", "tankers", "cargo", "dry bulk", "bulk carrier",
+            "containership", "shipowner", "shipowners", "shipyard",
+            "ship recycling", "charter rate", "demurrage", "seafarer",
+            "seafarers", "piracy",
+        ],
+    },
+    "upstream_oilfield": {
+        "label": "Upstream / Oilfield services",
+        "category": "energy_products",
+        "market_coverage": False,
+        # crude_oil's keywords are price-desk words (crude, brent, wti, barrel),
+        # so industry news matched nothing: "$180MM in Contracts Go to Sapura",
+        # "Aker BP Completes Delineation of New Discovery", "175-Well North Sea
+        # Orders Go to Ardyne". 342 unmatched documents, almost the whole
+        # Rigzone archive.
+        "news_keywords": [
+            "rig", "rigs", "drilling", "driller", "offshore", "onshore",
+            "upstream", "wellbore", "seismic", "fpso", "jack-up", "jackup",
+            "drillship", "north sea", "gulf of mexico", "permian", "shale",
+            "wildcat", "appraisal well", "oilfield", "workover", "subsea",
+            "exploration well", "production sharing", "discovery",
+            # "field" alone is deliberately absent: "2020 U.S. Economy Field
+            # Guide" would tag as upstream. "oilfield" and "discovery" carry
+            # the meaning without the collision.
+        ],
+    },
+    "mining_sector": {
+        "label": "Mining sector",
+        "category": "transition_metals",
+        "market_coverage": False,
+        # The taxonomy had individual metals but nothing for the industry
+        # itself, so mine development, output and M&A news went untagged.
+        "news_keywords": [
+            "mine", "mines", "mining", "miner", "miners", "orebody", "ore body",
+            "tailings", "smelter", "refinery expansion", "assay", "drill results",
+            "feasibility study", "mineral resource", "open pit", "underground mine",
+            "concentrate", "offtake",
+        ],
+    },
+    "renewables_nuclear": {
+        "label": "Renewables / Nuclear",
+        "category": "energy_products",
+        "market_coverage": False,
+        # energy_policy covers the POLICY debate ("climate policy", "emissions")
+        # and power_electricity covers the GRID ("megawatt", "ercot"), but
+        # neither tagged plain generation news: solar sites, nuclear PPAs,
+        # offshore wind, hydrogen.
+        "news_keywords": [
+            "solar", "wind farm", "offshore wind", "onshore wind", "nuclear",
+            "reactor", "smr", "hydrogen", "electrolyser", "electrolyzer",
+            "geothermal", "hydropower", "battery storage", "energy storage",
+            "power purchase agreement", "ppa", "photovoltaic",
         ],
     },
     "carbon_markets": {

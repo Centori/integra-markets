@@ -24,16 +24,20 @@ import { createClient } from '@/lib/supabase';
 
 type Provider = 'google' | 'apple';
 
-// Apple is behind a flag because the provider is not yet enabled on the
-// Supabase project: as of 2026-08-18,
-//   GET /auth/v1/authorize?provider=apple  ->  400
-//   GET /auth/v1/authorize?provider=google ->  302 (working)
-// Rendering a sign-in button that cannot complete is worse than omitting it —
-// someone taps it, fails, and may not try again. Set
-// NEXT_PUBLIC_APPLE_AUTH_ENABLED=true in Vercel once Apple is configured in
-// Supabase (Services ID + key); no code change or redeploy of this component is
-// needed beyond the env var taking effect on the next build.
-const APPLE_ENABLED = process.env.NEXT_PUBLIC_APPLE_AUTH_ENABLED === 'true';
+// Apple WORKS. Re-verified against production 2026-09-02:
+//   GET /auth/v1/authorize?provider=apple  ->  302
+//   GET /auth/v1/authorize?provider=google ->  302
+//
+// The comment here previously said Apple returned 400 and was "not yet
+// enabled". True on 2026-08-18, stale ever since — the provider was configured
+// and the flag flipped in Vercel, so this button has been rendering in
+// production while the source said it could not work. A stale comment about a
+// flag is worse than none: the next reader reasons from it instead of probing.
+//
+// Still an env flag so the button can be pulled without a deploy if Apple ever
+// revokes the Services ID, but it defaults ON — absence of a variable should
+// not silently remove a working sign-in method from every Apple-only account.
+const APPLE_ENABLED = process.env.NEXT_PUBLIC_APPLE_AUTH_ENABLED !== 'false';
 
 export default function SocialAuthButtons({
     onError,
