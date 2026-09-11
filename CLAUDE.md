@@ -118,6 +118,110 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
   `@react-native-community/netinfo` (needs 11.4.1 for SDK 52, not latest),
   `expo-clipboard` (needs ~7.0.1, not 8.x).
 
+## Before claiming anything works
+
+There are seven hops between an edit and a user seeing it:
+
+```
+written -> committed -> merged -> CI -> deployed -> cached -> their data
+```
+
+`tsc`, `pytest` and "the PR is merged" cover the first three. Every
+"you said it was fixed and it isn't" in this project has lived in the last
+four. Real examples, all from one week:
+
+- PRs reported as fixes while still open.
+- #83 merged cleanly and never deployed — the Railway build had been failing
+  for three days, so the old image kept serving.
+- `stripe` and `PyJWT` missing from the installed requirements file. `/health`
+  returned 200 the whole time while every authenticated request answered 503.
+
+So, four rules. The first three are executable; run them, don't recall them.
+
+**1. Probe production before reporting a fix.**
+
+```bash
+node scripts/verify-production.mjs           # every surface
+node scripts/verify-production.mjs backend   # one surface
+```
+
+Exits non-zero on failure. A merge is not a deploy; a deploy is not a working
+feature. If this has not passed, do not say it is live.
+
+**2. Confirm which checkout you are in before analysing.**
+
+```bash
+node scripts/where-am-i.mjs
+```
+
+Several checkouts of this project exist on one machine and two are traps:
+`~/integra-markets` is a FORK frozen in June, and `~/Desktop/integra/
+integra-markets-2` is the shipped mobile lineage, not `main`. Reading the wrong
+one does not error — it returns plausible source describing a different
+program. Two confident, wrong analyses have come from exactly this.
+
+**3. When a bug has a shape, grep for the shape.**
+
+```bash
+node scripts/find-bug-shapes.mjs
+```
+
+`stripe` missing and `PyJWT` missing were the same bug found a week apart, both
+greppable from the start. Fix the instance, then search for its siblings before
+moving on. `backend/tests/test_declared_dependencies.py` now enforces that
+particular one.
+
+**4. Re-read the request before shipping UI.**
+
+If your reasoning contradicts what was asked, say so in one sentence and build
+what was asked. A request to move something left was implemented as a move
+right, with a confident comment explaining why — the rationale won without
+anyone noticing it had overruled the instruction.
+
+## Known-broken things must age, not linger
+
+`known-issues.json` holds what is deliberately unfixed. Every entry carries
+`firstSeen`, an `owner`, a `nextAction`, and `escalateAfterDays`.
+`verify-production.mjs` reads it: before the deadline an entry is a WARN, after
+it the run **fails** and prints the next action.
+
+This exists because a warning that repeats forever stops being read. The MCP
+certificate was reported on every check for three days and nothing was decided
+— "known issue" becomes indistinguishable from "no check" once it has scrolled
+past a few times. A failing run means a decision is overdue, not that something
+new broke.
+
+To silence an entry: fix it and delete it, or change the deadline deliberately.
+Either is visible in a diff. Drifting is not an option the tooling offers.
+
+Entries also carry `verifiedNotOurs` — what has already been ruled out — so the
+next person does not re-run the same checks before reaching the same wall.
+
+## Known failure shapes in this codebase
+
+These have each shipped more than once. `DEBUGGING.md` carries the detail.
+
+| Shape | How it presents |
+|---|---|
+| Lazy import not in `requirements.txt` | App boots, `/health` is 200, one route 503s |
+| Two requirement files, one installed | Dependency looks declared, isn't installed |
+| Substring match without `\b` | "bullion" reads as bullish; "Goldman" as gold |
+| `.single()` where no row is normal | Swallowed error renders as empty state |
+| Silent catch to a permissive default | Outage renders as a correctly locked account |
+| Dict rebuilt field-by-field | Unnamed keys vanish downstream |
+| Two sources of truth | Drift, discovered by a customer |
+
+## Two lineages — the mobile app is not built from `main`
+
+The App Store build comes from `build64-exact`, **not** `main`. `main` is
+missing 49 commits of mobile work including the entire paywall, and five files
+the shipped app imports do not exist there — so `main`'s mobile bundle cannot
+resolve. `main` is authoritative for backend, dashboard and web; it has never
+been authoritative for the app.
+
+Build or OTA the app only from the shipped lineage. `scripts/where-am-i.sh`
+reports which side you are on. Reconciling the two is outstanding work.
+
 ## Working with Claude
 
 - When unsure which `App.*.js` / `main_*.py` variant is canonical, ask

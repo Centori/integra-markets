@@ -65,6 +65,23 @@ def comp_tier() -> str:
     return (os.environ.get(_TIER_VAR) or DEFAULT_COMP_TIER).strip() or DEFAULT_COMP_TIER
 
 
+def _allowlist() -> Set[str]:
+    """Every comped identifier, from both variables, as one set.
+
+    The two variables exist to document WHICH identifier reaches which surface
+    — an API-key request has no email, so a UUID is the only thing that can
+    comp it. They are deliberately NOT two separate matches, because a value in
+    the wrong variable would then match nothing at all, silently: the grant
+    would look configured and do nothing, which is the failure mode this whole
+    module was written in response to.
+
+    Putting an email in INTEGRA_COMP_USER_IDS now simply works. It still will
+    not comp API-key requests — nothing can, without the UUID — but it will not
+    quietly do nothing either.
+    """
+    return _split(os.environ.get(_USER_IDS_VAR)) | _split(os.environ.get(_EMAILS_VAR))
+
+
 def comp_tier_for(user_id: Optional[str], email: Optional[str] = None) -> Optional[str]:
     """The comped tier for this caller, or None if they are not comped.
 
@@ -72,11 +89,11 @@ def comp_tier_for(user_id: Optional[str], email: Optional[str] = None) -> Option
     caller that is not on a list is unaffected, and no code path can mistake
     "not comped" for a tier of its own.
     """
-    if user_id:
-        if user_id.strip().casefold() in _split(os.environ.get(_USER_IDS_VAR)):
-            return comp_tier()
-    if email:
-        if email.strip().casefold() in _split(os.environ.get(_EMAILS_VAR)):
+    allowed = _allowlist()
+    if not allowed:
+        return None
+    for identifier in (user_id, email):
+        if identifier and identifier.strip().casefold() in allowed:
             return comp_tier()
     return None
 

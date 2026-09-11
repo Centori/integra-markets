@@ -67,7 +67,10 @@
     "lint:fix": "eslint . --ext .js,.jsx,.ts,.tsx --fix",
     "postinstall": "patch-package",
     "check:release": "node scripts/check-release-config.mjs",
-    "update:production": "npm run check:release && eas update --channel production"
+    "update:production": "npm run check:release && eas update --channel production",
+    "verify:prod": "node scripts/verify-production.mjs",
+    "where": "node scripts/where-am-i.mjs",
+    "find:shapes": "node scripts/find-bug-shapes.mjs"
   },
   "devDependencies": {
     "@expo/ngrok": "^4.1.3",

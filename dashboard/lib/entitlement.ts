@@ -33,10 +33,25 @@ export async function fetchEntitlementSummary(
       cache: "no-store",
       signal: AbortSignal.timeout(6_000),
     });
-    if (!res.ok) return FALLBACK;
+    if (!res.ok) {
+      // Loud on purpose. This fallback made a backend outage indistinguishable
+      // from a correctly locked account: PyJWT was missing from the deployed
+      // image, every authenticated route answered 503, and this returned
+      // free_trial — so the page rendered "upgrade to the API tier" to a user
+      // who already had it, with nothing anywhere saying the API was down.
+      console.error(
+        `[entitlement] ${API_URL} returned ${res.status}; falling back to ` +
+          `${FALLBACK.tier}. The account's real tier is unknown, not free.`
+      );
+      return FALLBACK;
+    }
     const data = (await res.json()) as { tier?: string; user_id?: string };
     return { tier: data.tier ?? FALLBACK.tier, userId: data.user_id ?? null };
-  } catch {
+  } catch (err) {
+    console.error(
+      `[entitlement] lookup failed (${err instanceof Error ? err.message : err}); ` +
+        `falling back to ${FALLBACK.tier}.`
+    );
     return FALLBACK;
   }
 }

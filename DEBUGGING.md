@@ -8,7 +8,26 @@ person would otherwise re-derive.
 
 ---
 
-## 0. Check these four things before believing anything
+## 0. Run the verifier. It replaces the checklist below.
+
+```bash
+node scripts/verify-production.mjs     # every surface, live, exits non-zero on failure
+node  scripts/where-am-i.mjs            # which repo + which lineage you are in
+node  scripts/find-bug-shapes.mjs      # the failure shapes below, hunted automatically
+```
+
+The checklist that follows was the manual version and is kept because it says
+*why* each probe matters. The script is what you actually run — a checklist you
+have to remember is a checklist that gets skipped, and it was, repeatedly.
+
+The chain the verifier covers, which local checks do not:
+
+```
+written -> committed -> merged -> CI -> deployed -> cached -> their data
+             tsc/pytest cover here ^        every real miss has been here ^
+```
+
+### The manual checks, and why each exists
 
 ```bash
 # 1. Is the code actually on main? A PR is not a deploy.
@@ -118,6 +137,54 @@ if getattr(existing, "create_client", None) is None:
 A request that never settles never rejects, so `try/catch` cannot save it. On
 Vercel this surfaces as `504 FUNCTION_INVOCATION_TIMEOUT`. Only
 `AbortSignal.timeout()` bounds it.
+
+### A dependency imported lazily and declared nowhere
+
+`services/supabase_jwt.py` imports PyJWT *inside* `verify_supabase_jwt()` and
+answers 503 "auth library unavailable" if the import fails. PyJWT was in neither
+requirements file, so **every authenticated request in production returned 503**
+while `/health` returned 200 — it touches none of that code.
+
+`stripe` was the same bug a week earlier, declared only in
+`requirements-light.txt`, which nothing installs. The repo-root Dockerfile does
+`COPY backend/requirements.txt`; that is the only file that reaches the image.
+
+Now enforced by `backend/tests/test_declared_dependencies.py`, and reported at
+runtime by `/health`:
+
+```json
+{"status":"healthy","dependencies":{"auth_jwt":true,"stripe":true,"xlsx_export":true}}
+```
+
+`status` reads `degraded` when auth is unavailable. A backend answering 503 to
+every signed-in user is not healthy, whatever else works.
+
+### A silent catch turns an outage into a product state
+
+`fetchTier` caught every failure and returned `free_trial`. When the backend was
+503ing, the dashboard rendered "upgrade to the API tier" to a user who already
+had it. Nothing was logged, so the symptom was indistinguishable from working
+software enforcing a paywall — it was reported as a billing bug, not an outage.
+
+If a `catch` picks a default, it must say so. The default is a guess, and a
+guess that presents as fact is worse than an error.
+
+### A build-time check that cannot run at build time
+
+The MCP tool-parity script was wired into `npm run build`, which the Dockerfile
+runs. `scripts/` is not copied into that image, so **every Railway deploy failed
+for three days** with `Cannot find module /app/scripts/check-tool-parity.mjs` —
+and a fix merged during that window silently never shipped.
+
+Copying the script in would not have helped: it compares against
+`dashboard/lib/mcpTools.ts`, which is outside the build context by design.
+Cross-package checks belong in CI, where both packages exist.
+
+### 401 and 503 are not interchangeable
+
+Both mean "you did not get in", which is exactly why a broken auth library went
+unnoticed. **401 proves the auth code ran. 503 proves it could not.** The
+verifier asserts 401 on a deliberately bad token for this reason.
 
 ### Deleting a branch closes PRs stacked on it
 
