@@ -1,0 +1,53 @@
+{
+  "$comment": [
+    "Things that are known-broken, deliberately not fixed yet, and must AGE.",
+    "",
+    "This file exists because a warning that repeats forever stops being read.",
+    "mcp.integramarkets.app has had no TLS certificate since 2026-09-08. Every",
+    "check reported it, every report said 'known issue', and three days passed",
+    "with nobody deciding anything. A permanent WARN is indistinguishable from",
+    "no check at all.",
+    "",
+    "So each entry carries a deadline. scripts/verify-production.mjs reads this",
+    "file: before `escalateAfterDays` an entry is a WARN, after it the run FAILS",
+    "and prints `nextAction`. The scheduled workflow then goes red — not because",
+    "anything new broke, but because a decision is overdue.",
+    "",
+    "To silence an entry you either fix it and delete it, or change the deadline",
+    "on purpose, which is a visible act in a diff rather than a slow drift.",
+    "",
+    "`verifiedNotOurs` is what has already been ruled out, so the same checks are",
+    "not repeated every time someone new looks at it."
+  ],
+  "issues": [
+    {
+      "id": "mcp-custom-domain-cert",
+      "summary": "mcp.integramarkets.app serves no valid TLS certificate",
+      "firstSeen": "2026-09-08",
+      "escalateAfterDays": 3,
+      "owner": "Railway support",
+      "impact": "Customers are given the Railway hostname instead of the branded one. The connector works; the address is ugly and not ours to keep.",
+      "symptom": "TLS handshake presents CN=*.up.railway.app; subjectAltName does not match. Railway API reports CERTIFICATE_STATUS_TYPE_VALIDATING_OWNERSHIP.",
+      "verifiedNotOurs": [
+        "DNS: mcp -> kqhefzbr.up.railway.app, DNS_RECORD_STATUS_PROPAGATED",
+        "CAA on integramarkets.app permits letsencrypt.org",
+        "Port 80 reaches Railway (301 to https, x-railway-67 header)",
+        "Domain deleted and recreated once, 2026-09-08 — same result"
+      ],
+      "nextAction": "Open a Railway support ticket. Quote project 18e783a9-f02d-4396-b49c-98a7a99bbc72, domain id d27eb5a5-008f-49f1-bfc4-1ada1be18a85, stuck in VALIDATING_OWNERSHIP since 2026-09-08 with DNS propagated. This is not fixable from our side.",
+      "workaround": "https://integra-mcp-production.up.railway.app/mcp — identical deployment, valid certificate, already what the dashboard hands out."
+    },
+    {
+      "id": "mobile-lineage-split",
+      "summary": "The App Store app has never been built from main",
+      "firstSeen": "2026-09-11",
+      "escalateAfterDays": 30,
+      "owner": "us",
+      "impact": "Every mobile change needs deciding which lineage it belongs to. A build from main would ship without the paywall and could not resolve its own imports.",
+      "symptom": "main is missing 49 commits of mobile work; five files the shipped app imports do not exist there.",
+      "verifiedNotOurs": [],
+      "nextAction": "Merge the shipped mobile lineage (build64-exact) into main, deliberately and not under release pressure. Until then `npm run where` tells you which side a checkout is on.",
+      "workaround": "Build and OTA only from the shipped lineage."
+    }
+  ]
+}

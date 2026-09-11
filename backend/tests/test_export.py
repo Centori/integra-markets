@@ -111,8 +111,8 @@ def _client(monkeypatch, tier="api_basic", rows=None, export_count=0):
 
     from services import api_key_auth
 
-    monkeypatch.setattr(api_key_auth, "assert_history_depth", lambda *_a, **_k: None)
-    monkeypatch.setattr(export_mod, "assert_history_depth", lambda *_a, **_k: None)
+    monkeypatch.setattr(api_key_auth, "assert_export_depth", lambda *_a, **_k: None)
+    monkeypatch.setattr(export_mod, "assert_export_depth", lambda *_a, **_k: None)
 
     app = FastAPI()
     app.include_router(export_mod.router)
@@ -318,11 +318,11 @@ class TestDefaultWindow:
 
                 raise HTTPException(status_code=403, detail="too deep")
 
-        monkeypatch.setattr(export_mod, "assert_history_depth", spy)
+        monkeypatch.setattr(export_mod, "assert_export_depth", spy)
         monkeypatch.setattr(export_mod, "effective_scopes", lambda _a: {"history"})
 
         c = _client(monkeypatch)
-        monkeypatch.setattr(export_mod, "assert_history_depth", spy)
+        monkeypatch.setattr(export_mod, "assert_export_depth", spy)
         r = c.get("/v1/export/sentiment?commodity=crude_oil")
 
         assert r.status_code == 200, f"no-argument export was refused: {r.text[:120]}"
@@ -333,11 +333,11 @@ class TestDefaultWindow:
         from api import export as export_mod
 
         seen = {}
-        monkeypatch.setattr(export_mod, "assert_history_depth",
+        monkeypatch.setattr(export_mod, "assert_export_depth",
                             lambda _a, d: seen.__setitem__("days", d))
         monkeypatch.setattr(export_mod, "effective_scopes", lambda _a: {"history", "archive"})
         c = _client(monkeypatch, tier="api_history")
-        monkeypatch.setattr(export_mod, "assert_history_depth",
+        monkeypatch.setattr(export_mod, "assert_export_depth",
                             lambda _a, d: seen.__setitem__("days", d))
         assert c.get("/v1/export/sentiment?commodity=crude_oil").status_code == 200
         assert seen["days"] > 29.9, "archive callers should get the full default window"

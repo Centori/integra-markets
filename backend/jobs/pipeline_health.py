@@ -32,6 +32,7 @@ from __future__ import annotations
 
 import logging
 import os
+import re
 from datetime import datetime, timedelta, timezone
 from typing import Any, Dict, List
 
@@ -48,6 +49,17 @@ MIN_FEED_SOURCES = int(os.getenv("HEALTH_MIN_FEED_SOURCES", "2"))
 # is silently unavailable.
 MIN_REAL_SUMMARY_RATIO = float(os.getenv("HEALTH_MIN_REAL_SUMMARY_RATIO", "0.15"))
 
+# Every card rendered the Integra brand mark for weeks because the API never
+# sent image_url at all. The mark is the FALLBACK; it is not supposed to be the
+# only thing anyone sees. RSS media fields cover Yahoo alone, so this ratio is
+# carried almost entirely by the og:image capture at ingest — if that breaks,
+# coverage silently returns to zero and every card looks "fine".
+MIN_CARD_IMAGE_RATIO = float(os.getenv("HEALTH_MIN_CARD_IMAGE_RATIO", "0.35"))
+
+# A summary that is a bare URL or a base64-ish slug is worse than no summary:
+# it renders as unreadable junk on the card. Zero tolerance — one is a bug.
+MAX_URL_JUNK_SUMMARIES = int(os.getenv("HEALTH_MAX_URL_JUNK_SUMMARIES", "0"))
+
 
 def run() -> Dict[str, Any]:
     """One tick. Returns {"ok": bool, "checks": {...}, "failures": [...]}."""
@@ -58,6 +70,10 @@ def run() -> Dict[str, Any]:
         ("entity_mentions_fresh", _check_entity_mentions),
         ("raw_documents_fresh", _check_raw_documents),
         ("feed_quality", _check_feed_quality),
+        ("card_content", _check_card_content),
+        ("summarize_endpoint", _check_summarize_endpoint),
+        ("tier_depth_contract", _check_tier_depth_contract),
+        ("rulebook_coverage", _check_rulebook_coverage),
         ("archive_backfill_progress", _check_backfill_progress),
         ("archive_scoring_progress", _check_scoring_progress),
         ("archive_depth", _check_archive_depth),
@@ -362,3 +378,337 @@ def _check_archive_depth():
         "span_days": span_days,
         "min_span_days": ARCHIVE_MIN_SPAN_DAYS,
     }
+
+
+# =====================================================================
+# User-facing surface checks
+#
+# The checks above ask "is data arriving". These ask "is what a user actually
+# sees intact" — a different question, and the one that has failed most often
+# here, always silently:
+#
+#   * Every news card rendered the Integra brand mark for weeks. The mark is a
+#     FALLBACK for articles with no image; it showed on 100% of cards because
+#     `image_url` was never sent at all. Nothing was down, nothing logged an
+#     error, and /health stayed green.
+#   * /api/summarize/article — the refresh-summary button — returns
+#     {"unavailable": true} with HTTP 200 on every failure path, including when
+#     ArticleSummarizer failed to import at boot. A dead button and a working
+#     one are indistinguishable from outside.
+#
+# Both are the same class of bug as the four in this module's header: the
+# system reports success while the user sees something broken.
+
+# A bare URL, or a slug/base64 token that escaped from one. `2026-09-07_dugfy`
+# and `CBMiW0FVX3lxTE5C...` are the shapes that actually turn up.
+_URL_IN_TEXT_RE = re.compile(r"https?://\S+", re.IGNORECASE)
+_SLUG_TOKEN_RE = re.compile(r"[A-Za-z0-9_\-]{30,}")
+
+
+def _looks_like_url_junk(text: str) -> bool:
+    """True when a summary is a URL or a machine token rather than prose.
+
+    Deliberately NOT a general quality judgement — `is_usable_summary` already
+    covers boilerplate, length and title-echo. This asks only the narrow
+    question "would a reader see obvious machine junk on the card", which is
+    the failure mode that survives every other filter because such a string is
+    long enough and different enough from the title to pass them.
+    """
+    if not text:
+        return False
+    if _URL_IN_TEXT_RE.search(text):
+        return True
+    for token in _SLUG_TOKEN_RE.findall(text):
+        # Prose does not contain 30-character unbroken tokens. Hyphenated
+        # compounds and long words do exist, so require the digit/underscore
+        # mix that marks a slug or an encoded id.
+        if any(c.isdigit() for c in token) or "_" in token:
+            return True
+    return False
+
+
+def _live_articles():
+    """One fetch of the live feed, shared by the card-content assertions."""
+    import asyncio
+
+    from user_news_service import UserNewsService
+
+    async def _fetch():
+        service = UserNewsService()
+        return await service.get_user_based_news(
+            {"commodities": ["oil", "gold", "wheat"], "regions": [],
+             "keywords": [], "websiteURLs": []}
+        )
+
+    result = asyncio.run(_fetch())
+    return result.get("news") or result.get("articles") or []
+
+
+def _check_card_content():
+    """What the news card actually renders: an image, and readable summary text.
+
+    Both assertions run off one feed fetch because they answer questions about
+    the same payload, and a second live fetch per tick would double the load
+    for nothing.
+    """
+    articles = _live_articles()
+    if not articles:
+        return False, {"articles": 0, "reason": "feed returned nothing"}
+
+    with_image = sum(1 for a in articles if (a.get("image_url") or "").strip())
+    ratio = with_image / len(articles)
+
+    junk = [
+        {"title": (a.get("title") or "")[:60], "summary": (a.get("summary") or "")[:120]}
+        for a in articles
+        if _looks_like_url_junk(a.get("summary") or "")
+    ]
+
+    detail = {
+        "articles": len(articles),
+        "with_image": with_image,
+        "image_ratio": round(ratio, 2),
+        "url_junk_summaries": len(junk),
+    }
+    if junk:
+        detail["junk_examples"] = junk[:3]
+
+    reasons = []
+    if ratio < MIN_CARD_IMAGE_RATIO:
+        reasons.append(
+            f"only {round(ratio * 100)}% of cards have an image "
+            f"(need >={round(MIN_CARD_IMAGE_RATIO * 100)}%) — the brand mark is "
+            f"a fallback, not the design"
+        )
+    if len(junk) > MAX_URL_JUNK_SUMMARIES:
+        reasons.append(f"{len(junk)} summaries are a URL or an encoded token")
+    if reasons:
+        detail["reason"] = "; ".join(reasons)
+        return False, detail
+    return True, detail
+
+
+def _check_summarize_endpoint():
+    """The refresh-summary button, end to end.
+
+    It answers 200 with {"unavailable": true} for every failure — a missing
+    dependency, an unreachable publisher, an unusable result — so an outage is
+    invisible to any liveness probe. This calls the handler directly (no HTTP
+    round trip, no reliance on the service being externally reachable) with a
+    real article URL taken from the live feed.
+    """
+    import asyncio
+
+    try:
+        from api.summarize import SummarizeRequest, _summarizer, summarize_article
+    except Exception as exc:  # noqa: BLE001
+        return False, {"reason": f"api.summarize not importable: {exc}"}
+
+    if _summarizer is None:
+        # This exact condition shipped to production once already: the module
+        # was absent from main, so the scraping path never ran for anyone.
+        return False, {
+            "summarizer_loaded": False,
+            "reason": "ArticleSummarizer failed to import — the refresh-summary "
+                      "button returns 'unavailable' for every user",
+        }
+
+    articles = _live_articles()
+    candidates = [
+        a for a in articles
+        if str(a.get("url") or a.get("link") or "").startswith(("http://", "https://"))
+        and "news.google.com" not in str(a.get("url") or a.get("link"))
+    ][:3]
+    if not candidates:
+        return True, {"summarizer_loaded": True, "probed": 0,
+                      "note": "no directly-linked article to probe this tick"}
+
+    results = []
+    for article in candidates:
+        link = article.get("url") or article.get("link")
+        try:
+            payload = asyncio.run(
+                summarize_article(
+                    SummarizeRequest(url=link, title=article.get("title") or None)
+                )
+            )
+        except Exception as exc:  # noqa: BLE001
+            results.append({"url": link[:80], "error": f"{type(exc).__name__}: {exc}"})
+            continue
+        summary = payload.get("summary") or ""
+        results.append({
+            "url": link[:80],
+            "unavailable": bool(payload.get("unavailable")),
+            "chars": len(summary),
+            "url_junk": _looks_like_url_junk(summary),
+        })
+
+    usable = [r for r in results if not r.get("unavailable") and not r.get("error")]
+    junk = [r for r in results if r.get("url_junk")]
+
+    detail = {
+        "summarizer_loaded": True,
+        "probed": len(results),
+        "usable": len(usable),
+        "results": results,
+    }
+
+    # Individual articles legitimately fail (paywalls, hostile publishers), so
+    # the bar is "at least one worked" rather than "all worked". Zero out of
+    # three is the signature of a broken feature, not bad luck.
+    if not usable:
+        detail["reason"] = ("every probed article returned 'unavailable' — the "
+                            "refresh-summary button is failing for users")
+        return False, detail
+    if junk:
+        detail["reason"] = f"{len(junk)} summaries came back as a URL or encoded token"
+        return False, detail
+    return True, detail
+
+
+def _check_tier_depth_contract():
+    """The paid ladder still grants what it sells.
+
+    Every gate in the depth system fails in the invisible direction: a clamp
+    returns LESS data rather than erroring, so a tier quietly losing its
+    allowance looks like a slow week in the market. Same shape as the four
+    failures in this module's header, and as the brand mark showing on 100% of
+    cards — the system reports success while the customer gets less.
+
+    Three properties, none needing a network call:
+
+      1. No drift. api_trial / api_basic / api_history are defined in BOTH
+         tier_enforcement (drives clamp_hours_back, used by /v1/sentiment and
+         the feed) and entitlement (drives the depth gates, used by export).
+         Two literals for one policy is how they diverge, and which one applied
+         would depend on the path a request happened to take.
+      2. The ladder ascends. A paid tier must never reach less far than the one
+         below it — which is what a careless env override produces.
+      3. Export never exceeds query. Being able to download what you may not
+         read is the two-axis split inverted.
+    """
+    from services.entitlement import export_depth_days, query_depth_days
+    from services.tier_enforcement import limits_for
+
+    tiers = ("api_trial", "api_basic", "api_history")
+    detail = {
+        t: {
+            "query": query_depth_days(t),
+            "export": export_depth_days(t),
+            "clamp": limits_for(t).history_days,
+        }
+        for t in tiers
+    }
+
+    problems = []
+    for t in tiers:
+        d = detail[t]
+        if d["clamp"] != d["query"]:
+            problems.append(
+                f"{t}: tier_enforcement says {d['clamp']}d, entitlement says {d['query']}d"
+            )
+        if d["export"] > d["query"]:
+            problems.append(
+                f"{t}: export depth {d['export']}d exceeds query depth {d['query']}d"
+            )
+
+    for lower, upper in zip(tiers, tiers[1:]):
+        if detail[upper]["query"] < detail[lower]["query"]:
+            problems.append(
+                f"{upper} queries less deeply ({detail[upper]['query']}d) than "
+                f"{lower} ({detail[lower]['query']}d)"
+            )
+
+# How much of the live feed the directional rulebook can actually speak about.
+# Both failures this guards against are silent: an article that resolves to no
+# commodity, and one that resolves but matches no rule, are scored on prose tone
+# alone and look completely normal on the card.
+MIN_COMMODITY_RESOLUTION = float(os.getenv("HEALTH_MIN_COMMODITY_RESOLUTION", "0.45"))
+MIN_RULEBOOK_SIGNAL_RATIO = float(os.getenv("HEALTH_MIN_RULEBOOK_SIGNAL", "0.20"))
+
+
+def _check_rulebook_coverage():
+    """Is the directional rulebook still reaching live articles?
+
+    Two regressions this catches, both of which degrade quietly to tone-only
+    scoring rather than erroring:
+
+      * ROUTING. `normalize_commodity` decides which rulebook runs. It once
+        matched bare substrings -- "Goldman Sachs" resolved to gold, "Las Vegas"
+        to gas -- and tightening it to word boundaries could equally overshoot,
+        leaving articles resolving to nothing at all. Either way the card looks
+        fine and the direction comes from prose tone.
+      * VOCABULARY. Patterns were written in the present tense while news is
+        written in the past, so "inventories rose" missed a rule matching
+        "rise". An article can route to the right market and still match
+        nothing.
+
+    Also asserts the invariant that mirror pairs weigh the same, because an
+    asymmetry there is a directional prior applied to every future article.
+    """
+    articles = _live_articles()
+    if not articles:
+        return False, {"articles": 0, "reason": "feed returned nothing"}
+
+    try:
+        import main_simple_nlp as nlp
+    except Exception as exc:  # noqa: BLE001
+        return False, {"reason": f"main_simple_nlp not importable: {exc}"}
+
+    resolved = 0
+    with_signal = 0
+    markets: Dict[str, int] = {}
+    for article in articles:
+        text = f"{article.get('title', '')}. {article.get('summary', '')}"
+        try:
+            commodity = nlp.normalize_commodity(None, text)
+            if not commodity:
+                continue
+            resolved += 1
+            markets[commodity] = markets.get(commodity, 0) + 1
+            fundamental = nlp.analyze_fundamental_direction(text, commodity)
+            if fundamental.get("matched_signals"):
+                with_signal += 1
+        except Exception:  # noqa: BLE001 — one bad article must not fail the tick
+            continue
+
+    total = len(articles)
+    detail = {
+        "articles": total,
+        "resolved_to_commodity": resolved,
+        "resolution_ratio": round(resolved / total, 2),
+        "with_rulebook_signal": with_signal,
+        "signal_ratio": round(with_signal / total, 2),
+        "markets_seen": dict(sorted(markets.items(), key=lambda kv: -kv[1])[:8]),
+    }
+
+    problems = []
+    if detail["resolution_ratio"] < MIN_COMMODITY_RESOLUTION:
+        problems.append(
+            f"only {round(detail['resolution_ratio'] * 100)}% of articles resolve to a "
+            f"commodity (need >={round(MIN_COMMODITY_RESOLUTION * 100)}%) — routing may "
+            f"have overshot, and unresolved articles are scored on tone alone"
+        )
+    if detail["signal_ratio"] < MIN_RULEBOOK_SIGNAL_RATIO:
+        problems.append(
+            f"only {round(detail['signal_ratio'] * 100)}% match any rulebook signal "
+            f"(need >={round(MIN_RULEBOOK_SIGNAL_RATIO * 100)}%) — the rulebook is not "
+            f"reaching real articles"
+        )
+
+    unbalanced = [
+        f"{a}={nlp.signal_weight(a)} vs {b}={nlp.signal_weight(b)}"
+        for a, b in getattr(nlp, "_MIRROR_PAIRS", ())
+        if nlp.signal_weight(a) != nlp.signal_weight(b)
+    ]
+    if unbalanced:
+        detail["unbalanced_mirrors"] = unbalanced
+        problems.append(
+            f"{len(unbalanced)} mirror pair(s) weigh differently — a directional "
+            f"prior applied to every future article"
+        )
+
+    if problems:
+        detail["reason"] = "; ".join(problems)
+        return False, detail
+    return True, detail

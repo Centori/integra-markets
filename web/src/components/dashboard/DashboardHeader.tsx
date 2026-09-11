@@ -51,7 +51,14 @@ export default function DashboardHeader({ userEmail, onProfileClick }: Dashboard
 
     return (
         <header className="sticky top-0 z-50 bg-[#121212]/95 backdrop-blur-md border-b border-[#2a2a2a]">
-            <div className="max-w-7xl mx-auto px-4 sm:px-6 h-16 flex items-center justify-between">
+            {/* Avatar and logo are BOTH on the left, and the profile panel opens
+                on the left under them — which is what was asked for, twice, and
+                what the Claude reference does: account button bottom-left, its
+                menu bottom-left. I previously read "the same side" as "move the
+                panel to the avatar" and put the panel on the right. That closed
+                the distance but kept the account controls in the corner
+                furthest from the navigation, which was the actual complaint. */}
+            <div className="max-w-7xl mx-auto px-4 sm:px-6 h-16 flex items-center gap-4">
                 {/* Logo */}
                 <Link href="/" className="flex items-center gap-2.5">
                     <Image src="/logoNew.png" alt="Integra" width={28} height={28} />
@@ -61,8 +68,8 @@ export default function DashboardHeader({ userEmail, onProfileClick }: Dashboard
                     </div>
                 </Link>
 
-                {/* Right Actions */}
-                <div className="flex items-center gap-4">
+                {/* Account cluster — left, immediately after the logo. */}
+                <div className="flex items-center gap-3 border-l border-[#2a2a2a] pl-4">
                     {/* Greeting (Desktop) */}
                     <span className="hidden md:block text-sm text-zinc-400">
                         Hi,{' '}

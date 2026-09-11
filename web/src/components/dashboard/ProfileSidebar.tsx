@@ -238,11 +238,16 @@ export default function ProfileSidebar({ isOpen, onClose, user, onLogout, onBook
                 <>
                     <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} onClick={onClose} className="fixed inset-0 bg-black/60 backdrop-blur-sm z-50" />
 
+                    {/* LEFT, under the avatar, which is now also left.
+                        Both controls live on one edge — the thing that was
+                        asked for and the thing the Claude reference does. */}
                     <motion.div
                         initial={{ x: '-100%' }} animate={{ x: 0 }} exit={{ x: '-100%' }}
                         transition={{ type: 'spring', damping: 25, stiffness: 200 }}
                         className="fixed top-0 left-0 h-full w-full max-w-md bg-[#121212] border-r border-[#333] z-50 overflow-y-auto"
                     >
+                        {/* Close sits on the left, nearest the avatar and the
+                            edge the panel came from. */}
                         <div className="flex items-center justify-between p-4 border-b border-[#333]">
                             <button onClick={onClose} className="p-2"><X size={20} className="text-zinc-400" /></button>
                             <h2 className="text-lg font-semibold text-white">Profile</h2>
@@ -407,15 +412,6 @@ export default function ProfileSidebar({ isOpen, onClose, user, onLogout, onBook
                                     className="flex items-center justify-between px-4 py-3 border-b border-[#333] hover:bg-white/5"
                                 >
                                     <span className="text-white">API documentation</span>
-                                    <ChevronRight size={18} className="text-zinc-600" />
-                                </a>
-                                <a
-                                    href="https://github.com/Centori/integra-markets/tree/main/sdk"
-                                    target="_blank"
-                                    rel="noopener noreferrer"
-                                    className="flex items-center justify-between px-4 py-3 border-b border-[#333] hover:bg-white/5"
-                                >
-                                    <span className="text-white">SDKs &amp; MCP connector</span>
                                     <ChevronRight size={18} className="text-zinc-600" />
                                 </a>
                                 <Link href="/settings/privacy" className="flex items-center justify-between px-4 py-3 border-b border-[#333] hover:bg-white/5"><span className="text-white">Privacy Policy</span><ChevronRight size={18} className="text-zinc-600" /></Link>

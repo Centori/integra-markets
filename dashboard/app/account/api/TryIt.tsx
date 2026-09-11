@@ -81,8 +81,12 @@ export function TryIt() {
     setMeta("");
     const started = Date.now();
     try {
+      // Bounded so a stalled request shows an error instead of spinning
+      // forever. This one runs in the browser, so it cannot time out a Vercel
+      // function — it is purely so the console stays honest about what it knows.
       const res = await fetch(`${API_BASE}${path}`, {
         headers: { Authorization: `Bearer ${apiKey.trim()}` },
+        signal: AbortSignal.timeout(15_000),
       });
       const text = await res.text();
       setStatus(res.status);

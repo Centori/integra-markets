@@ -29,27 +29,23 @@ Every endpoint expects this as a bearer token:
 Authorization: Bearer $INTEGRA_API_KEY
 ```
 
-## 2. Install the SDK (optional)
+## 2. There is no SDK to install
 
-You can call every endpoint with plain `curl` or any HTTP client. If you
-prefer a typed SDK, we publish official clients for Python and
-TypeScript that wrap the same endpoints:
+Every endpoint is one authenticated HTTP GET, so any language that can set a
+header can call it — `curl`, `requests`, `fetch`, whatever you already have.
 
-<CodeGroup>
+Earlier versions of this page told you to run `pip install integra-markets` or
+`npm install @integra-markets/sdk`. Neither package was ever published, and the
+generated clients that used to live in `sdk/` have been removed: cloning a
+product's source in order to talk to its HTTP API is not a reasonable thing to
+ask of a customer.
 
-```bash Python
-pip install integra-markets
-```
+Copy-paste snippets for curl, Python, TypeScript and the Claude connector are
+on your API page, already filled in for your account:
 
-```bash TypeScript
-npm install @integra-markets/sdk
-```
-
-</CodeGroup>
-
-The SDK examples in this guide use these packages. If you want to skip
-straight to raw HTTP, the curl examples below work without installing
-anything.
+<Card href="https://dashboard.integramarkets.app/account/api">
+  dashboard.integramarkets.app/account/api
+</Card>
 
 ## 3. List the commodities we cover
 
@@ -212,7 +208,7 @@ with ApiClient(config) as client:
 ```
 
 ```typescript TypeScript
-import { Configuration, SentimentHistoryApi, AgentApi } from "@integra-markets/sdk";
+// Plain fetch — see dashboard.integramarkets.app/account/api for the full snippet.
 
 const config = new Configuration({
   basePath: "https://api.integramarkets.app",

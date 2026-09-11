@@ -1,0 +1,36 @@
+name: Verify production
+
+# Probes the LIVE deployments, so it runs on a schedule rather than per-PR:
+# a pull request has not deployed anything yet, and hitting production on every
+# push would be noise.
+#
+# It exists because the gap this project keeps falling into is between "merged"
+# and "serving". Three examples in one week: a Railway build failing for three
+# days while PRs merged cleanly on top of it, and two dependencies missing from
+# the installed requirements file while /health returned 200.
+on:
+  schedule:
+    - cron: "0 */6 * * *"
+  workflow_dispatch:
+  # Also after a merge to main, which is exactly when a deploy is in flight and
+  # most likely to have failed silently.
+  push:
+    branches: [main]
+
+jobs:
+  verify:
+    name: Live deployment checks
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+      # Deploys are not instant. On a push this waits for the platforms to pick
+      # the commit up; without it the job would report the previous image and
+      # pass, which is the failure mode it is here to catch.
+      - name: Wait for deploys to settle
+        if: github.event_name == 'push'
+        run: sleep 300
+      - name: Probe every surface
+        run: node scripts/verify-production.mjs

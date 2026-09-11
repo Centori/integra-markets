@@ -95,9 +95,24 @@ const httpServer = createHttpServer(async (req, res) => {
 
   const apiKey = extractApiKey(req);
   if (!apiKey) {
-    // 401 + WWW-Authenticate so a connector can prompt for credentials rather
-    // than failing opaquely.
-    res.setHeader("WWW-Authenticate", 'Bearer realm="integra-mcp"');
+    // DELIBERATELY NO WWW-Authenticate HEADER.
+    //
+    // It used to send `WWW-Authenticate: Bearer realm="integra-mcp"`, on the
+    // reasoning that a connector could then prompt for credentials instead of
+    // failing opaquely. In MCP that header means the opposite of what it reads
+    // like: per the authorization spec, 401 + `WWW-Authenticate: Bearer` is the
+    // signal that the server speaks OAuth 2.0. Claude takes it at its word and
+    // starts the discovery handshake:
+    //
+    //     GET /.well-known/oauth-protected-resource   -> 404
+    //     GET /.well-known/oauth-authorization-server -> 404
+    //     POST /register  (dynamic client registration) -> 404
+    //
+    // and then reports "Couldn't register with Integra Markets's sign-in
+    // service" — which is why connecting failed for a user who had pasted a
+    // perfectly good API key. This server does not speak OAuth; the key is
+    // supplied as a request header the user configures. Saying nothing leaves
+    // the JSON-RPC error below as the whole answer, which is the accurate one.
     return rpcError(
       res,
       401,
