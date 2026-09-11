@@ -56,6 +56,16 @@ MIN_REAL_SUMMARY_RATIO = float(os.getenv("HEALTH_MIN_REAL_SUMMARY_RATIO", "0.15"
 # coverage silently returns to zero and every card looks "fine".
 MIN_CARD_IMAGE_RATIO = float(os.getenv("HEALTH_MIN_CARD_IMAGE_RATIO", "0.35"))
 
+# Share of live cards still pointing at news.google.com. The resolver turns
+# those into publisher URLs at ingest; when it stops working the ratio climbs,
+# and summaries, images and key drivers degrade together because all three are
+# downstream of having a real page to read.
+#
+# Not zero: RSS occasionally yields an item the resolver legitimately cannot
+# resolve, and one of those must not page anyone. A quarter of the feed means
+# the mechanism is broken, not that one article is odd.
+MAX_UNRESOLVED_GNEWS_RATIO = float(os.getenv("HEALTH_MAX_GNEWS_RATIO", "0.25"))
+
 # A summary that is a bare URL or a base64-ish slug is worse than no summary:
 # it renders as unreadable junk on the card. Zero tolerance — one is a bug.
 MAX_URL_JUNK_SUMMARIES = int(os.getenv("HEALTH_MAX_URL_JUNK_SUMMARIES", "0"))
@@ -71,6 +81,7 @@ def run() -> Dict[str, Any]:
         ("raw_documents_fresh", _check_raw_documents),
         ("feed_quality", _check_feed_quality),
         ("card_content", _check_card_content),
+        ("gnews_urls_resolved", _check_gnews_resolution),
         ("summarize_endpoint", _check_summarize_endpoint),
         ("tier_depth_contract", _check_tier_depth_contract),
         ("rulebook_coverage", _check_rulebook_coverage),
@@ -484,6 +495,39 @@ def _check_card_content():
         reasons.append(f"{len(junk)} summaries are a URL or an encoded token")
     if reasons:
         detail["reason"] = "; ".join(reasons)
+        return False, detail
+    return True, detail
+
+
+def _check_gnews_resolution():
+    """Live cards should point at publishers, not at Google News redirects.
+
+    This is the check that will notice when Google next changes its scheme.
+    The resolver fails safe — an unresolvable article keeps its original URL —
+    so a total breakage produces no errors and no exceptions anywhere. It shows
+    up only as this ratio climbing, and then as summaries that restate their
+    title, cards with no image, and generic key drivers, all at once, because
+    every one of those needs a page that can actually be fetched.
+    """
+    articles = _live_articles()
+    if not articles:
+        return False, {"articles": 0, "reason": "feed returned nothing"}
+
+    unresolved = [a for a in articles if "news.google.com" in (a.get("url") or "")]
+    ratio = len(unresolved) / len(articles)
+    detail = {
+        "articles": len(articles),
+        "unresolved": len(unresolved),
+        "unresolved_ratio": round(ratio, 2),
+    }
+    if ratio > MAX_UNRESOLVED_GNEWS_RATIO:
+        detail["reason"] = (
+            f"{round(ratio * 100)}% of cards still link to news.google.com "
+            f"(allowed <={round(MAX_UNRESOLVED_GNEWS_RATIO * 100)}%) — the "
+            f"resolver has probably stopped working. Summaries, images and key "
+            f"drivers all degrade from this one cause."
+        )
+        detail["examples"] = [(a.get("title") or "")[:60] for a in unresolved[:3]]
         return False, detail
     return True, detail
 
