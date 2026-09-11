@@ -24,18 +24,32 @@ import { MCP_TOOLS } from "@/lib/mcpTools";
  * added once at the account level and live everywhere.
  */
 
-/** Custom domain. Preferred, and what a customer should keep. */
-const MCP_URL = "https://mcp.integramarkets.app/mcp";
+/**
+ * The address customers are given. Railway-issued, and the one that works.
+ *
+ * mcp.integramarkets.app was primary here, and it does not serve TLS. DNS is
+ * correct — it CNAMEs to kqhefzbr.up.railway.app — but Railway never completed
+ * certificate issuance, so the edge answers with its own wildcard:
+ *
+ *     subject: CN=*.up.railway.app
+ *     subjectAltName does not match host name mcp.integramarkets.app
+ *
+ * Every client rejects that before a single byte of MCP is exchanged, which is
+ * the "Couldn't reach this address" a user hit while following these very
+ * steps. A pretty hostname that cannot complete a handshake is worth less than
+ * an ugly one that can, so the working address is what this page hands out
+ * until the certificate issues.
+ */
+const MCP_URL = "https://integra-mcp-production.up.railway.app/mcp";
 
 /**
- * Railway-issued hostname for the same service.
+ * The custom domain, kept as the documented alternative rather than deleted.
  *
- * Shown as a fallback because a custom domain's certificate takes time to issue
- * after the DNS record lands, and a reader arriving in that window would
- * otherwise conclude the product is broken. Both addresses reach the identical
- * deployment.
+ * It is where this should end up, and the moment the certificate issues it
+ * becomes a one-line swap back. Until then it is listed as the thing to try if
+ * the address above ever stops working — not as the first thing to try.
  */
-const MCP_URL_FALLBACK = "https://integra-mcp-production.up.railway.app/mcp";
+const MCP_URL_FALLBACK = "https://mcp.integramarkets.app/mcp";
 
 /** Name Claude pre-fills into the connector dialog. */
 const CONNECTOR_NAME = "Integra Markets";
@@ -185,9 +199,9 @@ function ConnectDialog({
             Connector not reachable?
           </summary>
           <p className="mt-3">
-            The address above uses a custom domain whose certificate is issued
-            automatically. If it was set up very recently, this alternate address
-            reaches the identical service:
+            The address above is the one to use. This custom domain reaches the
+            identical service and will become the preferred address once its
+            certificate finishes issuing — it does not work yet:
           </p>
           <code className="mt-2 block break-all rounded-lg bg-bg-primary p-3 text-[11px] text-text-primary">
             {fallbackUrl}
