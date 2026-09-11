@@ -80,6 +80,25 @@ async def _fetch_and_archive() -> Dict[str, Any]:
     # result is persisted, and it is paid once per article rather than once per
     # view. Bounded on timeout, bytes, concurrency and total batch time, so a
     # hostile publisher cannot stall the tick.
+    # URL resolution runs FIRST, and the ordering is the whole point.
+    #
+    # Google News RSS gives every item an opaque redirect URL. feed_images
+    # lists news.google.com in _OPAQUE_HOSTS and skips it; the body scrape has
+    # nothing to fetch; the sentiment engine scores a bare headline. Resolving
+    # to the publisher's real URL here means the enrichment below operates on
+    # a page that actually exists, so images, summaries and key drivers all
+    # improve from one fix rather than three.
+    #
+    # Failures return the original URL unchanged, so the worst case is exactly
+    # today's behaviour.
+    try:
+        from services.gnews_resolve import resolve_batch
+
+        url_counters = await resolve_batch(articles)
+    except Exception as exc:  # noqa: BLE001 — never block archiving
+        logger.warning("news_fetcher: google news URL resolution skipped: %s", exc)
+        url_counters = {"error": str(exc)}
+
     try:
         from services.feed_images import enrich_missing_images
 
@@ -102,6 +121,7 @@ async def _fetch_and_archive() -> Dict[str, Any]:
 
     return {
         "articles_observed": len(enhanced),
+        "urls": url_counters,
         "images": image_counters,
         **write_result,
     }
