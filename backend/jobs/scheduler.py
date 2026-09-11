@@ -92,6 +92,28 @@ def start_all() -> None:
     t4.start()
     _threads["archive_scorer"] = t4
 
+    # Archive backfill every hour — the other half of archive_scorer.
+    #
+    # archive_scorer turns raw_documents into scored entity_mentions, and its
+    # docstring notes that "wayback keeps adding historical documents". It only
+    # does while somebody runs it by hand: every backfill source is a CLI, and
+    # nothing schedules the fetch. So the scorer drains a backlog that stops
+    # being refilled the moment attention moves on.
+    #
+    # This job fetches. Hourly, and only a few days of archive per source per
+    # tick: it shares a container with the API behind a 300s Railway
+    # healthcheck, and GDELT's own module notes it can saturate the network for
+    # hours. The per-host cursor makes every bounded run a checkpoint, so slow
+    # costs nothing but wall-clock. Disable with INTEGRA_DISABLE_BACKFILL=true.
+    try:
+        from jobs import archive_backfill
+    except ImportError as exc:
+        logger.warning("scheduler: archive_backfill not importable: %s", exc)
+    else:
+        t5 = _SchedulerThread("archive_backfill", archive_backfill.run, interval_s=3600)
+        t5.start()
+        _threads["archive_backfill"] = t5
+
 
 def stop_all() -> None:
     for t in _threads.values():

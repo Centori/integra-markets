@@ -44,7 +44,7 @@ from typing import Any, Dict, Iterator, List, Optional
 from fastapi import APIRouter, Depends, HTTPException, Query
 from fastapi.responses import StreamingResponse
 
-from services.api_key_auth import assert_history_depth, effective_scopes, require_scopes
+from services.api_key_auth import assert_export_depth, effective_scopes, require_scopes
 from services.entitlement import ARCHIVE_SCOPE, HISTORY_DEPTH_CAP_DAYS, HISTORY_SCOPE
 from services.rate_limit import (
     check_and_consume_export,
@@ -282,8 +282,14 @@ async def export_sentiment(
 
     # Gate 2 — depth, measured from now to the OLDEST point requested, exactly
     # as the history endpoints do. Exporting must not be a way around the cap.
+    #
+    # Uses the EXPORT depth, which is a separate axis from the query depth the
+    # read endpoints use. An archive key may query the full archive and export
+    # only the last year of it: the customer can ask any question and cannot
+    # carry the database away. Calling assert_history_depth here would reopen
+    # exactly that, because the archive tier's query depth is unlimited.
     now = dt.datetime.now(dt.timezone.utc)
-    assert_history_depth(auth, (now - start).total_seconds() / 86400.0)
+    assert_export_depth(auth, (now - start).total_seconds() / 86400.0)
 
     # Gate 3 — how OFTEN. Request metering counts calls and barely constrains
     # a call that returns 50,000 rows, so exports carry their own monthly

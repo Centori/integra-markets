@@ -1,5 +1,7 @@
 from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.openapi.utils import get_openapi
+import logging
 import os
 from pathlib import Path
 from dotenv import load_dotenv
@@ -153,6 +155,20 @@ except ImportError:
 _outcome_evaluator: Optional["OutcomeEvaluator"] = None
 
 app = FastAPI(title="Integra AI Backend", description="Financial AI Analysis API")
+
+
+# Declare the public API's auth scheme in the published spec. Without it every
+# /v1 operation generates into an SDK that cannot authenticate -- see
+# services/openapi_security.py for why this is post-processing rather than a
+# swap to fastapi.security.HTTPBearer.
+try:
+    from services.openapi_security import build_schema as _build_openapi_schema
+
+    app.openapi = lambda: _build_openapi_schema(app, get_openapi)
+except ImportError as _sec_exc:  # pragma: no cover - spec degrades, API does not
+    logging.getLogger(__name__).warning(
+        "openapi security scheme unavailable, spec will omit it: %s", _sec_exc
+    )
 
 # Lifespan events
 @app.on_event("startup")
@@ -353,9 +369,41 @@ def read_root():
         ]
     }
 
+def _optional_import_ok(module: str) -> bool:
+    """Whether a lazily-imported dependency is actually installed."""
+    import importlib.util
+    try:
+        return importlib.util.find_spec(module) is not None
+    except (ImportError, ValueError):
+        return False
+
+
 @app.get('/health')
 def health_check():
-    return {"status": "healthy", "supabase_connected": bool(supabase_url and supabase_key)}
+    """Liveness, plus the dependencies that fail silently when absent.
+
+    Several modules import third-party packages lazily so the app can boot
+    without them. That is deliberate, but it means a missing package shows up
+    only as a 503 on one route while this endpoint keeps answering 200 — which
+    is how the backend ran in production with PyJWT absent, returning
+    "auth library unavailable" to every authenticated request while every
+    health check passed.
+
+    Reporting them here does not change any behaviour; it makes the failure
+    visible to anything that already polls /health.
+    """
+    auth_ok = _optional_import_ok("jwt")
+    return {
+        # Unhealthy when no request can authenticate. A backend that answers
+        # 503 to every signed-in user is not serving, whatever else works.
+        "status": "healthy" if auth_ok else "degraded",
+        "supabase_connected": bool(supabase_url and supabase_key),
+        "dependencies": {
+            "auth_jwt": auth_ok,
+            "stripe": _optional_import_ok("stripe"),
+            "xlsx_export": _optional_import_ok("xlsxwriter"),
+        },
+    }
 
 _SENTIMENT_MAP = {"positive": "bullish", "negative": "bearish", "neutral": "neutral"}
 _KEYWORD_BULLISH = {"bullish", "gain", "profit", "surge", "rally", "rise", "increase", "boost", "strong", "growth"}

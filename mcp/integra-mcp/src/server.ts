@@ -2,7 +2,7 @@
  * Transport-independent MCP server construction.
  *
  * MCP separates *what tools exist* from *how the client reaches them*, and
- * this file is the "what". Both entrypoints build the same six tools:
+ * this file is the "what". Both entrypoints build the same tools:
  *
  *   index.ts  — stdio.  Claude Desktop / Claude Code spawn it locally.
  *   http.ts   — Streamable HTTP. Remote clients (ChatGPT connectors, hosted
@@ -88,6 +88,21 @@ export const TOOLS: ToolDef[] = [
     schema: marketBriefSchema,
     handler: (c, a) => marketBrief(c, a),
   },
+];
+
+/**
+ * Withdrawn from the advertised list until the archive backfill completes.
+ *
+ * `/v1/historical/analogs` returns 501 today — the backfill tables it reads are
+ * not populated. Advertising a tool that always fails is worse than not
+ * advertising it: an assistant will pick it precisely when the user asks the
+ * question the product is meant to answer, and the failure lands mid-conversation
+ * as a protocol error rather than as an honest "not yet".
+ *
+ * Kept defined rather than deleted so it cannot rot, and so restoring it is a
+ * one-line move back into TOOLS once the endpoint returns data.
+ */
+export const WITHDRAWN_TOOLS: ToolDef[] = [
   {
     name: "find_historical_analogs",
     description:

@@ -118,6 +118,11 @@ def persist_articles(
                 "enhanced": article.get("enhanced", False),
                 "word_count": article.get("word_count"),
                 "enhancement_method": article.get("enhancement_method"),
+                # Card image, captured at ingest. It was dropped here before,
+                # so no amount of work on the read path could recover it and
+                # every card fell back to the brand mark. Costs nothing --
+                # feedparser has already parsed the field.
+                "image_url": article.get("image_url") or None,
                 # Recorded so an unreadable upstream date is visible in the
                 # data rather than indistinguishable from a real one.
                 "published_estimated": published is None,

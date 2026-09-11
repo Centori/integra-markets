@@ -151,6 +151,9 @@ export default function AlertsPage() {
     });
     const [preferencesLoaded, setPreferencesLoaded] = useState(false);
     const [alerts, setAlerts] = useState<AlertItem[]>([]);
+    // null = not determined yet, so the empty state cannot flash before
+    // the preferences query has answered.
+    const [hasPreferences, setHasPreferences] = useState<boolean | null>(null);
     const [loading, setLoading] = useState(true);
     const [allAlerts, setAllAlerts] = useState<AlertItem[]>([]);
     const [isHistoryOpen, setIsHistoryOpen] = useState(false);
@@ -217,11 +220,17 @@ export default function AlertsPage() {
                 avatar_url: user.user_metadata?.avatar_url
             });
 
+            // maybeSingle, not single: PostgREST treats "no rows" as an error
+            // for .single(), and no rows is the NORMAL state for anyone who has
+            // never saved preferences here — which, until the mobile app began
+            // writing this table, was everyone. The thrown error was caught by
+            // the outer handler, so the page logged and rendered an empty feed
+            // instead of saying anything.
             const { data: dbPrefs } = await supabase
                 .from('alert_preferences')
                 .select('*')
                 .eq('user_id', user.id)
-                .single();
+                .maybeSingle();
 
             let currentPrefs = alertPreferences;
             if (dbPrefs) {
@@ -233,8 +242,13 @@ export default function AlertsPage() {
                     websiteURLs: dbPrefs.website_urls || [],
                     alertFrequency: dbPrefs.alert_frequency || 'Real-time',
                     alertThreshold: dbPrefs.alert_threshold || 'Medium',
-                    pushNotifications: dbPrefs.push_enabled !== false,
-                    emailAlerts: dbPrefs.email_enabled || false,
+                    // The columns are push_notifications and email_alerts.
+                    // Reading push_enabled/email_enabled returned undefined on
+                    // every row: `undefined !== false` happened to be true, so
+                    // push looked correct by accident, while email alerts read
+                    // as false for everyone who had switched them on.
+                    pushNotifications: dbPrefs.push_notifications !== false,
+                    emailAlerts: dbPrefs.email_alerts || false,
                     priceAlerts: true,
                     newsAlerts: true,
                 };
@@ -268,10 +282,16 @@ export default function AlertsPage() {
             }
 
             if (queryComms === null) {
+                // No preferences of any kind. Distinct from "your filters
+                // matched nothing", and the two used to render identically —
+                // alerts appeared while loading, then vanished into a message
+                // telling the user to set up preferences with no way to do it.
                 setAlerts([]);
+                setHasPreferences(false);
                 setLoading(false);
                 return;
             }
+            setHasPreferences(true);
 
             const apiUrl = process.env.NEXT_PUBLIC_API_URL || 'https://api.integramarkets.app';
             const response = await fetch(`${apiUrl}/api/news/latest?t=${Date.now()}`, {
@@ -521,10 +541,27 @@ export default function AlertsPage() {
                             <Loader2 className="animate-spin mx-auto text-[#4ECCA3] mb-2" size={24} />
                             <p className="text-zinc-500">Loading alerts...</p>
                         </div>
+                    ) : hasPreferences === false ? (
+                        <div className="bg-[#1E1E1E] border border-[#2A2A2A] rounded-xl p-8 text-center">
+                            <p className="text-white font-medium mb-1">No alert preferences yet</p>
+                            <p className="text-zinc-500 text-sm mb-4">
+                                Pick the commodities, regions and keywords you care
+                                about and this feed fills up. Preferences follow your
+                                account, so what you set here shows on the app too.
+                            </p>
+                            <Link
+                                href="/onboarding"
+                                className="inline-block px-6 py-2 bg-[#4ECCA3] text-[#121212] rounded-full text-sm font-medium hover:opacity-90 transition-opacity"
+                            >
+                                Set up alerts
+                            </Link>
+                        </div>
                     ) : alerts.length === 0 ? (
                         <div className="bg-[#1E1E1E] border border-[#2A2A2A] rounded-xl p-8 text-center">
                             <p className="text-white font-medium mb-1">No matching alerts</p>
-                            <p className="text-zinc-500 text-sm">Set up your alert preferences to see personalized news.</p>
+                            <p className="text-zinc-500 text-sm">
+                                Nothing in the last 24 hours matched your preferences.
+                            </p>
                         </div>
                     ) : (
                         <div className="space-y-3">
