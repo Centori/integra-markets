@@ -217,6 +217,14 @@ _SIGNAL_WEIGHTS: Dict[str, float] = {
     "Storage surplus": 0.8,
     # Real but slower-acting
     "Supply disruption risk": 0.7,
+    # A chokepoint closing is as decisive as an attack on a refinery:
+    # it removes real barrels from the water, not just sentiment.
+    # Observed, not inferred: the headline states the direction rather than a
+    # cause from which direction must be guessed. Weighted to clear the
+    # dominance gate alone, because a stated price move should not be
+    # overturned by the tone of the words around it.
+    "Price action up": 0.85,
+    "Price action down": 0.85,
     "Production disruption": 0.7,
     "Supply growth": 0.7,
     "De-escalation": 0.7,
@@ -274,6 +282,9 @@ _SIGNAL_WEIGHTS: Dict[str, float] = {
     "Freight rates rising": 0.8,
     "Freight rates falling": 0.8,
     "Chokepoint disruption": 0.9,
+    # Mirror of the line above, which the freight rulebook has used since it
+    # was written. Same weight, or the dominance gate tilts toward disruption.
+    "Chokepoint flows normalise": 0.9,
     "Port congestion": 0.7,
     "Congestion easing": 0.7,
     "War risk premium": 0.7,
@@ -326,11 +337,20 @@ def signal_weight(signal: str) -> float:
 _CURVE_RULES: Dict[str, List[Dict[str, str]]] = {
     "bullish": [
         {"pattern": r"backwardat\w+", "signal": "Backwardation"},
+                # A reported price move is DIRECT evidence of direction, which
+                # is why it outweighs most inferred causes. Nothing read it
+                # before: "Oil Prices Surge to Four-Month Highs as War Risks
+                # Mount" scored NEUTRAL because the only rule that fired was the
+                # war risk, and the word "surge" — the actual answer — was
+                # visible to VADER only, which read the sentence as fearful.
+                {"pattern": r"(oil|crude|brent|wti|price\w*|barrel)\w*.{0,30}(surg\w+|soar\w*|jump\w*|rall\w+|climb\w*|spike\w*|rose|ris\w*|gain\w*|top\w*|highest|multi[- ]?month high|\d+[- ]month high)", "signal": "Price action up"},
         {"pattern": r"(prompt|time|front)[- ]spread\w*.{0,24}(widen\w*|strengthen\w*|firm\w*)", "signal": "Prompt spread firming"},
         {"pattern": r"curve.{0,24}(flip\w*|mov\w+).{0,16}backwardat\w+", "signal": "Backwardation"},
     ],
     "bearish": [
         {"pattern": r"contango", "signal": "Contango"},
+                # Mirror of Price action up. _MIRROR_PAIRS asserts equal weight.
+                {"pattern": r"(oil|crude|brent|wti|price\w*|barrel)\w*.{0,30}(slump\w*|plunge\w*|tumbl\w+|slid\w*|sank|sink\w*|fall\w*|fell|drop\w*|declin\w+|lowest|multi[- ]?month low|\d+[- ]month low)", "signal": "Price action down"},
         {"pattern": r"(floating storage|storage economics|carry trade)", "signal": "Storage economics"},
         {"pattern": r"(prompt|time|front)[- ]spread\w*.{0,24}(collaps\w+|weaken\w*|narrow\w*)", "signal": "Prompt spread weakening"},
     ],
@@ -482,7 +502,11 @@ def get_commodity_rulebook() -> Dict[str, Dict[str, List[Dict[str, str]]]]:
                 # and relief is handled by the "Sanctions relief" rule below.
                 {"pattern": r"(sanctions?|embargo)\w*.{0,30}(impos\w+|tighten\w*|expand\w*\w*|widen\w*|announc\w+|new)", "signal": "Sanctions imposed"},
                 {"pattern": r"(impos\w+|tighten\w*|expand\w*\w*|widen\w*).{0,30}(sanctions?|embargo)", "signal": "Sanctions imposed"},
-                {"pattern": r"(conflict|war|hostilities).{0,24}(oil|crude|shipping|export|supply)", "signal": "Supply disruption risk"},
+                {"pattern": r"(conflict|war|hostilit\w+|geopolitical|military action).{0,30}(oil|crude|shipping|export|supply|risk\w*|premium)", "signal": "Supply disruption risk"},
+                # Same event with the commodity first. Headlines lead with the
+                # price move at least as often as with the cause ("Oil surges as
+                # war risks mount"), and the pattern above matched none of them.
+                {"pattern": r"(oil|crude|brent|wti|price\w*).{0,40}(war|conflict|hostilit\w+|geopolitical|military action|attack\w*)", "signal": "Supply disruption risk"},
                 {"pattern": r"(hurricane|storm|outage|disruption).{0,24}(production|supply|export|offshore)?", "signal": "Production disruption"},
                 # Kinetic supply disruption. The rulebook's vocabulary was
                 # war/conflict/sanctions/embargo/hurricane/storm/outage/disruption,
@@ -494,16 +518,28 @@ def get_commodity_rulebook() -> Dict[str, Dict[str, List[Dict[str, str]]]]:
                 # Anchored to infrastructure nouns in both directions, because
                 # bare "attack" is far too broad — "attack on inflation" must
                 # not read as a supply shock.
-                {"pattern": r"(attack|attacked|strike|struck|drone|missile|shelling|sabotage|explosion|blast)\w*.{0,40}(refinery|refineries|pipeline|terminal|tanker|vessel|facilit|oilfield|port|depot|infrastructure|export)", "signal": "Infrastructure attack"},
-                {"pattern": r"(refinery|refineries|pipeline|terminal|tanker|vessel|facilit\w+|oilfield|port|depot|infrastructure).{0,40}(attack|struck|hit|damaged|ablaze|sabotage|offline|shut in)", "signal": "Infrastructure attack"},
+                {"pattern": r"(attack|attacked|strike|struck|drone|missile|shelling|sabotage|explosion|blast)\w*.{0,40}(refinery|refineries|pipeline|terminal|tanker|vessel|facilit\w*|oilfield|oil field|port|depot|infrastructure|installation\w*|energy site\w*|energy asset\w*|processing plant|pumping station|export)", "signal": "Infrastructure attack"},
+                {"pattern": r"(refinery|refineries|pipeline|terminal|tanker|vessel|facilit\w+|oilfield|oil field|port|depot|infrastructure|installation\w*|energy site\w*|energy asset\w*).{0,40}(attack|struck|hit|damaged|ablaze|sabotage|offline|shut in)", "signal": "Infrastructure attack"},
                 {"pattern": r"(blockade|seiz\w+|impound\w*|detain\w*).{0,30}(tanker|vessel|ship|cargo|export|shipment)", "signal": "Shipping interdiction"},
+                # Chokepoints. A named waterway carrying less than usual is a
+                # supply event whatever verb the wire chose, and no rule knew
+                # what Hormuz was — so "Hormuz Tanker Traffic Slumps" scored on
+                # tone alone and came out bearish for crude.
+                {"pattern": r"(hormuz|suez|bab el[- ]?mandeb|malacca|bosphorus|dardanelles|panama canal|red sea|strait|chokepoint).{0,44}(slump\w*|fall\w*|fell|drop\w*|plunge\w*|halt\w*|clos\w+|block\w*|disrupt\w*|divert\w*|avoid\w*|reroute\w*|suspend\w*|down \d)", "signal": "Chokepoint disruption"},
+                {"pattern": r"(traffic|transit\w*|flow\w*|shipment\w*|voyage\w*|passage).{0,30}(hormuz|suez|bab el[- ]?mandeb|malacca|red sea|strait|canal).{0,30}(slump\w*|fall\w*|fell|drop\w*|plunge\w*|halt\w*|disrupt\w*|down \d)", "signal": "Chokepoint disruption"},
                 {"pattern": r"(export|shipment|loading|output|production).{0,24}(halt\w*\w*|suspend\w*|stopp?\w*|curtail\w*)", "signal": "Export halt"},
-                {"pattern": r"demand.{0,18}(ris\w*|rose|strong\w*|strengthen\w*|increas\w+|recover\w*)", "signal": "Demand strengthening"}
+                {"pattern": r"demand.{0,18}(ris\w*|rose|strong\w*|strengthen\w*|increas\w+|recover\w*)", "signal": "Demand strengthening"},
+                # Demand as a flow. A refiner does not "demand" crude in a
+                # headline — it buys, imports or lifts it.
+                {"pattern": r"(import\w*|buying|purchas\w+|lifting\w*|intake|appetite|consumption|refinery runs).{0,26}(ris\w*|rose|rebound\w*|jump\w*|surg\w+|climb\w*|grew|grow\w*|increas\w+|recover\w*|strong\w*)", "signal": "Demand strengthening"}
             ],
             "bearish": [
                 {"pattern": r"(production|output|supply).{0,18}(ris\w*|rose|increas\w+|boost\w*|grow\w*|grew)", "signal": "Supply growth"},
                 {"pattern": r"(inventor\w+|stockpile\w*).{0,26}(build\w*|built|ris\w*|rose|increas\w+|surplus)", "signal": "Inventory build"},
                 {"pattern": r"demand.{0,18}(slow\w*|weak\w*|fall\w*|fell|declin\w+)", "signal": "Demand weakness"},
+                # Mirror of the flow rule above. Both sides get the same
+                # vocabulary or the dominance gate tilts — see _MIRROR_PAIRS.
+                {"pattern": r"(import\w*|buying|purchas\w+|lifting\w*|intake|appetite|consumption|refinery runs).{0,26}(fall\w*|fell|slump\w*|slid\w*|drop\w*|declin\w+|weaken\w*|slow\w*)", "signal": "Demand weakness"},
                 {"pattern": r"(recession|slowdown|demand destruction)", "signal": "Macro demand risk"},
                 # Mirror vocabulary for the kinetic/geopolitical patterns above.
                 # Without these the bullish side had nine patterns against four,
@@ -515,6 +551,9 @@ def get_commodity_rulebook() -> Dict[str, Dict[str, List[Dict[str, str]]]]:
                 {"pattern": r"(sanctions?|embargo).{0,30}(lift\w*|eas\w+|waiv\w+|relax\w*|suspend\w*)", "signal": "Sanctions relief"},
                 {"pattern": r"(waiver|exemption)\w*.{0,30}(oil|crude|export|barrel)", "signal": "Sanctions relief"},
                 {"pattern": r"(ceasefire|cease-fire|truce|peace deal|de-escalat\w+|deescalat\w+)", "signal": "De-escalation"},
+                # Mirror of Chokepoint disruption. _MIRROR_PAIRS asserts the
+                # two weigh the same; a one-sided addition tilts the gate.
+                {"pattern": r"(hormuz|suez|bab el[- ]?mandeb|malacca|bosphorus|panama canal|red sea|strait|chokepoint).{0,44}(reopen\w*|resum\w+|normalis\w+|normaliz\w+|recover\w*|rebound\w*|restor\w+|return\w*|rose|ris\w*|climb\w*)", "signal": "Chokepoint flows normalise"},
                 {"pattern": r"(refinery|refineries|pipeline|terminal|field|port|output|export)\w*.{0,40}(restart\w*|resum\w+|back online|repaired|restored|reopen\w*)", "signal": "Supply restored"},
                 {"pattern": r"(restart\w*|resum\w+|reopen\w*|restor\w+).{0,40}(refinery|refineries|pipeline|terminal|production|output|export)", "signal": "Supply restored"},
                 {"pattern": r"opec\+?.{0,30}(raise|increas\w+|boost\w*|unwind\w*|ease|hike).{0,20}(quota|output|production|target)?", "signal": "OPEC quota increase"},
@@ -1347,6 +1386,8 @@ _MIRROR_PAIRS = (
     ("Infrastructure attack", "Supply restored"),
     ("Sanctions imposed", "Sanctions relief"),
     ("Supply disruption risk", "De-escalation"),
+    ("Chokepoint disruption", "Chokepoint flows normalise"),
+    ("Price action up", "Price action down"),
     ("Inventory draw", "Inventory build"),
     ("Storage draw", "Storage surplus"),
     ("Demand strengthening", "Demand weakness"),
