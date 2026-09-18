@@ -134,6 +134,28 @@ check("dashboard", "connector page ships the working MCP URL", async () => {
   return "advertised MCP URL not found in any deployed chunk — dashboard is stale";
 });
 
+// NEXT_PUBLIC_* values are compiled into the client bundle at build time, so
+// their absence is observable from outside. This check exists because the
+// in-page Google flow shipped and then sat switched off — the redirect
+// fallback works, so the only visible symptom was a consent screen reading
+// "to continue to <project>.supabase.co", which looks like a design choice
+// rather than an unset variable.
+check("dashboard", "Google in-page sign-in is switched on", async () => {
+  const { text: html } = await req(`${DASHBOARD}/login`);
+  const chunks = [...new Set(
+    [...html.matchAll(/\/_next\/static\/chunks\/[\w./-]+\.js/g)].map((m) => m[0])
+  )];
+  for (const c of chunks) {
+    const { text } = await req(`${DASHBOARD}${c}`);
+    if (/\d{10,}-[a-z0-9]{20,}\.apps\.googleusercontent\.com/.test(text)) return true;
+  }
+  return (
+    "no Google client id in the login bundle — NEXT_PUBLIC_GOOGLE_CLIENT_ID is " +
+    "unset on Vercel, so sign-in falls back to the Supabase redirect and the " +
+    "consent screen shows the project host"
+  );
+});
+
 // --- www -----------------------------------------------------------------
 check("www", "app routes render", async () => {
   const failures = [];

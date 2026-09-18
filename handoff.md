@@ -159,6 +159,58 @@ needs a Railway support ticket** quoting project
 `18e783a9-f02d-4396-b49c-98a7a99bbc72` and domain
 `d27eb5a5-008f-49f1-bfc4-1ada1be18a85`. The verifier fails on it daily until
 someone files it or moves the deadline in a diff.
+# Code repair rule — added 2026-09-18
+
+**Replace, don't duplicate.** Full rule in `CLAUDE.md`. A fix modifies the
+implementation that exists; it does not sit beside it. No fallbacks unless
+asked, remove the obsolete code, one source of truth per feature, and **a repair
+is not finished until it is deployed to Railway and `npm run verify:prod`
+passes**.
+
+`npm run find:dupes` enforces it. First run exposed 29 candidates.
+
+### FIVE FastAPI apps
+
+`backend/main.py` is what `uvicorn main:app` runs and what mounts the 18
+routers. Also present:
+
+| File | State |
+|---|---|
+| `backend/main_simple_nlp.py` | 3301 lines, 29 routes, **not mounted** |
+| `backend/main_integrated.py` | 443 lines, referenced only as a module-name string |
+| `backend/main_production.py` | dead |
+| `main_production.py` (repo root) | dead |
+
+The damage is not the dead files. It is that the codebase has been
+**re-implementing `main_simple_nlp`'s routes one at a time** into `backend/api/`
+and documenting it while doing so: `api/summarize.py`, `api/market_sentiment.py`
+and `api/news_feed.py` each carry a comment saying the route existed only in a
+file production does not run. The rule being added here, violated three times,
+in writing, by someone who noticed each time.
+
+`main_simple_nlp.py` cannot simply be deleted — it holds the sentiment engine
+(`analyze_market_sentiment`, `normalize_commodity`, the commodity rulebooks) and
+the jobs import those. The repair is to extract the engine into a service module
+and delete the unmounted app. That is a refactor and deserves its own change.
+
+### The rest
+
+- **Four Supabase clients**: `app/lib/supabase.ts`, `dashboard/lib/supabase.ts`,
+  `web/src/lib/supabase.ts`, `lib/supabase.ts`. The root pair
+  (`lib/supabase.ts`, `lib/supabase-server.ts`) reads `NEXT_PUBLIC_*` and is
+  orphaned; mobile uses `app/utils/supabaseConfig`.
+- **Two dependency manifests** — `requirements-light.txt` is installed by
+  nothing. This is how `stripe` and `PyJWT` both hid.
+- **Two Google sign-in implementations** — `dashboard/app/login/LoginForm.tsx`
+  has the GIS flow from #80; `web/src/components/SocialAuthButtons.tsx` still
+  calls `signInWithOAuth`. #80 fixed one and never touched the other.
+- **File duplicates**: `App.web.js` / `App.web.new.js`,
+  `MainApp.js` / `MainApp.web.js`,
+  `app/components/NewsCard.js` / `NewsCard.tsx`.
+
+Legitimate, left alone: React Native vs React components across `app/` and
+`web/`, per-provider `backfill()`, and the MCP tool list duplicated across a
+package boundary with a parity check enforcing it.
 
 ---
 

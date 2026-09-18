@@ -70,7 +70,8 @@
     "update:production": "npm run check:release && eas update --channel production",
     "verify:prod": "node scripts/verify-production.mjs",
     "where": "node scripts/where-am-i.mjs",
-    "find:shapes": "node scripts/find-bug-shapes.mjs"
+    "find:shapes": "node scripts/find-bug-shapes.mjs",
+    "find:dupes": "node scripts/find-duplicate-implementations.mjs"
   },
   "devDependencies": {
     "@expo/ngrok": "^4.1.3",

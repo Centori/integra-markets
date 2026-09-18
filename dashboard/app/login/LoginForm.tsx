@@ -129,7 +129,21 @@ export default function LoginForm() {
   );
 
   useEffect(() => {
-    if (!GOOGLE_CLIENT_ID) return;
+    if (!GOOGLE_CLIENT_ID) {
+      // Say so. Without this the page silently uses the redirect flow, which
+      // works — so the only symptom is Google's consent screen reading
+      // "to continue to zhdcpiopihqwcmicjpca.supabase.co", and the only way to
+      // discover the cause is to read this file. The whole in-page flow was
+      // shipped and then sat switched off for a day because nothing said it
+      // was switched off.
+      console.warn(
+        "[auth] NEXT_PUBLIC_GOOGLE_CLIENT_ID is not set, so Google sign-in " +
+          "uses the Supabase redirect and the consent screen shows the " +
+          "Supabase project host. Set it on the Vercel project to enable the " +
+          "in-page flow."
+      );
+      return;
+    }
     let cancelled = false;
 
     (async () => {
