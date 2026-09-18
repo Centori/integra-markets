@@ -17,13 +17,37 @@ function extractDetail(text: string): string | null {
   return null;
 }
 
+export type Transport = "stdio" | "http";
+
 export class IntegraClient {
   private readonly baseUrl: string;
   private readonly apiKey: string;
 
-  constructor(apiKey: string, baseUrl?: string) {
+  private readonly transport: Transport;
+
+  /**
+   * @param transport how the key reached us, which decides how a rejected key
+   *   is explained. The two transports configure it in completely different
+   *   places — stdio reads INTEGRA_API_KEY from the environment, the remote
+   *   connector reads an Authorization header the user typed into Claude — so
+   *   one message cannot serve both. It said "Set INTEGRA_API_KEY" to everyone,
+   *   which for a connector user names a variable that does not exist anywhere
+   *   in their setup.
+   */
+  constructor(apiKey: string, baseUrl?: string, transport: Transport = "stdio") {
     this.apiKey = apiKey;
+    this.transport = transport;
     this.baseUrl = (baseUrl ?? process.env.INTEGRA_API_URL ?? DEFAULT_BASE).replace(/\/$/, "");
+  }
+
+  /** How to fix a rejected key, in the terms of the transport in use. */
+  private keyHelp(): string {
+    return this.transport === "http"
+      ? "Update the Authorization header on the Integra connector to " +
+        "`Bearer <your key>`, using a key from " +
+        "https://dashboard.integramarkets.app/account/api"
+      : "Set INTEGRA_API_KEY to a valid key from " +
+        "https://dashboard.integramarkets.app/account/api";
   }
 
   async get<T>(path: string, params?: Record<string, string | number | undefined>): Promise<T> {
@@ -56,9 +80,7 @@ export class IntegraClient {
       const detail = extractDetail(text);
 
       if (res.status === 401) {
-        throw new Error(
-          "Integra API key rejected. Set INTEGRA_API_KEY to a valid key from https://dashboard.integramarkets.app/api-keys"
-        );
+        throw new Error(`Integra API key rejected. ${this.keyHelp()}`);
       }
       if (res.status === 403) {
         // Deliberately does NOT quote a price. The old message advertised an
