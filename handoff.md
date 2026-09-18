@@ -1,3 +1,122 @@
+# Handoff — 2026-09-18
+
+> Latest. Read `CLAUDE.md` "Before claiming anything works" and the code repair
+> rule before writing anything. Run `npm run where` and `npm run verify:prod`
+> first, every time.
+
+## Landed this session, deployed and verified
+
+| PR | What |
+|---|---|
+| #92 | Sentiment engine extracted to `services/commodity_sentiment.py`; 3 dead FastAPI apps deleted |
+| #93 | Supply disruptions now read BULLISH — the reported inversions |
+| #94 | Shared price-action rule now reads every market, not just oil |
+| #95 | MCP: transport-aware key errors *(open, CI was still running)* |
+
+Backend tests 594 -> 756. Every merge confirmed on its **own** Railway
+deployment id, not the one that happened to be at the top of the list — twice
+this session a watcher exited against the previous deployment and would have
+reported a fix live before it had built.
+
+## Where the sentiment work got to
+
+The inversions are fixed at the root. The diagnosis that mattered: the rulebook
+was never wrong, it was **unmatched** — every failing case scored `vader_v2`,
+so the blend fell back to tone, and tone is inverted for supply news. Demand
+down is bearish, supply down is bullish, and both sound negative.
+
+Five categories were added or widened, all inside the existing mechanism:
+asset vocabulary ("energy sites"), chokepoints (nothing knew what Hormuz was),
+bidirectional geopolitical matching, demand-as-a-flow (imports/buying, since a
+refiner never "demands" crude in a headline), and price action (nothing read an
+explicitly stated price move).
+
+**Financial Phrasebank accuracy is 71.36%, essentially unchanged from 71.38%.**
+That number is the anti-overfit guard — if a future change makes specific
+headlines right and moves this down, it bought them with general accuracy.
+
+One case is deliberately left imperfect: "China's Crude Buying Rebounds as Fuel
+Exports Jump 29%" reads NEUTRAL 0.58 on a single moderate signal. It is no
+longer inverted, just uncertain, which is honest for a mixed headline. Tuning
+until it went green would be fitting to four examples rather than to the market.
+
+### Curve rules, asked about directly
+
+`_CURVE_RULES` + `_merge_curve_rules` attach backwardation, contango and
+prompt-spread rules to the 13 markets in `_CURVE_APPLIES`. Coverage is 14 of 20.
+Correctly absent from `forex`/`macro`/`weather` (pseudo-markets) and
+`coltan`/`helium` (no liquid futures). **`freight` is a genuine gap** — FFAs are
+a real forward market with real contango and get none of these rules. Not done.
+
+## NEXT_PUBLIC_GOOGLE_CLIENT_ID — the order matters
+
+Vercel projects (verified via `vercel project ls`):
+
+```
+integra-dashboard   dashboard.integramarkets.app   <- the variable goes here
+integra-web         www.integramarkets.app
+```
+
+Client id: `1039046627332-btsk2dvtdui7onof4tieaqvk3koq99fo.apps.googleusercontent.com`
+
+**Add the JavaScript origin BEFORE setting the variable.** `#89` added a
+verifier check that greps the deployed login bundle for a client id. Setting the
+variable first turns that check green while Google still shows the Supabase
+host, because GIS will refuse an unauthorised origin and fall back silently —
+a false green, which is the exact failure class this tooling exists to prevent.
+
+Correct order:
+1. Google Cloud Console -> client `…btsk2dvt…` -> **Authorized JavaScript
+   origins** -> add `https://dashboard.integramarkets.app`. Origins, not
+   redirect URIs.
+2. Then set `NEXT_PUBLIC_GOOGLE_CLIENT_ID` on **integra-dashboard**.
+3. `npm run verify:prod` should then show the dashboard check passing AND the
+   consent screen should read `integramarkets.app`. If the check passes and the
+   screen still says supabase.co, step 1 did not take.
+
+Also free and worth trying first: the **OAuth consent screen App name**. Google
+shows "to continue to <App name>" when branding is set and falls back to the
+raw redirect host when it is not. Yours shows the bare host, which suggests it
+is unset — and if so, setting it fixes every surface including mobile's web
+fallback, with no deploy.
+
+**Not done, and it matters:** `web/src/components/SocialAuthButtons.tsx` still
+calls `signInWithOAuth`. #80 only ever touched the dashboard, so
+www.integramarkets.app has no in-page flow at all and the Vercel variable will
+not change it. Porting `dashboard/lib/googleIdentity.ts` to `web/` is the
+remaining piece — roughly an hour, same module.
+
+## MCP — complete, one wording fix open
+
+Probed live end to end: transport, handshake, `tools/list` and `tools/call` all
+work. #95 fixes the one wrong thing — a rejected key told every user to "Set
+INTEGRA_API_KEY", which is the stdio variable and means nothing to a connector
+user who typed an Authorization header.
+
+Worth knowing: `initialize` and `tools/list` succeed with ANY key, because the
+key is only validated when a tool calls the API. Correct MCP behaviour, but it
+means a typo'd key connects cleanly and fails on first use — so the wording of
+that first failure is the whole of the user's diagnosis.
+
+## Outstanding, owner named
+
+1. **Railway certificate** for `mcp.integramarkets.app` — 10 days, overdue in
+   `known-issues.json`, fails `verify:prod` daily. Needs a support ticket
+   quoting project `18e783a9-f02d-4396-b49c-98a7a99bbc72` and domain
+   `d27eb5a5-008f-49f1-bfc4-1ada1be18a85`. Not fixable from our side.
+2. **App Store 1.0.3 (91)** — uploaded 11 Sep, storefront still shows 1.0.2.
+   Likely waiting on a manual submit in App Store Connect.
+3. **Mobile lineage split** — the app has never been built from `main`. Still
+   true, still tracked.
+4. **Remaining product list**: mobile copy button, sentiment poll parity,
+   divergence parity, the dead refresh button. Untouched.
+5. **iOS App Store localization for ASO** — asked for, not started. The lever is
+   `fastlane deliver` pushing localized name/subtitle/keywords across locales;
+   each locale has its own 100-character keyword field, which is the real
+   ranking surface.
+
+---
+
 # Handoff — 2026-09-11
 
 > Latest session. Everything below this heading supersedes older sections where
