@@ -33,17 +33,11 @@ def nlp():
         fake.create_client = lambda *a, **k: None
         fake.Client = object
         sys.modules["supabase"] = fake
-    import main_simple_nlp
-
-    # `vader_analyzer` is assigned inside FastAPI's lifespan, so it is None on a
-    # plain import and analyze_market_sentiment silently falls through to
-    # basic_sentiment_analysis — a different function, different return shape,
-    # and a 20-word keyword list instead of the lexicons. The same trap already
-    # corrupted jobs/archive_scorer.py and jobs/news_fetcher.py in production.
-    if main_simple_nlp.vader_analyzer is None:
-        from services.sentiment_engine import get_analyzer
-
-        main_simple_nlp.vader_analyzer = get_analyzer()
+    # No supabase stub and no vader_analyzer to set: the engine lives in
+    # services/commodity_sentiment.py now, imports nothing it does not use,
+    # and asks get_analyzer() for the analyser at call time. Both hacks below
+    # existed only because the engine was trapped inside a FastAPI module.
+    import services.commodity_sentiment as main_simple_nlp
 
     return main_simple_nlp
 

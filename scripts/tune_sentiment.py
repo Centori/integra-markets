@@ -25,14 +25,14 @@ import time
 from dataclasses import dataclass
 from pathlib import Path
 
-# Allow `from main_simple_nlp import ...` when run from anywhere.
+# Allow `from services.commodity_sentiment import ...` when run from anywhere.
 ROOT = Path(__file__).parent.parent
 sys.path.insert(0, str(ROOT / "backend"))
 
 from nltk.sentiment.vader import SentimentIntensityAnalyzer
 
 from services.lexicons import HENRY, SENTI_BIG_NOMICS
-import main_simple_nlp as nlp
+import services.commodity_sentiment as nlp
 
 
 DATA = ROOT / "backend" / "tests" / "data" / "financial_phrasebank.csv"

@@ -51,7 +51,7 @@ def _label_to_int(label: str) -> int:
 def _classify(text: str) -> int:
     """Run the production sentiment pipeline on a single sentence.
 
-    This used to do `from main_simple_nlp import vader_analyzer` and then
+    This used to do `from services.commodity_sentiment import vader_analyzer` and then
     `pytest.skip` when it was None — and it was ALWAYS None, because that
     global is only assigned inside FastAPI's lifespan() and a from-import
     copies the value at import time. So the gate protecting the accuracy floor
@@ -66,7 +66,7 @@ def _classify(text: str) -> int:
     Now sourced from services.sentiment_engine, which builds the analyser on
     demand and raises rather than returning None.
     """
-    from main_simple_nlp import analyze_market_sentiment
+    from services.commodity_sentiment import analyze_market_sentiment
     from services.sentiment_engine import clean_text, get_analyzer
 
     scores = get_analyzer().polarity_scores(clean_text(text))

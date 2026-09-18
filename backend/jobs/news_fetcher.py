@@ -134,7 +134,7 @@ def _score(articles: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
     handler but is decoupled from any request lifecycle.
     """
     try:
-        from main_simple_nlp import (  # type: ignore
+        from services.commodity_sentiment import (  # type: ignore
             analyze_market_sentiment,
             basic_sentiment_analysis,
             extract_commodity_tickers,
