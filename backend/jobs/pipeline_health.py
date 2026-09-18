@@ -695,7 +695,7 @@ def _check_rulebook_coverage():
         return False, {"articles": 0, "reason": "feed returned nothing"}
 
     try:
-        import main_simple_nlp as nlp
+        import services.commodity_sentiment as nlp
     except Exception as exc:  # noqa: BLE001
         return False, {"reason": f"main_simple_nlp not importable: {exc}"}
 

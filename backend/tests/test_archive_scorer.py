@@ -180,8 +180,15 @@ class TestLabelNormalisation:
         # Patch the path the scorer actually takes. This used to patch
         # `basic_sentiment_analysis`, which only ran because the analyser was
         # None — i.e. the assertion depended on the bug being present.
-        sys.modules["main_simple_nlp"].analyze_market_sentiment = (
-            lambda text, commodity, scores=None: {"sentiment": "SPICY", "confidence": 0.9}
+        # monkeypatch, not direct assignment. The scorer imports from
+        # services.commodity_sentiment now, which is the real engine module every
+        # other test in the session also imports — assigning to it directly
+        # leaked a "SPICY" analyser into 22 unrelated tests. monkeypatch reverts
+        # at teardown; the previous target (main_simple_nlp) was incidentally
+        # isolated, so this hazard did not exist before the move.
+        monkeypatch.setattr(
+            "services.commodity_sentiment.analyze_market_sentiment",
+            lambda text, commodity, scores=None: {"sentiment": "SPICY", "confidence": 0.9},
         )
         result = archive_scorer.run()
         assert result["unscorable"] == 1 and result["scored"] == 0

@@ -54,13 +54,13 @@ def _load_scoring_fns():
     path, historical sentiment would not be comparable with live sentiment,
     and every chart spanning the join would show a phantom step change.
     """
-    from main_simple_nlp import (  # type: ignore
+    from services.commodity_sentiment import (  # type: ignore
         analyze_market_sentiment,
         basic_sentiment_analysis,
         normalize_commodity,
     )
 
-    # NOT `from main_simple_nlp import vader_analyzer`. That global is None at
+    # NOT `from services.commodity_sentiment import vader_analyzer`. That global is None at
     # import time and only assigned inside FastAPI's lifespan(); a from-import
     # copies the None, this job never runs under FastAPI, and every document
     # fell through to basic_sentiment_analysis — a 20-word keyword list. That

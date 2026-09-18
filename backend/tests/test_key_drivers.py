@@ -81,13 +81,20 @@ class TestDriversReachTheCard:
 
 
 def _extract_keywords():
-    """Load the extractor without importing main_simple_nlp (needs supabase)."""
-    src = open(os.path.join(os.path.dirname(__file__), "..", "main_simple_nlp.py")).read()
-    block = src[src.index("_DRIVER_TERMS = ["):
-                src.index("def extract_trigger_keywords_with_relevance")]
-    ns = {"re": re, "List": list}
-    exec(block, ns)
-    return ns["extract_keywords"]
+    """The extractor, imported.
+
+    This used to read main_simple_nlp.py as text, slice out the block between
+    two source strings and exec() it — because the engine lived inside a FastAPI
+    module that could not be imported without Supabase. A test reaching for a
+    substring of a source file is a symptom, not a technique: it broke the
+    moment the code moved, which is exactly what it was written to survive.
+
+    The engine now lives in services/commodity_sentiment.py, which imports
+    anywhere. So this is an import.
+    """
+    from services.commodity_sentiment import extract_keywords
+
+    return extract_keywords
 
 
 class TestDriverExtractionBoundaries:

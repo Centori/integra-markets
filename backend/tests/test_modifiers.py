@@ -32,13 +32,14 @@ def nlp():
         fake.create_client = lambda *a, **k: None
         fake.Client = object
         sys.modules["supabase"] = fake
-    import main_simple_nlp
+    # No vader_analyzer to poke. The engine asks get_analyzer() for the
+    # analyser at call time, so there is no module global to be None and no
+    # fixture left that has to set one. This block used to do exactly that,
+    # which is how the tests passed while the jobs importing the same function
+    # were silently falling through to a 20-word keyword list.
+    import services.commodity_sentiment as engine
 
-    if main_simple_nlp.vader_analyzer is None:
-        from services.sentiment_engine import get_analyzer
-
-        main_simple_nlp.vader_analyzer = get_analyzer()
-    return main_simple_nlp
+    return engine
 
 
 def _signals(nlp, text, commodity):
