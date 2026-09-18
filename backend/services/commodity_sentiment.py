@@ -326,6 +326,67 @@ def signal_weight(signal: str) -> float:
     return _SIGNAL_WEIGHTS.get(signal, 1.0)
 
 
+# What may sit between the market and the verb in a price-action rule.
+#
+# A plain .{0,30} gap was too permissive: "LME copper inventories rose" read as
+# copper's PRICE rising, and "wheat ending stocks fell" as wheat's price
+# falling. Both are backwards — a stock build is bearish and a draw is bullish,
+# which the inventory rules already say correctly.
+#
+# Requiring the verb to sit immediately after the market was too strict the
+# other way: "crude oil prices extended their climb" puts it two words out.
+#
+# So the gap is tempered — any characters EXCEPT ones that start a quantity
+# noun. The price may extend, ease or edge its way to the verb; inventories,
+# stocks, output and yields may not stand in for it.
+_NOT_A_QUANTITY = (
+    r"(?:(?!\b(?:inventor|stock|stockpile|carryout|carry-out|production|output|"
+    r"supply|supplies|export|import|reserve|storage|yield|acreage|harvest|"
+    r"capacity|volume|shipment|cargo)\w*)[\s\S]){0,28}"
+)
+
+
+
+# Subject class for the shared price-action rules, derived from the alias table
+# rather than typed out.
+#
+# Those rules live in _CURVE_RULES, which _merge_curve_rules attaches to all 13
+# markets that have a forward curve — but the pattern was written with oil
+# vocabulary (oil|crude|brent|wti|barrel). So "Brent tumbles to a three-month
+# low" matched and "Gold tumbles to a three-month low" did not, and gold fell
+# through to tone. It happened to come out right, by luck, which is precisely
+# the fragility the rules exist to remove.
+#
+# Deriving it from _COMMODITY_ALIASES means every market the engine can route to
+# is also a market whose price moves it can read, and adding a commodity to the
+# alias table extends the price rules for free. The rulebook is already scoped to
+# one commodity by the time these patterns run, so a broad subject class cannot
+# cross-match.
+#
+# Aliases of one or two characters are excluded: too short to be safe inside
+# ordinary prose even with word boundaries.
+_PRICE_SUBJECT = "|".join(
+    sorted(
+        (
+            re.escape(a)
+            for a, canonical in list(_COMMODITY_ALIASES.items())
+            + [(v, v) for v in _COMMODITY_ALIASES.values()]
+            # The pseudo-markets are excluded, and this is not an optimisation.
+            # "usd" and "dollar" route to `forex`, so a broad subject class made
+            # "the dollar rallied to a multi-month high" fire Price action up on
+            # OIL's rulebook — directly contradicting the macro modifier, which
+            # says dollar strength is bearish for every USD-priced commodity.
+            # The dollar is the denominator, not the thing being priced.
+            if len(a) > 2 and canonical not in _PSEUDO_COMMODITIES
+        ),
+        key=len,
+        reverse=True,
+    )
+    or ["price"]
+)
+_PRICE_SUBJECT = f"(?:{_PRICE_SUBJECT}|price\\w*|future\\w*|contract\\w*|benchmark|spot)"
+
+
 # Curve structure applies to every storable physical commodity, so it is defined
 # once and merged into each rulebook rather than repeated eleven times.
 #
@@ -343,14 +404,14 @@ _CURVE_RULES: Dict[str, List[Dict[str, str]]] = {
                 # Mount" scored NEUTRAL because the only rule that fired was the
                 # war risk, and the word "surge" — the actual answer — was
                 # visible to VADER only, which read the sentence as fearful.
-                {"pattern": r"(oil|crude|brent|wti|price\w*|barrel)\w*.{0,30}(surg\w+|soar\w*|jump\w*|rall\w+|climb\w*|spike\w*|rose|ris\w*|gain\w*|top\w*|highest|multi[- ]?month high|\d+[- ]month high)", "signal": "Price action up"},
+                {"pattern": _PRICE_SUBJECT + r"(?:\s+(?:price|prices|future|futures|spot|contract|contracts|benchmark)s?)?" + _NOT_A_QUANTITY + r"(surg\w+|soar\w*|jump\w*|rall\w+|climb\w*|spike\w*|rose|ris\w*|gain\w*|hit\w*|top\w*|highest|record high)", "signal": "Price action up"},
         {"pattern": r"(prompt|time|front)[- ]spread\w*.{0,24}(widen\w*|strengthen\w*|firm\w*)", "signal": "Prompt spread firming"},
         {"pattern": r"curve.{0,24}(flip\w*|mov\w+).{0,16}backwardat\w+", "signal": "Backwardation"},
     ],
     "bearish": [
         {"pattern": r"contango", "signal": "Contango"},
                 # Mirror of Price action up. _MIRROR_PAIRS asserts equal weight.
-                {"pattern": r"(oil|crude|brent|wti|price\w*|barrel)\w*.{0,30}(slump\w*|plunge\w*|tumbl\w+|slid\w*|sank|sink\w*|fall\w*|fell|drop\w*|declin\w+|lowest|multi[- ]?month low|\d+[- ]month low)", "signal": "Price action down"},
+                {"pattern": _PRICE_SUBJECT + r"(?:\s+(?:price|prices|future|futures|spot|contract|contracts|benchmark)s?)?" + _NOT_A_QUANTITY + r"(slump\w*|plunge\w*|tumbl\w+|slid\w*|sank|sink\w*|fall\w*|fell|drop\w*|declin\w+|lowest|record low)", "signal": "Price action down"},
         {"pattern": r"(floating storage|storage economics|carry trade)", "signal": "Storage economics"},
         {"pattern": r"(prompt|time|front)[- ]spread\w*.{0,24}(collaps\w+|weaken\w*|narrow\w*)", "signal": "Prompt spread weakening"},
     ],
