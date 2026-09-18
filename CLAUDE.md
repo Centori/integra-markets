@@ -178,6 +178,76 @@ what was asked. A request to move something left was implemented as a move
 right, with a confident comment explaining why — the rationale won without
 anyone noticing it had overruled the instruction.
 
+## Code repair rule — replace, don't duplicate
+
+When fixing or optimizing existing code, do not create a second implementation
+of the feature. This repo is already the cautionary example: parallel
+`App.web.js` / `MainApp.js` entry points, three Supabase clients, two
+requirements files of which one is never installed, and two tier resolvers whose
+own docstring says it "replaces two separate, drifting notions of entitlement"
+while both are still live. Every one of those cost a day this month.
+
+**The workflow is:**
+
+```
+Inspect -> Identify root cause -> Replace broken implementation
+        -> Remove obsolete code -> Verify -> Deploy -> Finish
+```
+
+**Not:**
+
+```
+Inspect -> Add new implementation -> Keep old one -> Add fallback
+        -> Create duplicate
+```
+
+1. **Inspect the existing implementation first.** Identify the component,
+   function, hook, API call, state, logic or file that owns the feature today.
+   Understand how it works and where the weakness is before writing anything.
+
+2. **Modify that implementation directly.** Replace the broken logic in place.
+   Do not create a parallel version. Do not duplicate components, functions,
+   hooks, API calls, state variables or files.
+
+3. **No fallbacks unless explicitly requested.** Do not keep the old
+   implementation "just in case". Do not add backwards-compatibility logic
+   unless asked. A fallback that is never exercised is untested code that will
+   be reached exactly once, in production, at the worst moment.
+
+4. **The new implementation replaces the old one.** Remove obsolete code, dead
+   code, duplicate functions, unused imports, orphaned state and conflicting
+   logic. One clear source of truth per feature.
+
+5. **Do not work around the problem.** Fix the root cause rather than adding a
+   layer around the bug. Do not patch symptoms with competing logic.
+
+6. **Preserve unrelated functionality.** Do not rewrite parts of the app that
+   are not the subject of the repair. Keep existing architecture and naming
+   where still appropriate.
+
+7. **Verify the repair, then deploy it.**
+   - Confirm the new code is actually connected: imports, state, props, API
+     calls, navigation, event handlers, dependencies.
+   - Check for duplicate or conflicting implementations left behind.
+   - Check for TypeScript/Python errors and obvious runtime issues.
+   - **Push it to the Railway backend.** A repair that is merged but not
+     deployed is not a repair — #83 merged cleanly and served the old image for
+     three days. Run `npm run verify:prod` and confirm the deploy succeeded
+     before calling anything fixed.
+
+If the existing architecture is fundamentally wrong, **refactor it** rather than
+building a separate parallel implementation beside it.
+
+**Before finishing, state explicitly:**
+
+- What existing code was replaced
+- What obsolete or duplicate code was removed
+- Where the final implementation lives
+- That there is exactly one active implementation of the feature
+- That it is connected, working, and deployed
+
+Run `npm run find:dupes` to see what currently violates this.
+
 ## Known-broken things must age, not linger
 
 `known-issues.json` holds what is deliberately unfixed. Every entry carries
