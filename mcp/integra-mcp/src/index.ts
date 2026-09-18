@@ -17,7 +17,7 @@ import { createServer } from "./server.js";
 const apiKey = process.env.INTEGRA_API_KEY;
 if (!apiKey) {
   console.error("[integra-mcp] INTEGRA_API_KEY environment variable is required.");
-  console.error("Get a key from https://dashboard.integramarkets.app/api-keys");
+  console.error("Get a key from https://dashboard.integramarkets.app/account/api");
   process.exit(1);
 }
 
