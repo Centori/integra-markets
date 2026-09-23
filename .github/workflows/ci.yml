@@ -102,3 +102,16 @@ jobs:
       # from the day it was added while never once running as a check.
       - name: MCP tool lists in sync with the dashboard
         run: node mcp/integra-mcp/scripts/check-tool-parity.mjs
+
+      # The OAuth flow is how every Claude.ai user now authenticates — their
+      # dialog has no field for a static header — so it is an auth surface on a
+      # production host. The test starts the built server and drives the whole
+      # flow, and most of what it asserts is the refusals: an unregistered
+      # redirect address, a mismatched PKCE verifier, a code redeemed against a
+      # different URI, a token replayed as a code.
+      - name: MCP OAuth flow
+        working-directory: mcp/integra-mcp
+        run: |
+          npm ci --silent
+          npm run build
+          node scripts/test-oauth.mjs

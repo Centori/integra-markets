@@ -124,18 +124,48 @@ check("mcp", "health", async () => {
   return status === 200 && JSON.parse(text).ok ? true : `HTTP ${status} ${text.slice(0, 80)}`;
 });
 
-// WWW-Authenticate: Bearer is the MCP spec's OAuth signal. Sending it made
-// Claude hunt for a sign-in service that does not exist, and every tool call
-// failed with "No approval received".
-check("mcp", "does not advertise OAuth on 401", async () => {
+// WWW-Authenticate: Bearer is the MCP spec's OAuth signal, and it used to be
+// sent by a server that served no OAuth endpoints — Claude went hunting for a
+// sign-in service that did not exist and reported "No approval received".
+//
+// The inverse is now the failure to catch. Claude.ai's connector dialog has no
+// field for a static header, so OAuth is the only way anyone configures this;
+// if the header is missing, or the discovery documents behind it are not
+// served, nobody can connect at all. The header and the endpoints it promises
+// are checked together, because either alone is the broken state.
+check("mcp", "OAuth discovery is advertised and answered", async () => {
   const { status, headers } = await req(`${MCP}/mcp`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ jsonrpc: "2.0", id: 1, method: "initialize", params: {} }),
   });
-  if (status !== 401) return `expected 401, got ${status}`;
-  const wa = headers.get("www-authenticate");
-  return wa ? `still sends WWW-Authenticate: ${wa}` : true;
+  if (status !== 401) return `expected 401 on an unauthenticated call, got ${status}`;
+
+  const wa = headers.get("www-authenticate") ?? "";
+  if (!wa.includes("resource_metadata=")) {
+    return `401 does not point at resource metadata (WWW-Authenticate: ${wa || "absent"}) — ` +
+      "MCP_OAUTH_SECRET is probably unset on the service, so no connector can be configured";
+  }
+
+  for (const path of [
+    "/.well-known/oauth-protected-resource",
+    "/.well-known/oauth-authorization-server",
+  ]) {
+    const doc = await req(`${MCP}${path}`);
+    if (doc.status !== 200) return `${path} -> ${doc.status}`;
+  }
+
+  const meta = JSON.parse((await req(`${MCP}/.well-known/oauth-authorization-server`)).text);
+  for (const field of ["authorization_endpoint", "token_endpoint", "registration_endpoint"]) {
+    if (!meta[field]) return `authorization server metadata has no ${field}`;
+  }
+  // A sign-in page that does not render is a flow that dead-ends in a browser
+  // tab, which no amount of correct metadata makes up for.
+  const page = await req(meta.authorization_endpoint);
+  if (page.status !== 400 && page.status !== 200) {
+    return `authorize endpoint -> ${page.status} (expected a rendered page or a 400 for missing params)`;
+  }
+  return true;
 });
 
 // Was a tracked known-issue for fifteen days: Railway never issued a

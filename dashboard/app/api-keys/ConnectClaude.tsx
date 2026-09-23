@@ -131,7 +131,7 @@ function ConnectDialog({
         </p>
 
         <ol className="mt-6 space-y-6">
-          <Step n={1} text="Copy the server URL below.">
+          <Step n={1} text="Copy the server URL — only needed if the dialog does not prefill it.">
             <div className="mt-3 flex items-center justify-between gap-3 rounded-lg bg-bg-primary px-4 py-3">
               <code className="truncate text-xs text-text-primary">{url}</code>
               <button
@@ -171,25 +171,17 @@ function ConnectDialog({
             n={3}
             text={
               <>
-                Set <span className="text-text-primary">Authentication</span> to{" "}
-                <span className="text-text-primary">None</span>, then add a
-                request header:{" "}
-                <code className="text-accent-primary">Authorization</code> with
-                the value{" "}
-                <code className="text-accent-primary">Bearer ik_live_…</code>{" "}
-                using a key from this page.
+                Press <span className="text-text-primary">Connect</span>. Integra
+                asks for an API key — paste one from this page and you are done.
               </>
             }
           >
             <p className="mt-2 text-xs text-text-secondary">
-              Claude may suggest &ldquo;Always required&rdquo;. That means OAuth,
-              which this server does not use — <span className="text-text-primary">None</span>{" "}
-              is the option for API-key servers. Leave Transport on{" "}
-              <span className="text-text-primary">Streamable HTTP</span>.
+              Claude keeps a token, not your key, and revoking the key here ends
+              the connection. Enable the connector in a conversation from the
+              &#43; menu.
             </p>
           </Step>
-
-          <Step n={4} text="Tap Add to save the connector, then enable it in a conversation from the + menu." />
         </ol>
 
         <details className="mt-8 text-xs text-text-secondary">
