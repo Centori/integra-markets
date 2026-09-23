@@ -1,12 +1,21 @@
 import type { Metadata } from "next";
 import Image from "next/image";
 import { serverClient } from "@/lib/supabase-server";
-import integraIcon from "@/assets/integra-icon.png";
 import "./globals.css";
+
+// Lives in public/ rather than being imported, so it has ONE stable URL:
+// /integra-icon.png. An imported asset is emitted under a content hash, which
+// is fine for a header logo and useless for anything off-site — and this file
+// is now also the favicon and the icon the MCP server advertises to clients.
+// Both of those are references we do not control and cannot re-issue.
+const ICON_PATH = "/integra-icon.png";
 
 export const metadata: Metadata = {
   title: "Integra Markets",
   description: "Commodity sentiment, divergence signals, and the API to build on them.",
+  // Neither the dashboard nor www served a favicon at all — /favicon.ico was a
+  // 404 HTML page on both, so every tab showed a blank sheet.
+  icons: { icon: ICON_PATH, apple: ICON_PATH },
 };
 
 export default async function RootLayout({ children }: { children: React.ReactNode }) {
@@ -23,7 +32,7 @@ export default async function RootLayout({ children }: { children: React.ReactNo
           <header className="border-b border-bg-tertiary px-6 py-4 flex items-center justify-between">
             <a href="/" className="flex items-center gap-2">
               <Image
-                src={integraIcon}
+                src={ICON_PATH}
                 alt="Integra Markets"
                 width={32}
                 height={32}
