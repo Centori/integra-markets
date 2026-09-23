@@ -28,6 +28,20 @@ import { createServer as createHttpServer, IncomingMessage, ServerResponse } fro
 import { StreamableHTTPServerTransport } from "@modelcontextprotocol/sdk/server/streamableHttp.js";
 import { IntegraClient } from "./client.js";
 import { createServer, SERVER_NAME, SERVER_VERSION } from "./server.js";
+import { authorizePage, authorizeErrorPage } from "./authorizePage.js";
+import {
+  OAUTH_PATHS,
+  authorizationServerMetadata,
+  oauthEnabled,
+  protectedResourceMetadata,
+  publicOrigin,
+  redeemCode,
+  redeemRefresh,
+  registerClient,
+  registeredRedirectUris,
+  resolveApiKey,
+  issueCode,
+} from "./oauth.js";
 
 const PORT = Number(process.env.PORT ?? 8080);
 const MCP_PATH = process.env.MCP_PATH ?? "/mcp";
@@ -82,6 +96,243 @@ function rpcError(res: ServerResponse, status: number, code: number, message: st
   sendJson(res, status, { jsonrpc: "2.0", error: { code, message }, id: null });
 }
 
+const INTEGRA_API_URL = (process.env.INTEGRA_API_URL ?? "https://api.integramarkets.app").replace(/\/$/, "");
+
+function originOf(req: IncomingMessage): string {
+  const proto = req.headers["x-forwarded-proto"];
+  return publicOrigin(req.headers.host, Array.isArray(proto) ? proto[0] : proto);
+}
+
+function isOAuthPath(path: string): boolean {
+  return (
+    path === OAUTH_PATHS.protectedResource ||
+    path === OAUTH_PATHS.authorizationServer ||
+    path === OAUTH_PATHS.register ||
+    path === OAUTH_PATHS.authorize ||
+    path === OAUTH_PATHS.token ||
+    // Some clients append the resource path to the well-known lookup, per
+    // RFC 9728. Answering both spellings is cheaper than debugging which one a
+    // given client chose.
+    path.startsWith(`${OAUTH_PATHS.protectedResource}/`) ||
+    path.startsWith(`${OAUTH_PATHS.authorizationServer}/`)
+  );
+}
+
+function sendHtml(res: ServerResponse, status: number, html: string): void {
+  res.writeHead(status, {
+    "Content-Type": "text/html; charset=utf-8",
+    "Content-Length": Buffer.byteLength(html),
+    // The form carries an API key. Keep it out of shared caches and out of the
+    // referrer sent to the redirect target.
+    "Cache-Control": "no-store",
+    "Referrer-Policy": "no-referrer",
+  });
+  res.end(html);
+}
+
+function readForm(req: IncomingMessage): Promise<URLSearchParams> {
+  return new Promise((resolve, reject) => {
+    let size = 0;
+    const chunks: Buffer[] = [];
+    req.on("data", (chunk: Buffer) => {
+      size += chunk.length;
+      if (size > MAX_BODY_BYTES) {
+        reject(new Error("request body too large"));
+        req.destroy();
+        return;
+      }
+      chunks.push(chunk);
+    });
+    req.on("end", () => resolve(new URLSearchParams(Buffer.concat(chunks).toString("utf8"))));
+    req.on("error", reject);
+  });
+}
+
+/**
+ * Is this key real? Asked of the API, because this server has no user table.
+ *
+ * 401 is the only answer that means "no". A 403 is a valid key whose plan does
+ * not cover that endpoint, and refusing it here would tell a paying customer
+ * their key is invalid — the failure should surface later, on the call that
+ * actually needs the entitlement, where the message can say which.
+ */
+async function apiKeyIsValid(apiKey: string): Promise<boolean> {
+  try {
+    const res = await fetch(`${INTEGRA_API_URL}/v1/commodities`, {
+      headers: { Authorization: `Bearer ${apiKey}` },
+      signal: AbortSignal.timeout(10_000),
+    });
+    return res.status !== 401;
+  } catch {
+    // The API being unreachable is not evidence the key is bad. Let it through;
+    // the MCP call that follows will fail loudly and accurately.
+    return true;
+  }
+}
+
+function oauthError(res: ServerResponse, status: number, error: string, description: string): void {
+  sendJson(res, status, { error, error_description: description });
+}
+
+async function handleOAuth(req: IncomingMessage, res: ServerResponse, path: string): Promise<void> {
+  const origin = originOf(req);
+
+  if (path === OAUTH_PATHS.protectedResource || path.startsWith(`${OAUTH_PATHS.protectedResource}/`)) {
+    return sendJson(res, 200, protectedResourceMetadata(origin));
+  }
+
+  if (path === OAUTH_PATHS.authorizationServer || path.startsWith(`${OAUTH_PATHS.authorizationServer}/`)) {
+    return sendJson(res, 200, authorizationServerMetadata(origin));
+  }
+
+  // --- dynamic client registration ---------------------------------------
+  if (path === OAUTH_PATHS.register) {
+    if (req.method !== "POST") return oauthError(res, 405, "invalid_request", "POST only");
+    let body: any;
+    try {
+      body = await readBody(req);
+    } catch {
+      return oauthError(res, 400, "invalid_request", "body was not JSON");
+    }
+    const uris = Array.isArray(body?.redirect_uris) ? body.redirect_uris : [];
+    const registered = registerClient(uris);
+    if (!registered) {
+      return oauthError(res, 400, "invalid_redirect_uri", "at least one redirect_uri is required");
+    }
+    return sendJson(res, 201, {
+      client_id: registered.client_id,
+      redirect_uris: uris,
+      token_endpoint_auth_method: "none",
+      grant_types: ["authorization_code", "refresh_token"],
+      response_types: ["code"],
+      client_name: typeof body?.client_name === "string" ? body.client_name : undefined,
+    });
+  }
+
+  // --- the sign-in page ---------------------------------------------------
+  if (path === OAUTH_PATHS.authorize) {
+    if (req.method === "GET") {
+      const url = new URL(req.url ?? "/", origin);
+      const form = {
+        clientId: url.searchParams.get("client_id") ?? "",
+        redirectUri: url.searchParams.get("redirect_uri") ?? "",
+        state: url.searchParams.get("state") ?? "",
+        codeChallenge: url.searchParams.get("code_challenge") ?? "",
+        resource: url.searchParams.get("resource") ?? "",
+      };
+      const invalid = validateAuthorizeParams(form, url.searchParams.get("code_challenge_method"));
+      if (invalid) return sendHtml(res, 400, authorizeErrorPage(invalid));
+      return sendHtml(res, 200, authorizePage(form));
+    }
+
+    if (req.method === "POST") {
+      let form: URLSearchParams;
+      try {
+        form = await readForm(req);
+      } catch {
+        return sendHtml(res, 400, authorizeErrorPage("The form could not be read."));
+      }
+      const params = {
+        clientId: form.get("client_id") ?? "",
+        redirectUri: form.get("redirect_uri") ?? "",
+        state: form.get("state") ?? "",
+        codeChallenge: form.get("code_challenge") ?? "",
+        resource: form.get("resource") ?? "",
+      };
+      const invalid = validateAuthorizeParams(params, "S256");
+      if (invalid) return sendHtml(res, 400, authorizeErrorPage(invalid));
+
+      const apiKey = (form.get("api_key") ?? "").trim();
+      if (!apiKey) {
+        return sendHtml(res, 400, authorizePage(params, "Enter an API key to continue."));
+      }
+      if (!(await apiKeyIsValid(apiKey))) {
+        // Re-render rather than redirect: the user is standing in front of the
+        // one field they can fix, and bouncing them back to Claude with an
+        // error turns a typo into a restart of the whole flow.
+        return sendHtml(
+          res,
+          401,
+          authorizePage(params, "That key was rejected. Check it was copied whole, or create a new one.")
+        );
+      }
+
+      const code = issueCode(apiKey, params.codeChallenge, params.redirectUri);
+      if (!code) return sendHtml(res, 500, authorizeErrorPage("Could not issue an authorization code."));
+
+      const target = new URL(params.redirectUri);
+      target.searchParams.set("code", code);
+      if (params.state) target.searchParams.set("state", params.state);
+      res.writeHead(302, { Location: target.toString(), "Cache-Control": "no-store", "Referrer-Policy": "no-referrer" });
+      res.end();
+      return;
+    }
+
+    return oauthError(res, 405, "invalid_request", "GET or POST only");
+  }
+
+  // --- token --------------------------------------------------------------
+  if (path === OAUTH_PATHS.token) {
+    if (req.method !== "POST") return oauthError(res, 405, "invalid_request", "POST only");
+    let form: URLSearchParams;
+    try {
+      form = await readForm(req);
+    } catch {
+      return oauthError(res, 400, "invalid_request", "body could not be read");
+    }
+
+    const grant = form.get("grant_type");
+    let result;
+    if (grant === "authorization_code") {
+      result = redeemCode(
+        form.get("code") ?? "",
+        form.get("code_verifier") ?? "",
+        form.get("redirect_uri") ?? ""
+      );
+    } else if (grant === "refresh_token") {
+      result = redeemRefresh(form.get("refresh_token") ?? "");
+    } else {
+      return oauthError(res, 400, "unsupported_grant_type", `grant_type ${grant ?? "(missing)"}`);
+    }
+
+    if ("error" in result) {
+      return oauthError(
+        res,
+        400,
+        result.error,
+        "The authorization code or refresh token was invalid, expired, or did not match this client."
+      );
+    }
+    res.setHeader("Cache-Control", "no-store");
+    return sendJson(res, 200, result);
+  }
+
+  return oauthError(res, 404, "invalid_request", "no such endpoint");
+}
+
+/** Everything that must be true before a password field is put in front of anyone. */
+function validateAuthorizeParams(
+  params: { clientId: string; redirectUri: string; codeChallenge: string },
+  challengeMethod: string | null
+): string | null {
+  if (!params.clientId) return "The connector did not send a client id.";
+  if (!params.redirectUri) return "The connector did not send a redirect address.";
+  if (!params.codeChallenge) return "The connector did not send a PKCE challenge.";
+  if (challengeMethod && challengeMethod !== "S256") {
+    return `Unsupported PKCE method ${challengeMethod}. This server requires S256.`;
+  }
+
+  // The redirect target must be one the client registered. Without this check
+  // anyone could craft an /authorize link pointing anywhere, and a user who
+  // pasted their key into our real page would have it delivered to a stranger.
+  const allowed = registeredRedirectUris(params.clientId);
+  if (!allowed) return "The connector's registration has expired. Reconnect it to continue.";
+  if (!allowed.includes(params.redirectUri)) {
+    return "The redirect address does not match the one this connector registered.";
+  }
+  return null;
+}
+
 const httpServer = createHttpServer(async (req, res) => {
   // Unauthenticated liveness probe for Railway.
   if (req.method === "GET" && req.url === "/health") {
@@ -89,36 +340,76 @@ const httpServer = createHttpServer(async (req, res) => {
   }
 
   const path = (req.url ?? "").split("?")[0];
+
+  // --- OAuth ---------------------------------------------------------------
+  // Handled before the MCP path check so that a client following discovery
+  // reaches an endpoint rather than the catch-all. When MCP_OAUTH_SECRET is
+  // unset these all fall through to the message below, which tells the user to
+  // configure a header instead — the behaviour this server had before.
+  if (oauthEnabled() && isOAuthPath(path)) {
+    return handleOAuth(req, res, path);
+  }
+
+  if (path.startsWith("/.well-known/oauth") || path === OAUTH_PATHS.register) {
+    // Reached only when OAuth is switched off. The generic "Not found. MCP
+    // endpoint is /mcp" was true, useless, and shown to the user verbatim: it
+    // reads as a wrong server address when the address was right and the auth
+    // mode was wrong.
+    return rpcError(
+      res,
+      404,
+      -32601,
+      "This server is not configured for OAuth. In the connector's settings " +
+        "set Authentication to 'None', then add a request header " +
+        "'Authorization' with the value 'Bearer <your Integra API key>'. " +
+        "Keys are created at https://dashboard.integramarkets.app/account/api"
+    );
+  }
+
   if (path !== MCP_PATH) {
     return rpcError(res, 404, -32601, `Not found. MCP endpoint is ${MCP_PATH}`);
   }
 
-  const apiKey = extractApiKey(req);
+  const bearer = extractApiKey(req);
+  // A bearer is either a raw ik_live_ key (stdio-style config, and anything
+  // that can send its own header) or a token this server issued through the
+  // OAuth flow. resolveApiKey unwraps the second and passes the first through.
+  const apiKey = bearer ? resolveApiKey(bearer) : null;
   if (!apiKey) {
-    // DELIBERATELY NO WWW-Authenticate HEADER.
+    // THE HEADER IS A PROMISE, AND IT IS NOW KEPT.
     //
-    // It used to send `WWW-Authenticate: Bearer realm="integra-mcp"`, on the
-    // reasoning that a connector could then prompt for credentials instead of
-    // failing opaquely. In MCP that header means the opposite of what it reads
-    // like: per the authorization spec, 401 + `WWW-Authenticate: Bearer` is the
-    // signal that the server speaks OAuth 2.0. Claude takes it at its word and
-    // starts the discovery handshake:
+    // 401 + `WWW-Authenticate: Bearer` is not a prompt for credentials; per the
+    // MCP authorization spec it is the signal that the server speaks OAuth 2.0,
+    // and a client takes it at its word:
     //
-    //     GET /.well-known/oauth-protected-resource   -> 404
-    //     GET /.well-known/oauth-authorization-server -> 404
-    //     POST /register  (dynamic client registration) -> 404
+    //     GET /.well-known/oauth-protected-resource
+    //     GET /.well-known/oauth-authorization-server
+    //     POST /register
     //
-    // and then reports "Couldn't register with Integra Markets's sign-in
-    // service" — which is why connecting failed for a user who had pasted a
-    // perfectly good API key. This server does not speak OAuth; the key is
-    // supplied as a request header the user configures. Saying nothing leaves
-    // the JSON-RPC error below as the whole answer, which is the accurate one.
+    // This server used to send the header and serve none of those, so Claude
+    // reported "Couldn't register with Integra Markets's sign-in service" to
+    // users holding a perfectly good API key, and the header was removed. All
+    // three endpoints exist now, so the header goes back — but only when OAuth
+    // is actually configured. Advertising a flow that cannot complete is the
+    // bug that was fixed; advertising one that can is what makes the connector
+    // configurable at all, because Claude's dialog offers no way to set a
+    // header by hand.
+    if (oauthEnabled()) {
+      const origin = originOf(req);
+      res.setHeader(
+        "WWW-Authenticate",
+        `Bearer realm="integra-mcp", resource_metadata="${origin}${OAUTH_PATHS.protectedResource}"`
+      );
+    }
     return rpcError(
       res,
       401,
       -32001,
-      "Missing Authorization header. Send 'Authorization: Bearer <your Integra API key>'. " +
-        "Get a key at https://dashboard.integramarkets.app/account/api"
+      oauthEnabled()
+        ? "Not connected. Reconnect the Integra connector and paste an API key when asked. " +
+            "Keys are created at https://dashboard.integramarkets.app/account/api"
+        : "Missing Authorization header. Send 'Authorization: Bearer <your Integra API key>'. " +
+            "Get a key at https://dashboard.integramarkets.app/account/api"
     );
   }
 

@@ -140,7 +140,30 @@ export const WITHDRAWN_TOOLS: ToolDef[] = [
  */
 export function createServer(getClient: () => IntegraClient): Server {
   const server = new Server(
-    { name: SERVER_NAME, version: SERVER_VERSION },
+    {
+      name: SERVER_NAME,
+      version: SERVER_VERSION,
+      // Everything below `version` is what a client has to render the
+      // connector with. Without it the only identity we hand over is the
+      // string "integra-mcp", so the connector shows up as a generic entry
+      // among a user's others — which is how it has looked until now.
+      //
+      // The icon is served from the dashboard rather than from here: this
+      // process answers JSON-RPC and has no business serving images, and the
+      // dashboard already holds the asset behind a certificate we control.
+      title: "Integra Markets",
+      websiteUrl: "https://dashboard.integramarkets.app/mcp",
+      description:
+        "Commodity sentiment, prediction-market divergence, and narrative " +
+        "intelligence, queried directly from your conversation.",
+      icons: [
+        {
+          src: "https://dashboard.integramarkets.app/integra-icon.png",
+          mimeType: "image/png",
+          sizes: ["1024x1024"],
+        },
+      ],
+    },
     { capabilities: { tools: {} } }
   );
 
