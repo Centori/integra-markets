@@ -118,7 +118,7 @@ const httpServer = createHttpServer(async (req, res) => {
       401,
       -32001,
       "Missing Authorization header. Send 'Authorization: Bearer <your Integra API key>'. " +
-        "Get a key at https://dashboard.integramarkets.app/api-keys"
+        "Get a key at https://dashboard.integramarkets.app/account/api"
     );
   }
 
@@ -132,7 +132,10 @@ const httpServer = createHttpServer(async (req, res) => {
   // Fresh server + transport per request. sessionIdGenerator: undefined puts
   // the transport in stateless mode — no session to resume, nothing sticky,
   // so instances scale horizontally without a shared store.
-  const client = new IntegraClient(apiKey);
+  // "http": this key came from an Authorization header the user configured
+  // in Claude, not from an environment variable, so a rejection has to say
+  // so. See IntegraClient.keyHelp().
+  const client = new IntegraClient(apiKey, undefined, "http");
   const server = createServer(() => client);
   const transport = new StreamableHTTPServerTransport({ sessionIdGenerator: undefined });
 

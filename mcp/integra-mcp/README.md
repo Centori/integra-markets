@@ -16,7 +16,7 @@ Claude will call the Integra API on your behalf and return structured answers.
 ## Requirements
 
 - Node.js 18+
-- An [Integra API key](https://dashboard.integramarkets.app/api-keys) (API Basic tier or higher)
+- An [Integra API key](https://dashboard.integramarkets.app/account/api) (API Basic tier or higher)
 
 ## Install
 
