@@ -19,11 +19,15 @@ WHY TWO KEYS. The two authentication surfaces know different things:
   * An API-key request carries only ``api_keys.user_id``, so it knows the UUID
     and can never know the email without another round trip.
 
-Listing an email therefore unlocks the dashboard but NOT the API keys minted
-from it, which would be a confusing half-grant. Both keys exist so a grant can
-be complete. ``/api/subscriptions/entitlement`` returns ``user_id`` for exactly
-this reason — so the UUID to list can be read off the dashboard instead of
-hunted for in Supabase.
+Listing an email used to unlock the dashboard but NOT the API keys minted
+from it: a grant that looks complete, mints keys happily, and answers 403 on
+every call made with them. The documented remedy was to paste the UUID into
+the second variable as well — a manual step nothing verifies and nothing
+complains about skipping, which is the same class of silent half-configuration
+this module was written to remove. So an email grant now resolves the UUID's
+account email through the GoTrue admin API and matches on that. Both variables
+remain: the UUID list still works offline, costs no lookup, and is the only
+thing that can comp a key when the admin API is unreachable.
 
 REMOVING IT. Delete the variables. Nothing else refers to comp state, no rows
 were written, and the next request resolves through the paid path.
@@ -33,7 +37,9 @@ from __future__ import annotations
 
 import logging
 import os
-from typing import Optional, Set
+import threading
+import time
+from typing import Dict, Optional, Set, Tuple
 
 logger = logging.getLogger(__name__)
 
@@ -82,6 +88,76 @@ def _allowlist() -> Set[str]:
     return _split(os.environ.get(_USER_IDS_VAR)) | _split(os.environ.get(_EMAILS_VAR))
 
 
+# --- Resolving a user_id back to its account email ------------------------
+# Spoken to over HTTP rather than through the supabase client: this runs on the
+# API-key path, where the client that main.py built may be absent, and GoTrue's
+# admin route is a stable HTTP contract while the client library's admin
+# surface has moved between versions.
+_EMAIL_TTL_S = 900  # The mapping is immutable; the TTL only bounds staleness.
+_LOOKUP_TIMEOUT_S = 4
+
+_email_cache: Dict[str, Tuple[float, Optional[str]]] = {}
+_email_lock = threading.Lock()
+
+
+def _cached_email(user_id: str) -> Tuple[bool, Optional[str]]:
+    """(hit, email). Misses are cached too — see email_for_user_id."""
+    with _email_lock:
+        entry = _email_cache.get(user_id)
+    if entry is None or (time.monotonic() - entry[0]) > _EMAIL_TTL_S:
+        return False, None
+    return True, entry[1]
+
+
+def email_for_user_id(user_id: str) -> Optional[str]:
+    """The account email behind a user_id, or None if it cannot be determined.
+
+    Requires SUPABASE_SERVICE_ROLE_KEY; returns None without it rather than
+    attempting an anon call that would answer 401 on every request.
+
+    A *resolved* answer is cached whether or not it matched, so a stranger's
+    id costs one admin call and not one per request. A *failed* call is not
+    cached: a transient outage must not pin "not comped" for the next quarter
+    of an hour, which would look exactly like a revoked grant.
+    """
+    if not user_id:
+        return None
+
+    hit, cached = _cached_email(user_id)
+    if hit:
+        return cached
+
+    base = (os.environ.get("SUPABASE_URL") or "").rstrip("/")
+    service_key = os.environ.get("SUPABASE_SERVICE_ROLE_KEY")
+    if not base or not service_key:
+        return None
+
+    try:
+        import requests
+
+        response = requests.get(
+            f"{base}/auth/v1/admin/users/{user_id}",
+            headers={"apikey": service_key, "Authorization": f"Bearer {service_key}"},
+            timeout=_LOOKUP_TIMEOUT_S,
+        )
+        if response.status_code == 404:
+            email = None  # A real answer: no such user. Worth caching.
+        elif response.status_code != 200:
+            logger.warning(
+                "comp: admin lookup for %s returned %s", user_id, response.status_code
+            )
+            return None
+        else:
+            email = (response.json() or {}).get("email")
+    except Exception as exc:  # noqa: BLE001
+        logger.warning("comp: admin lookup for %s failed: %s", user_id, exc)
+        return None
+
+    with _email_lock:
+        _email_cache[user_id] = (time.monotonic(), email)
+    return email
+
+
 def comp_tier_for(user_id: Optional[str], email: Optional[str] = None) -> Optional[str]:
     """The comped tier for this caller, or None if they are not comped.
 
@@ -94,6 +170,14 @@ def comp_tier_for(user_id: Optional[str], email: Optional[str] = None) -> Option
         return None
     for identifier in (user_id, email):
         if identifier and identifier.strip().casefold() in allowed:
+            return comp_tier()
+
+    # Only the caller who arrived without an email — the API-key path — and
+    # only when an email grant is actually configured. A deployment comping
+    # nobody, or comping by UUID alone, makes no admin call at all.
+    if email is None and user_id and _split(os.environ.get(_EMAILS_VAR)):
+        resolved = email_for_user_id(user_id)
+        if resolved and resolved.strip().casefold() in allowed:
             return comp_tier()
     return None
 
