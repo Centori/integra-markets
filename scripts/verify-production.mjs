@@ -85,6 +85,39 @@ check("backend", "v1 requires a key", async () => {
   return status === 401 ? true : `expected 401, got ${status}`;
 });
 
+// Everything above proves the door is locked. Nothing proves a real key opens
+// it, and those are different failures: a key that mints cleanly and then 403s
+// on every call looked exactly like a working API for two weeks. Opt-in,
+// because the checks must stay runnable by anyone without a key.
+if (process.env.INTEGRA_API_KEY) {
+  check("backend", "a real key has live scopes", async () => {
+    const key = { Authorization: `Bearer ${process.env.INTEGRA_API_KEY}` };
+
+    const list = await req(`${BACKEND}/v1/commodities`, { headers: key });
+    if (list.status === 403) {
+      return (
+        `403 on /v1/commodities — the key is valid but carries no entitlement. ` +
+        `If this is a comped account, check INTEGRA_COMP_EMAILS resolves: ${list.text.slice(0, 120)}`
+      );
+    }
+    if (list.status !== 200) return `/v1/commodities -> ${list.status} ${list.text.slice(0, 100)}`;
+
+    const names = JSON.parse(list.text).commodities ?? [];
+    if (names.length === 0) return "/v1/commodities returned an empty list — nothing is indexed";
+
+    // The history scope is separately gated, and it is what the MCP's
+    // get_sentiment_history needs. A key can pass the line above and fail here.
+    const daily = await req(
+      `${BACKEND}/v1/sentiment/${encodeURIComponent(names[0])}/daily?days=7`,
+      { headers: key }
+    );
+    if (daily.status !== 200) {
+      return `history scope: /v1/sentiment/${names[0]}/daily -> ${daily.status} ${daily.text.slice(0, 100)}`;
+    }
+    return true;
+  });
+}
+
 // --- mcp -----------------------------------------------------------------
 check("mcp", "health", async () => {
   const { status, text } = await req(`${MCP}/health`);
