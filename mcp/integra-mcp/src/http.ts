@@ -89,6 +89,28 @@ const httpServer = createHttpServer(async (req, res) => {
   }
 
   const path = (req.url ?? "").split("?")[0];
+
+  // OAuth discovery gets an answer aimed at the person, not at the client.
+  //
+  // A user who picks an authentication mode other than "None" sends Claude off
+  // to look for OAuth metadata, and every one of those probes lands here. The
+  // generic reply — "Not found. MCP endpoint is /mcp" — is true, useless, and
+  // shown to them verbatim: it reads as a broken server address when the
+  // address was right and the auth mode was wrong. 404 is still the correct
+  // status, and the only honest one, since we genuinely do not serve OAuth;
+  // only the text changes, to name what to do instead.
+  if (path.startsWith("/.well-known/oauth") || path === "/register") {
+    return rpcError(
+      res,
+      404,
+      -32601,
+      "This server does not use OAuth. In the connector's settings set " +
+        "Authentication to 'None', then add a request header 'Authorization' " +
+        "with the value 'Bearer <your Integra API key>'. Keys are created at " +
+        "https://dashboard.integramarkets.app/account/api"
+    );
+  }
+
   if (path !== MCP_PATH) {
     return rpcError(res, 404, -32601, `Not found. MCP endpoint is ${MCP_PATH}`);
   }
