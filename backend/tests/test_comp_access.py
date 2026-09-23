@@ -15,19 +15,64 @@ silently not.
 from __future__ import annotations
 
 import pytest
+import requests
 
+from services import comp_access
 from services.comp_access import DEFAULT_COMP_TIER, comp_tier_for, is_comped
 from services.entitlement import resolve as resolve_entitlement
 from services.tier_enforcement import get_effective_tier
 
 UID = "11111111-2222-3333-4444-555555555555"
+STRANGER_UID = "99999999-8888-7777-6666-555555555555"
 EMAIL = "owner@example.com"
 
 
 @pytest.fixture(autouse=True)
 def _clear_env(monkeypatch):
-    for var in ("INTEGRA_COMP_EMAILS", "INTEGRA_COMP_USER_IDS", "INTEGRA_COMP_TIER"):
+    for var in (
+        "INTEGRA_COMP_EMAILS",
+        "INTEGRA_COMP_USER_IDS",
+        "INTEGRA_COMP_TIER",
+        # Cleared so a developer with real credentials exported does not have
+        # these tests make live admin calls against production.
+        "SUPABASE_URL",
+        "SUPABASE_SERVICE_ROLE_KEY",
+    ):
         monkeypatch.delenv(var, raising=False)
+    # The email lookup is memoised for 15 minutes; a cache surviving between
+    # tests would let one test's stub answer another's assertion.
+    comp_access._email_cache.clear()
+
+
+class _Boom:
+    """Marker for 'this call raises', used by the outage test."""
+
+
+class _Response:
+    def __init__(self, status_code, payload):
+        self.status_code = status_code
+        self._payload = payload
+
+    def json(self):
+        return self._payload
+
+
+def _stub_admin_lookup(monkeypatch, users):
+    """Point the GoTrue admin call at a dict. Returns the list of ids requested."""
+    monkeypatch.setenv("SUPABASE_URL", "https://example.supabase.co")
+    monkeypatch.setenv("SUPABASE_SERVICE_ROLE_KEY", "service-key")
+    comp_access._email_cache.clear()
+    calls = []
+
+    def _get(url, headers=None, timeout=None):
+        user_id = url.rsplit("/", 1)[-1]
+        calls.append(user_id)
+        if user_id not in users:
+            return _Response(404, None)
+        return _Response(200, {"id": user_id, "email": users[user_id]})
+
+    monkeypatch.setattr(requests, "get", _get)
+    return calls
 
 
 def test_nobody_is_comped_by_default():
@@ -124,13 +169,81 @@ def test_an_identifier_in_the_wrong_variable_still_works(monkeypatch):
     assert comp_tier_for(UID, None) == DEFAULT_COMP_TIER
 
 
-def test_api_key_requests_still_need_the_uuid(monkeypatch):
-    """The interchangeability is convenience, not magic.
+def test_an_email_grant_reaches_the_api_key_path(monkeypatch):
+    """The half-grant this module exists to prevent, closed.
 
-    An API-key request carries only api_keys.user_id. If the only listed
-    identifier is an email, that request cannot be comped by anything — which
-    is a real constraint, not a bug, and the reason both variables are
-    documented separately even though they are matched together.
+    An API-key request carries only api_keys.user_id. An email grant therefore
+    used to unlock the dashboard — which mints keys happily — and leave every
+    one of those keys answering 403, with nothing anywhere saying why. The
+    email behind the UUID is now looked up instead of demanded as a second
+    hand-pasted variable.
     """
     monkeypatch.setenv("INTEGRA_COMP_EMAILS", EMAIL)
+    _stub_admin_lookup(monkeypatch, {UID: EMAIL})
+
+    assert comp_tier_for(UID, None) == DEFAULT_COMP_TIER
+
+    ent = resolve_entitlement(None, UID)  # no email, as on the key path
+    assert ent.scopes, "a comped key with no scopes is a key that 403s"
+
+
+def test_the_lookup_is_not_a_second_grant(monkeypatch):
+    """Resolving an email must not comp an account whose email is not listed."""
+    monkeypatch.setenv("INTEGRA_COMP_EMAILS", EMAIL)
+    _stub_admin_lookup(monkeypatch, {STRANGER_UID: "stranger@else.io"})
+    assert comp_tier_for(STRANGER_UID, None) is None
+
+
+def test_no_service_key_means_no_lookup(monkeypatch):
+    """Without admin credentials the old constraint still holds, silently safe.
+
+    This is the deployment where only the UUID variable can comp a key, and it
+    must fail closed rather than raise or grant.
+    """
+    monkeypatch.setenv("INTEGRA_COMP_EMAILS", EMAIL)
+    monkeypatch.delenv("SUPABASE_SERVICE_ROLE_KEY", raising=False)
+    monkeypatch.setenv("SUPABASE_URL", "https://example.supabase.co")
+    comp_access._email_cache.clear()
     assert comp_tier_for(UID, None) is None
+
+
+def test_a_uuid_grant_costs_no_lookup(monkeypatch):
+    """The offline path stays offline — the admin call is the fallback, not the rule."""
+    monkeypatch.setenv("INTEGRA_COMP_USER_IDS", UID)
+    calls = _stub_admin_lookup(monkeypatch, {UID: EMAIL})
+    assert comp_tier_for(UID, None) == DEFAULT_COMP_TIER
+    assert calls == [], "a listed UUID must be decided before any network call"
+
+
+def test_a_failed_lookup_is_not_cached(monkeypatch):
+    """A transient outage must not pin 'not comped' for the whole TTL.
+
+    Caching a failure here reads to the user as a grant that was revoked and
+    came back on its own, which is far harder to diagnose than a slow request.
+    """
+    monkeypatch.setenv("INTEGRA_COMP_EMAILS", EMAIL)
+    monkeypatch.setenv("SUPABASE_URL", "https://example.supabase.co")
+    monkeypatch.setenv("SUPABASE_SERVICE_ROLE_KEY", "service-key")
+    comp_access._email_cache.clear()
+
+    outcomes = [_Boom(), _Response(200, {"email": EMAIL})]
+
+    def _get(url, headers=None, timeout=None):
+        outcome = outcomes.pop(0)
+        if isinstance(outcome, _Boom):
+            raise RuntimeError("connection reset")
+        return outcome
+
+    monkeypatch.setattr(requests, "get", _get)
+
+    assert comp_tier_for(UID, None) is None
+    assert comp_tier_for(UID, None) == DEFAULT_COMP_TIER
+
+
+def test_a_resolved_answer_is_cached(monkeypatch):
+    """Including a miss: a stranger's id must cost one admin call, not one per request."""
+    monkeypatch.setenv("INTEGRA_COMP_EMAILS", EMAIL)
+    calls = _stub_admin_lookup(monkeypatch, {STRANGER_UID: "stranger@else.io"})
+    for _ in range(3):
+        assert comp_tier_for(STRANGER_UID, None) is None
+    assert len(calls) == 1
