@@ -43,6 +43,15 @@ export const MCP_TOOLS: McpTool[] = [
     name: "market_brief",
     blurb: "sentiment + narratives + divergence + price in one call",
   },
+  {
+    name: "list_commodities",
+    blurb: "what is in the database — and the cheapest way to check a key works",
+  },
+  {
+    name: "get_sentiment_history",
+    blurb: "daily score, article counts and momentum over a range",
+    historyTier: true,
+  },
 ];
 
 /**
