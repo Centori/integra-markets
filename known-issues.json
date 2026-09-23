@@ -10,7 +10,7 @@
     "",
     "So each entry carries a deadline. scripts/verify-production.mjs reads this",
     "file: before `escalateAfterDays` an entry is a WARN, after it the run FAILS",
-    "and prints `nextAction`. The scheduled workflow then goes red — not because",
+    "and prints `nextAction`. The scheduled workflow then goes red \u2014 not because",
     "anything new broke, but because a decision is overdue.",
     "",
     "To silence an entry you either fix it and delete it, or change the deadline",
@@ -32,10 +32,11 @@
         "DNS: mcp -> kqhefzbr.up.railway.app, DNS_RECORD_STATUS_PROPAGATED",
         "CAA on integramarkets.app permits letsencrypt.org",
         "Port 80 reaches Railway (301 to https, x-railway-67 header)",
-        "Domain deleted and recreated once, 2026-09-08 — same result"
+        "Domain deleted and recreated once, 2026-09-08 \u2014 same result",
+        "2026-09-23 re-check: mcp resolves to 69.46.46.102 (Railway RLWY-HIKARI-01), api.integramarkets.app resolves to 69.46.46.122 the same way and HAS a cert; port 80 answers identically on both; domain still attached to integra-mcp"
       ],
       "nextAction": "Open a Railway support ticket. Quote project 18e783a9-f02d-4396-b49c-98a7a99bbc72, domain id d27eb5a5-008f-49f1-bfc4-1ada1be18a85, stuck in VALIDATING_OWNERSHIP since 2026-09-08 with DNS propagated. This is not fixable from our side.",
-      "workaround": "https://integra-mcp-production.up.railway.app/mcp — identical deployment, valid certificate, already what the dashboard hands out."
+      "workaround": "https://integra-mcp-production.up.railway.app/mcp \u2014 identical deployment, valid certificate, already what the dashboard hands out."
     },
     {
       "id": "mobile-lineage-split",
