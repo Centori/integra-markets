@@ -21,24 +21,6 @@
   ],
   "issues": [
     {
-      "id": "mcp-custom-domain-cert",
-      "summary": "mcp.integramarkets.app serves no valid TLS certificate",
-      "firstSeen": "2026-09-08",
-      "escalateAfterDays": 3,
-      "owner": "Railway support",
-      "impact": "Customers are given the Railway hostname instead of the branded one. The connector works; the address is ugly and not ours to keep.",
-      "symptom": "TLS handshake presents CN=*.up.railway.app; subjectAltName does not match. Railway API reports CERTIFICATE_STATUS_TYPE_VALIDATING_OWNERSHIP.",
-      "verifiedNotOurs": [
-        "DNS: mcp -> kqhefzbr.up.railway.app, DNS_RECORD_STATUS_PROPAGATED",
-        "CAA on integramarkets.app permits letsencrypt.org",
-        "Port 80 reaches Railway (301 to https, x-railway-67 header)",
-        "Domain deleted and recreated once, 2026-09-08 \u2014 same result",
-        "2026-09-23 re-check: mcp resolves to 69.46.46.102 (Railway RLWY-HIKARI-01), api.integramarkets.app resolves to 69.46.46.122 the same way and HAS a cert; port 80 answers identically on both; domain still attached to integra-mcp"
-      ],
-      "nextAction": "Open a Railway support ticket. Quote project 18e783a9-f02d-4396-b49c-98a7a99bbc72, domain id d27eb5a5-008f-49f1-bfc4-1ada1be18a85, stuck in VALIDATING_OWNERSHIP since 2026-09-08 with DNS propagated. This is not fixable from our side.",
-      "workaround": "https://integra-mcp-production.up.railway.app/mcp \u2014 identical deployment, valid certificate, already what the dashboard hands out."
-    },
-    {
       "id": "mobile-lineage-split",
       "summary": "The App Store app has never been built from main",
       "firstSeen": "2026-09-11",

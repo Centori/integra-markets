@@ -138,15 +138,31 @@ check("mcp", "does not advertise OAuth on 401", async () => {
   return wa ? `still sends WWW-Authenticate: ${wa}` : true;
 });
 
-// Tracked in known-issues.json, which gives it a deadline. See the
-// known-issues section at the bottom of this file.
-check("mcp", "custom domain certificate", async () => {
-  try {
-    await req(`${MCP_CUSTOM}/health`);
-    return true;
-  } catch {
-    return { warn: `${MCP_CUSTOM} not serving TLS — tracked as mcp-custom-domain-cert` };
+// Was a tracked known-issue for fifteen days: Railway never issued a
+// certificate, so this threw on the TLS handshake and the connector URL had to
+// be the Railway hostname. TLS is now terminated by Vercel in front of the same
+// Railway service (mcp-proxy/), and this is a hard check again — the branded
+// address is what customers are given, so it failing is an outage, not a wart.
+check("mcp", "custom domain serves MCP", async () => {
+  const { status, text } = await req(`${MCP_CUSTOM}/health`);
+  if (status !== 200) return `HTTP ${status}`;
+  // Proving TLS terminates is not enough: a proxy that answers /health from
+  // its own edge while dropping the POST body would pass that and serve
+  // nothing. Exchange real MCP over it.
+  const rpc = await req(`${MCP_CUSTOM}/mcp`, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      Accept: "application/json, text/event-stream",
+      Authorization: "Bearer verify-production-probe",
+    },
+    body: JSON.stringify({ jsonrpc: "2.0", id: 1, method: "tools/list" }),
+  });
+  if (rpc.status !== 200) return `tools/list over the custom domain -> ${rpc.status}`;
+  if (!rpc.text.includes("get_sentiment")) {
+    return "tools/list answered over the custom domain but advertised no tools";
   }
+  return JSON.parse(text).ok ? true : `health said ${text.slice(0, 80)}`;
 });
 
 // --- dashboard -----------------------------------------------------------
@@ -156,13 +172,20 @@ check("dashboard", "login renders", async () => {
 });
 
 // Greps the DEPLOYED bundle, not the source. A merge is not a deploy.
-check("dashboard", "connector page ships the working MCP URL", async () => {
+//
+// What this proves and what it does not: the page ships BOTH the advertised URL
+// and a documented fallback, and they are plain string constants in the same
+// chunk, so a grep cannot tell which one the copy button hands out. It catches
+// a stale deploy — a bundle that predates the branded address entirely — and
+// nothing finer. Swapping the two constants would keep this green, so read the
+// diff on ConnectClaude.tsx rather than trusting this line alone.
+check("dashboard", "connector bundle carries the branded MCP URL", async () => {
   const { text: html } = await req(`${DASHBOARD}/mcp`);
   const chunks = [...html.matchAll(/\/_next\/static\/chunks\/[\w./-]+\.js/g)].map((m) => m[0]);
   if (!chunks.length) return "no JS chunks found on /mcp";
   for (const c of [...new Set(chunks)]) {
     const { text } = await req(`${DASHBOARD}${c}`);
-    if (text.includes("integra-mcp-production.up.railway.app/mcp")) return true;
+    if (text.includes("mcp.integramarkets.app/mcp")) return true;
   }
   return "advertised MCP URL not found in any deployed chunk — dashboard is stale";
 });

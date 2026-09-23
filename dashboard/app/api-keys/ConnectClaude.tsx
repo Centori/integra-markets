@@ -25,31 +25,29 @@ import { MCP_TOOLS } from "@/lib/mcpTools";
  */
 
 /**
- * The address customers are given. Railway-issued, and the one that works.
+ * The address customers are given. Ours, and serving a valid certificate.
  *
- * mcp.integramarkets.app was primary here, and it does not serve TLS. DNS is
- * correct — it CNAMEs to kqhefzbr.up.railway.app — but Railway never completed
- * certificate issuance, so the edge answers with its own wildcard:
+ * This was the Railway hostname for fifteen days, because Railway never
+ * completed certificate issuance for mcp.integramarkets.app and every client
+ * rejects a handshake before a single byte of MCP is exchanged. A pretty
+ * hostname that cannot complete a handshake is worth less than an ugly one
+ * that can.
  *
- *     subject: CN=*.up.railway.app
- *     subjectAltName does not match host name mcp.integramarkets.app
- *
- * Every client rejects that before a single byte of MCP is exchanged, which is
- * the "Couldn't reach this address" a user hit while following these very
- * steps. A pretty hostname that cannot complete a handshake is worth less than
- * an ugly one that can, so the working address is what this page hands out
- * until the certificate issues.
+ * TLS is now terminated by Vercel — which already runs this zone's DNS and
+ * issues certificates for www and the dashboard without trouble — and every
+ * request is passed straight through to the same Railway service. See
+ * mcp-proxy/README.md for the whole arrangement and how to undo it.
  */
-const MCP_URL = "https://integra-mcp-production.up.railway.app/mcp";
+const MCP_URL = "https://mcp.integramarkets.app/mcp";
 
 /**
- * The custom domain, kept as the documented alternative rather than deleted.
+ * The origin, kept as the documented alternative rather than deleted.
  *
- * It is where this should end up, and the moment the certificate issues it
- * becomes a one-line swap back. Until then it is listed as the thing to try if
- * the address above ever stops working — not as the first thing to try.
+ * It is the same deployment answering, one hop earlier, so it is the thing to
+ * try if the proxy in front of it ever misbehaves — and the thing to compare
+ * against when deciding whether a fault is ours or Railway's.
  */
-const MCP_URL_FALLBACK = "https://mcp.integramarkets.app/mcp";
+const MCP_URL_FALLBACK = "https://integra-mcp-production.up.railway.app/mcp";
 
 /** Name Claude pre-fills into the connector dialog. */
 const CONNECTOR_NAME = "Integra Markets";
