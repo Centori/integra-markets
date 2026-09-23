@@ -41,6 +41,12 @@ import {
   findHistoricalAnalogs,
   findHistoricalAnalogsSchema,
 } from "./tools/brief.js";
+import {
+  getSentimentHistory,
+  getSentimentHistorySchema,
+  listCommodities,
+  listCommoditiesSchema,
+} from "./tools/history.js";
 
 export const SERVER_NAME = "integra-mcp";
 export const SERVER_VERSION = "0.2.0";
@@ -87,6 +93,20 @@ export const TOOLS: ToolDef[] = [
       "One-call briefing for a commodity: current sentiment, top narratives, key prediction-market divergences, and price context. Use this when the user wants a holistic snapshot.",
     schema: marketBriefSchema,
     handler: (c, a) => marketBrief(c, a),
+  },
+  {
+    name: "list_commodities",
+    description:
+      "List the commodities that have scored articles in the database. Call this first when unsure what a name maps to, or to check a key works — it is the cheapest authenticated call.",
+    schema: listCommoditiesSchema,
+    handler: (c) => listCommodities(c),
+  },
+  {
+    name: "get_sentiment_history",
+    description:
+      "Daily sentiment series for a commodity over the last N days: average score, article counts, and day-on-day momentum. Use this for 'how has X moved', trends and turning points — get_sentiment returns a single aggregate and cannot answer those.",
+    schema: getSentimentHistorySchema,
+    handler: (c, a) => getSentimentHistory(c, a),
   },
 ];
 
