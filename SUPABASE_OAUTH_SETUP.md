@@ -22,8 +22,19 @@ Client IDs (public, safe to reference):
 
 - **iOS**: `1039046627332-nk0jejccajfd9u63p5kas0l5ps53nlsq.apps.googleusercontent.com`
   — used natively via `@react-native-google-signin` + `signInWithIdToken`.
-- **Web**: `1039046627332-sb9etffag0j3a8ti34hevhrt2qp44qb5.apps.googleusercontent.com`
-  — used by Supabase's hosted OAuth flow (`signInWithOAuth`).
+- **Web**: `1039046627332-btsk2dvtdui7onof4tieaqvk3koq99fo.apps.googleusercontent.com`
+  — used by Supabase's hosted OAuth flow (`signInWithOAuth`), and the one
+  `NEXT_PUBLIC_GOOGLE_CLIENT_ID` must be set to.
+
+  This value was wrong here until 2026-09-23: it named
+  `...sb9etffag0j3a8ti34hevhrt2qp44qb5`, which is not the client the provider
+  is configured with. Authorizing a JavaScript origin on the wrong client
+  fails silently — GIS just falls back to the redirect — so read it from the
+  provider itself rather than from any document, this one included:
+
+      curl -s -o /dev/null -w '%{redirect_url}' \
+        'https://<project>.supabase.co/auth/v1/authorize?provider=google' \
+        | tr '&' '\n' | grep client_id
 
 ### Supabase dashboard (Authentication → Providers → Google)
 
