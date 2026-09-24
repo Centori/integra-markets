@@ -77,24 +77,94 @@ def _parse_iso(value: str, label: str) -> dt.datetime:
     return parsed
 
 
+# How far back "has data" looks. Long enough that a thinly covered commodity
+# still shows up, short enough that the answer describes the live product
+# rather than everything ever ingested.
+COMMODITY_WINDOW_DAYS = 30
+
+
 @router.get("/commodities")
 async def list_commodities(_auth: Dict[str, Any] = Depends(verify_api_key)) -> Dict[str, Any]:
-    """Return distinct commodities that have at least one scored document."""
+    """Commodities with scored articles in the last 30 days, busiest first.
+
+    THE BUG THIS REPLACES. The previous implementation asked for 10,000 rows of
+    entity_mentions with no ORDER BY and no time filter, then took the distinct
+    set in Python. Postgres may return any 10,000 rows for such a query, and it
+    returned a block from the archive backfill: this endpoint reported that
+    `bitcoin` was the only commodity with data, while the same table held 22 oil
+    mentions, 3 gold and 1 copper from the previous 24 hours alone.
+
+    A paid endpoint was telling customers the product was empty, and the MCP
+    tool built on it was repeating that to their assistant. DISTINCT now happens
+    in the database, where it is exact rather than a sample.
+
+    Counts ride along because they were free once the grouping existed, and they
+    answer the question behind the question: not "what can I ask about" but
+    "what is worth asking about".
+    """
     supabase = _supabase()
+    rows: List[Dict[str, Any]] = []
     try:
         rows = (
-            supabase.table("entity_mentions")
-            .select("entity")
-            .eq("entity_type", "commodity")
-            .limit(10000)
-            .execute()
+            supabase.rpc(
+                "commodities_with_data", {"p_days": COMMODITY_WINDOW_DAYS}
+            ).execute()
         ).data or []
     except Exception as exc:  # noqa: BLE001
-        logger.warning("list_commodities query failed: %s", exc)
-        rows = []
+        # The function is added by supabase/migrations/20260924_commodities_with_data.sql.
+        # Until that is applied this falls back to a scan that is ORDERED and
+        # WINDOWED — still a sample rather than a true distinct, but taken from
+        # the most recent mentions, so a commodity that is active cannot be
+        # missed the way it was before.
+        logger.warning(
+            "commodities_with_data RPC unavailable (%s); falling back to a bounded scan. "
+            "Apply supabase/migrations/20260924_commodities_with_data.sql",
+            exc,
+        )
+        since = (
+            dt.datetime.now(dt.timezone.utc) - dt.timedelta(days=COMMODITY_WINDOW_DAYS)
+        ).isoformat()
+        try:
+            scanned = (
+                supabase.table("entity_mentions")
+                .select("entity, published_at")
+                .eq("entity_type", "commodity")
+                .gte("published_at", since)
+                .order("published_at", desc=True)
+                .limit(20000)
+                .execute()
+            ).data or []
+        except Exception as scan_exc:  # noqa: BLE001
+            logger.warning("list_commodities fallback scan failed: %s", scan_exc)
+            scanned = []
+        counts: Dict[str, int] = {}
+        for row in scanned:
+            name = (row.get("entity") or "").strip().lower()
+            if name:
+                counts[name] = counts.get(name, 0) + 1
+        rows = [
+            {"entity": name, "article_count": count}
+            for name, count in sorted(counts.items(), key=lambda kv: (-kv[1], kv[0]))
+        ]
 
-    distinct = sorted({(r.get("entity") or "").strip().lower() for r in rows if r.get("entity")})
-    return {"commodities": [c for c in distinct if c]}
+    commodities = []
+    for row in rows:
+        name = (row.get("entity") or "").strip().lower()
+        if not name:
+            continue
+        commodities.append({
+            "commodity": name,
+            "article_count": row.get("article_count"),
+            "last_seen": row.get("last_seen"),
+        })
+
+    return {
+        # A plain list of names, kept because it is what the field was before and
+        # what every existing caller reads.
+        "commodities": [c["commodity"] for c in commodities],
+        "window_days": COMMODITY_WINDOW_DAYS,
+        "details": commodities,
+    }
 
 
 @router.get("/sentiment/{commodity}/now")
