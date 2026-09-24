@@ -2,7 +2,9 @@ import { z } from "zod";
 import type { IntegraClient } from "../client.js";
 
 export const findEmergingNarrativesSchema = {
-  commodity: z.string().describe("Commodity ticker (e.g., 'brent', 'wti', 'ng', 'copper', 'wheat')."),
+  commodity: z.string().describe(
+    "Canonical commodity name, not a market ticker: 'oil', 'gas', 'gold', 'copper', 'wheat', 'corn', 'silver', 'uranium', 'lithium', 'freight', 'bitcoin'. Tickers like 'brent', 'wti' or 'ng' match nothing — the store is keyed by the name the sentiment engine normalises to. Call list_commodities when unsure."
+  ),
   lookback: z.enum(["24h", "7d", "30d"]).default("7d").describe("Lookback window."),
 };
 

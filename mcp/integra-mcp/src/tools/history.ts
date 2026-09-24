@@ -38,7 +38,9 @@ export async function listCommodities(client: IntegraClient) {
 export const getSentimentHistorySchema = {
   commodity: z
     .string()
-    .describe("Commodity ticker or name (e.g., 'brent', 'wti', 'ng', 'copper', 'gold', 'wheat')."),
+    .describe(
+      "Canonical commodity name, not a market ticker: 'oil', 'gas', 'gold', 'copper', 'wheat', 'corn', 'silver', 'uranium', 'lithium', 'freight', 'bitcoin'. Tickers like 'brent', 'wti' or 'ng' match nothing — the store is keyed by the name the sentiment engine normalises to. Call list_commodities when unsure."
+    ),
   days: z
     .number()
     .int()

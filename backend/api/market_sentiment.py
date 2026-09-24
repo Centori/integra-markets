@@ -48,9 +48,16 @@ logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/api/sentiment", tags=["market-sentiment"])
 
 # Display names match the legacy payload so nothing downstream has to remap.
+# The left value is queried against entity_mentions.entity and MUST be a name
+# the sentiment engine normalises TO, not one it normalises FROM. "natural gas"
+# was the second kind: _COMMODITY_ALIASES maps it to "gas", so nothing was ever
+# stored under it and NAT GAS reported sample_size 0 with a NEUTRAL label on the
+# dashboard and in the app, every day, for as long as the tile has existed. It
+# looked like a quiet market rather than a query that could not match.
+# tests/test_tracked_commodities_are_canonical.py now fails if this drifts again.
 _TRACKED = (
     ("oil", "OIL"),
-    ("natural gas", "NAT GAS"),
+    ("gas", "NAT GAS"),
     ("wheat", "WHEAT"),
     ("gold", "GOLD"),
     ("corn", "CORN"),
