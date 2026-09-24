@@ -116,6 +116,13 @@ async def list_commodities(_auth: Dict[str, Any] = Depends(verify_api_key)) -> D
         # WINDOWED — still a sample rather than a true distinct, but taken from
         # the most recent mentions, so a commodity that is active cannot be
         # missed the way it was before.
+        #
+        # The limit below is not the real cap: PostgREST enforces its own
+        # max-rows, measured at 1000 on this project, so `20000` is only a
+        # statement of intent. That cap is also why the original query was worse
+        # than it looked — it took 1000 arbitrary rows, not 10,000. Against 30
+        # days of live data the 1000 most recent mentions still surfaced all 17
+        # commodities, but the guarantee comes from the RPC, not from here.
         logger.warning(
             "commodities_with_data RPC unavailable (%s); falling back to a bounded scan. "
             "Apply supabase/migrations/20260924_commodities_with_data.sql",
