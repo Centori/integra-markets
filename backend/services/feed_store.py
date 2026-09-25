@@ -174,7 +174,11 @@ def _drivers(row: Dict[str, Any]) -> List[Dict[str, Any]]:
     assert a precision the pipeline does not have. Leading terms rank higher
     because `extract_keywords` orders commodities first.
     """
-    terms = _driver_terms(row)
+    # Prefer the contextual drivers the scorer now writes — "Price action down
+    # · 'Gold slips'" rather than "gold". They are what the engine actually
+    # read, and a reader can check them against the headline. Rows written
+    # before that existed, and the whole archive, still carry only `keywords`.
+    terms = row.get("key_drivers") or _driver_terms(row)
     if not terms:
         return []
     step = 0.5 / max(len(terms), 1)
