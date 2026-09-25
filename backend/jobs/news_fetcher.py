@@ -49,9 +49,17 @@ async def _fetch_and_archive() -> Dict[str, Any]:
 
     articles: List[Dict[str, Any]] = []
     async with NewsDataSources() as ns:
+        # This tuple is the coverage policy. It ran five fetchers, three of
+        # which are energy-only by construction (EIA, IEA, OilPrice), and the
+        # result was a platform where oil, gas and gold are 86% of every
+        # commodity mention ever scored and wheat is 0.6%. Agriculture and base
+        # metals had no route in from any source.
         for fetcher_name in (
             "fetch_reuters_commodities",
             "fetch_yahoo_finance_commodities",
+            "fetch_agriculture_news",
+            "fetch_metals_news",
+            "fetch_ngi_news",
             "fetch_eia_reports",
             "fetch_iea_news",
             "fetch_oilprice_news",
@@ -65,6 +73,15 @@ async def _fetch_and_archive() -> Dict[str, Any]:
                     articles.extend(result)
             except Exception as exc:  # noqa: BLE001
                 logger.warning("news_fetcher: %s failed: %s", fetcher_name, exc)
+                continue
+            # A fetcher that returns nothing is reported by name. Silence is how
+            # fetch_iea_news ran for the platform's whole history contributing
+            # zero documents: it raised nothing, logged nothing, and returned [].
+            if isinstance(result, list) and not result:
+                logger.error(
+                    "news_fetcher: %s returned 0 articles — treat as a broken "
+                    "source, not a quiet news day", fetcher_name,
+                )
 
     if not articles:
         return {"articles_observed": 0}
