@@ -199,15 +199,128 @@ class NewsDataSources:
             raise last_err
         raise Exception(f"Failed to fetch {url} after {retries} retries")
 
+    # --- Google News as a feed transport -----------------------------------
+    #
+    # Four of the publishers this platform wants either never had an RSS feed or
+    # retired one: iea.org/news is an HTML page (feedparser found zero entries in
+    # it every run since it was added), kitco.com/rss/headlines/*.xml answers 404,
+    # and mining.com and miningweekly.com answer 403 to a plain client. Each
+    # failure was silent — the fetcher loop logs a warning and moves on — so
+    # `fetch_iea_news` contributed 0 documents in the platform's entire history
+    # and nobody noticed.
+    #
+    # Google News RSS reaches all of them with one transport that is already
+    # proven here (the Reuters fetcher has used it for months) and whose redirect
+    # URLs are already resolved at ingest by services/gnews_resolve.py.
+    #
+    # `min_items` exists because of the failure above: a feed that parses to
+    # nothing is reported as a problem rather than returning [] like a quiet news
+    # day. That is the difference between "no news" and "no feed".
+    GOOGLE_NEWS_RSS = "https://news.google.com/rss/search"
+
+    async def _fetch_google_news(
+        self,
+        query: str,
+        source: str,
+        category: str,
+        limit: int = 20,
+        min_items: int = 1,
+    ) -> List[Dict]:
+        """One Google News query, normalised to this module's article shape."""
+        from urllib.parse import urlencode
+
+        url = f"{self.GOOGLE_NEWS_RSS}?" + urlencode(
+            {"q": query, "hl": "en-US", "gl": "US", "ceid": "US:en"}
+        )
+        try:
+            content = await self._get_text_with_retry(url)
+        except Exception as exc:  # noqa: BLE001
+            logger.error("Error fetching %s via Google News: %s", source, exc)
+            source_tracker.update_status(source, success=False, error=str(exc))
+            return []
+
+        feed = feedparser.parse(content)
+        entries = list(feed.entries)[:limit]
+        if len(entries) < min_items:
+            # Loud on purpose. This is the shape every dead feed here took.
+            logger.error(
+                "%s returned %d items for %r — expected at least %d. The query or "
+                "the transport is broken, not the news flow.",
+                source, len(entries), query, min_items,
+            )
+            source_tracker.update_status(source, success=False, error="feed parsed to no items")
+            return []
+
+        articles = [
+            {
+                "source": source,
+                "title": entry.title,
+                "summary": getattr(entry, "summary", ""),
+                "image_url": extract_image_url(entry),
+                "url": entry.link,
+                "published": self._parse_date(getattr(entry, "published", "")),
+                "category": category,
+            }
+            for entry in entries
+        ]
+        logger.info("Fetched %d %s articles", len(articles), source)
+        source_tracker.update_status(source, success=True)
+        return articles
+
+    # Named so the gap is obvious at a glance. Agriculture and base metals were
+    # absent from every source this platform had — 785 wheat mentions all-time
+    # against 55,134 for oil — because the only agricultural word anywhere in the
+    # configuration was "wheat", inside the Reuters query string.
+    async def fetch_agriculture_news(self) -> List[Dict]:
+        """Grains, softs and farm inputs. Previously not covered by any source."""
+        topical = await self._fetch_google_news(
+            query=(
+                "(corn OR soybeans OR wheat OR \"soybean meal\" OR fertilizer OR urea OR potash) "
+                "(USDA OR harvest OR crop OR export OR acreage OR planting OR yield)"
+            ),
+            source="Agriculture Wire",
+            category="agriculture",
+            limit=25,
+        )
+        trade_press = await self._fetch_google_news(
+            query="site:agriculture.com OR site:farmprogress.com OR site:agweb.com",
+            source="Agriculture Trade Press",
+            category="agriculture",
+            limit=15,
+        )
+        return topical + trade_press
+
+    async def fetch_metals_news(self) -> List[Dict]:
+        """Precious and base metals.
+
+        Replaces fetch_kitco_news, whose three configured RSS URLs all answer
+        404. Kitco is still the publisher; only the transport changed.
+        """
+        return await self._fetch_google_news(
+            query="site:kitco.com OR site:mining.com OR site:miningweekly.com",
+            source="Metals Wire",
+            category="metals",
+            limit=25,
+        )
+
     async def fetch_reuters_commodities(self) -> List[Dict]:
         """Fetch Reuters commodities news via RSS feed"""
         try:
             # Reuters does not expose a stable free commodities RSS feed here, so use
             # a Google News RSS query constrained to Reuters commodity coverage.
+            # The commodity list here WAS the platform's coverage policy, and it
+            # named four things. Everything absent from it was absent from the
+            # product: corn, soybeans, copper, silver, iron ore, lithium,
+            # uranium and fertilizer had no route in from any source at all.
             url = (
                 "https://news.google.com/rss/search?"
-                "q=site%3Areuters.com%20(commodities%20OR%20oil%20OR%20gold%20OR%20wheat%20OR%20gas)"
-                "&hl=en-US&gl=US&ceid=US:en"
+                "q=site%3Areuters.com%20("
+                "commodities%20OR%20oil%20OR%20gas%20OR%20LNG%20OR%20diesel%20OR%20"
+                "gold%20OR%20silver%20OR%20copper%20OR%20aluminium%20OR%20nickel%20OR%20"
+                "%22iron%20ore%22%20OR%20lithium%20OR%20uranium%20OR%20"
+                "wheat%20OR%20corn%20OR%20soybeans%20OR%20sugar%20OR%20coffee%20OR%20cocoa%20OR%20"
+                "cotton%20OR%20fertilizer%20OR%20freight"
+                ")&hl=en-US&gl=US&ceid=US:en"
             )
             
             try:
@@ -235,12 +348,22 @@ class NewsDataSources:
             feed = feedparser.parse(content)
             
             articles = []
-            for entry in feed.entries[:10]:  # Get latest 10 articles
+            for entry in feed.entries[:30]:  # Widened query, widened intake
                 # Filter for commodity-related keywords
                 title = entry.title.lower()
                 summary = getattr(entry, 'summary', '').lower()
                 
-                commodity_keywords = ['oil', 'gas', 'gold', 'silver', 'copper', 'wheat', 'corn', 'commodity', 'energy', 'metal']
+                # Widened with the query above. A filter narrower than the
+                # search is a second, invisible coverage policy: the query
+                # would fetch soybeans and this list would silently drop them.
+                commodity_keywords = [
+                    'oil', 'gas', 'lng', 'diesel', 'fuel', 'energy',
+                    'gold', 'silver', 'copper', 'aluminium', 'aluminum', 'nickel',
+                    'iron ore', 'lithium', 'uranium', 'metal', 'mining',
+                    'wheat', 'corn', 'soybean', 'grain', 'sugar', 'coffee', 'cocoa',
+                    'cotton', 'fertilizer', 'potash', 'urea', 'crop', 'harvest',
+                    'commodity', 'commodities', 'freight', 'shipping',
+                ]
                 if any(keyword in title or keyword in summary for keyword in commodity_keywords):
                     articles.append({
                         'source': 'Reuters',
@@ -390,38 +513,24 @@ class NewsDataSources:
             return []
 
     async def fetch_iea_news(self) -> List[Dict]:
-        """Fetch International Energy Agency news"""
-        try:
-            # IEA news feed
-            url = "https://www.iea.org/news"
-            
-            try:
-                content = await self._get_text_with_retry(url)
-            except Exception as e:
-                logger.error(f"Error fetching IEA news: {e}")
-                return []
+        """IEA coverage, via Google News.
 
-            feed = feedparser.parse(content)
-            
-            articles = []
-            for entry in feed.entries[:8]:
-                articles.append({
-                    'source': 'IEA',
-                    'title': entry.title,
-                    'summary': getattr(entry, 'summary', ''),
-                    'image_url': extract_image_url(entry),
-                    'url': entry.link,
-                    'published': self._parse_date(entry.published),
-                    'category': 'energy_policy'
-                })
-            
-            logger.info(f"Fetched {len(articles)} IEA articles")
-            return articles
-                    
-            
-        except Exception as e:
-            logger.error(f"Error fetching IEA news: {e}")
-            return []
+        WAS: feedparser.parse() over https://www.iea.org/news, which is an HTML
+        page and has never been an RSS feed. feedparser returns zero entries for
+        HTML without raising, the loop logged nothing of consequence, and this
+        fetcher contributed 0 documents across the platform's entire history —
+        confirmed against ~7,000 sampled documents, live and archived, in which
+        no IEA source label appears at all.
+
+        Kept rather than deleted because the IEA is worth having; only the
+        transport was wrong.
+        """
+        return await self._fetch_google_news(
+            query="site:iea.org",
+            source="IEA",
+            category="energy_policy",
+            limit=12,
+        )
 
     async def fetch_bloomberg_commodities(self) -> List[Dict]:
         """Fetch Bloomberg commodities news via alternative sources"""
@@ -650,49 +759,14 @@ class NewsDataSources:
             return []
 
     async def fetch_kitco_news(self) -> List[Dict]:
-        """Fetch Kitco metals news via RSS"""
-        try:
-            urls = [
-                "https://www.kitco.com/rss/headlines/gold.xml",
-                "https://www.kitco.com/rss/headlines/silver.xml",
-                "https://www.kitco.com/rss/headlines/metals.xml"
-            ]
-            
-            all_articles = []
-            for url in urls:
-                try:
-                    content = await self._get_text_with_retry(url)
-                    feed = feedparser.parse(content)
-                    
-                    for entry in feed.entries[:5]:  # Top 5 from each feed
-                        # Determine category from URL
-                        if 'gold' in url:
-                            category = 'gold'
-                        elif 'silver' in url:
-                            category = 'silver'
-                        else:
-                            category = 'metals'
-                            
-                        all_articles.append({
-                            'source': 'Kitco News',
-                            'title': entry.title,
-                            'summary': getattr(entry, 'summary', ''),
-                            'image_url': extract_image_url(entry),
-                            'url': entry.link,
-                            'published': self._parse_date(entry.published),
-                            'category': category
-                        })
-                except Exception as e:
-                    logger.warning(f"Error fetching Kitco feed {url}: {e}")
-                    continue
-            
-            logger.info(f"Fetched {len(all_articles)} Kitco articles")
-            source_tracker.update_status('Kitco', success=True)
-            return all_articles
+        """Deprecated alias for fetch_metals_news.
 
-        except Exception as e:
-            logger.error(f"Error fetching Kitco news: {e}")
-            return []
+        The three URLs this used — kitco.com/rss/headlines/{gold,silver,metals}.xml
+        — all answer 404. Verified 2026-09-25. Kitco is still covered, through
+        fetch_metals_news; this name is kept only so nothing that calls it breaks,
+        and it now reaches a working transport instead of returning [].
+        """
+        return await self.fetch_metals_news()
 
     async def fetch_metal_bulletin_news(self) -> List[Dict]:
         """Fetch Metal Bulletin news via RSS"""
