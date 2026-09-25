@@ -253,8 +253,16 @@ _SIGNAL_WEIGHTS: Dict[str, float] = {
     # Industrial metals and the newly covered markets
     "Mine supply disruption": 0.9,
     "Mine supply growth": 0.9,
-    "Exchange stock draw": 0.8,
-    "Exchange stock build": 0.8,
+    # 0.8 put these BELOW SENTIMENT_RULE_DOMINANCE_WEIGHT, so a reported
+    # inventory move never governed the reading: "Copper inventories rose
+    # sharply at LME warehouses" fired the bearish rule and still scored
+    # NEUTRAL, because tone was allowed to argue with it. The grain equivalent
+    # — "Stocks tightening" / "Stocks building" — has always been 0.9 for the
+    # same kind of statement. Exchange stocks are daily observed warehouse
+    # data and grain stocks are a periodic official estimate, so if anything
+    # the metals version is the more direct evidence. Aligned.
+    "Exchange stock draw": 0.9,
+    "Exchange stock build": 0.9,
     "Concentrate tightness": 0.7,
     "Concentrate surplus": 0.7,
     "China stimulus": 0.7,
@@ -339,11 +347,48 @@ def signal_weight(signal: str) -> float:
 # So the gap is tempered — any characters EXCEPT ones that start a quantity
 # noun. The price may extend, ease or edge its way to the verb; inventories,
 # stocks, output and yields may not stand in for it.
-_NOT_A_QUANTITY = (
-    r"(?:(?!\b(?:inventor|stock|stockpile|carryout|carry-out|production|output|"
+# Words that must not appear between a price subject and its verb.
+#
+# QUANTITY nouns, because "copper inventories rose" is a supply statement and
+# not a price one.
+_QUANTITY_NOUNS = (
+    r"inventor|stock|stockpile|carryout|carry-out|production|output|"
     r"supply|supplies|export|import|reserve|storage|yield|acreage|harvest|"
-    r"capacity|volume|shipment|cargo)\w*)[\s\S]){0,28}"
+    r"capacity|volume|shipment|cargo"
 )
+
+# The verbs of the OPPOSING direction, which is the harder lesson.
+#
+# "Gold slips as rising oil prices, Treasury yields dent appeal" scored BULLISH.
+# The subject was right — gold — and the gap then carried the match over the
+# actual predicate, "slips", to reach "rising" nine characters later. A gap wide
+# enough to be useful is wide enough to skip the word that answers the question,
+# and the first directional verb after the subject is the one that governs it.
+#
+# So each direction's gap forbids the other's verbs. The pattern can still reach
+# across "prices" or "futures", and can no longer reach across "fell".
+_PRICE_UP_VERBS = (
+    r"surg\w+|soar\w*|jump\w*|rall\w+|climb\w*|spike\w*|rose|ris\w*|gain\w*|"
+    r"hit\w*|top\w*|highest|record high"
+)
+# slip/ease/retreat/soften/dip/pare were absent entirely, which is why "Gold
+# slips" had no down rule to fire even before the gap carried it upward.
+# Spelled out rather than stemmed where a stem would over-match: `eas\w+` also
+# matches "east", and `dip\w*` matches "diplomacy".
+_PRICE_DOWN_VERBS = (
+    r"slump\w*|plunge\w*|tumbl\w+|slid\w*|slip\w*|sank|sink\w*|fall\w*|fell|"
+    r"drop\w*|declin\w+|retreat\w*|eased|eases|easing|soften\w*|dipped|dips|"
+    r"dipping|pared|pares|paring|shed|lowest|record low"
+)
+
+
+def _price_gap(opposing_verbs: str) -> str:
+    """Up to 28 characters that contain neither a quantity noun nor a reversal."""
+    return r"(?:(?!\b(?:" + _QUANTITY_NOUNS + r"|" + opposing_verbs + r")\w*)[\s\S]){0,28}"
+
+
+# Kept for the rules that only need the quantity guard.
+_NOT_A_QUANTITY = r"(?:(?!\b(?:" + _QUANTITY_NOUNS + r")\w*)[\s\S]){0,28}"
 
 
 
@@ -404,14 +449,14 @@ _CURVE_RULES: Dict[str, List[Dict[str, str]]] = {
                 # Mount" scored NEUTRAL because the only rule that fired was the
                 # war risk, and the word "surge" — the actual answer — was
                 # visible to VADER only, which read the sentence as fearful.
-                {"pattern": _PRICE_SUBJECT + r"(?:\s+(?:price|prices|future|futures|spot|contract|contracts|benchmark)s?)?" + _NOT_A_QUANTITY + r"(surg\w+|soar\w*|jump\w*|rall\w+|climb\w*|spike\w*|rose|ris\w*|gain\w*|hit\w*|top\w*|highest|record high)", "signal": "Price action up"},
+                {"pattern": _PRICE_SUBJECT + r"(?:\s+(?:price|prices|future|futures|spot|contract|contracts|benchmark)s?)?" + _price_gap(_PRICE_DOWN_VERBS) + r"(" + _PRICE_UP_VERBS + r")", "signal": "Price action up"},
         {"pattern": r"(prompt|time|front)[- ]spread\w*.{0,24}(widen\w*|strengthen\w*|firm\w*)", "signal": "Prompt spread firming"},
         {"pattern": r"curve.{0,24}(flip\w*|mov\w+).{0,16}backwardat\w+", "signal": "Backwardation"},
     ],
     "bearish": [
         {"pattern": r"contango", "signal": "Contango"},
                 # Mirror of Price action up. _MIRROR_PAIRS asserts equal weight.
-                {"pattern": _PRICE_SUBJECT + r"(?:\s+(?:price|prices|future|futures|spot|contract|contracts|benchmark)s?)?" + _NOT_A_QUANTITY + r"(slump\w*|plunge\w*|tumbl\w+|slid\w*|sank|sink\w*|fall\w*|fell|drop\w*|declin\w+|lowest|record low)", "signal": "Price action down"},
+                {"pattern": _PRICE_SUBJECT + r"(?:\s+(?:price|prices|future|futures|spot|contract|contracts|benchmark)s?)?" + _price_gap(_PRICE_UP_VERBS) + r"(" + _PRICE_DOWN_VERBS + r")", "signal": "Price action down"},
         {"pattern": r"(floating storage|storage economics|carry trade)", "signal": "Storage economics"},
         {"pattern": r"(prompt|time|front)[- ]spread\w*.{0,24}(collaps\w+|weaken\w*|narrow\w*)", "signal": "Prompt spread weakening"},
     ],
@@ -720,13 +765,27 @@ def get_commodity_rulebook() -> Dict[str, Dict[str, List[Dict[str, str]]]]:
         "corn": {
             "bullish": [
                 {"pattern": r"(drought|heatwave|crop stress|yield loss)", "signal": "Crop stress"},
-                {"pattern": r"(ethanol demand|export sales).{0,18}(ris\w*|rose|strong\w*|strengthen\w*)", "signal": "Demand support"},
+                # "export shipments" and "export inspections" are the USDA's own
+                # weekly vocabulary and appear in headlines far more often than
+                # "export sales"; the bearish mirror already knew "inspections".
+                {"pattern": r"(ethanol demand|export sales?|export shipments?|export inspections?|export demand)"
+                            r".{0,24}(ris\w*|rose|strong\w*|strengthen\w*|robust|brisk|remain\w* strong)",
+                 "signal": "Demand support"},
                 {"pattern": r"(ending stocks?|carryout|stocks?[- ]to[- ]use|grain stocks?).{0,26}(fall\w*|fell|drop\w*|declin\w+|tighten\w*|below|cut\w*)", "signal": "Stocks tightening"},
                 {"pattern": r"(wasde|usda).{0,30}(cut\w*|lower\w*|reduc\w+).{0,20}(yield|production|stocks?|acreage)", "signal": "WASDE downgrade"},
                 {"pattern": r"(crop conditions?|good[- ]to[- ]excellent|good/excellent).{0,24}(fall\w*|fell|drop\w*|declin\w+|deteriorat\w+)", "signal": "Crop conditions deteriorating"},
             ],
             "bearish": [
-                {"pattern": r"(record crop|strong\w*|strengthen\w* yield|ample supply)", "signal": "Ample supply"},
+                # `strong\w*` sat here unanchored, so ANY "strong" in the
+                # sentence meant ample supply: "Corn Bulls Flock Back in as
+                # Export Shipments Remain Strong" scored BEARISH on the word
+                # "Strong" alone, while strong exports are demand and bullish.
+                # Bound to the nouns that make it a supply statement.
+                {"pattern": r"(record\s+(?:\w+\s+){0,2}crops?|ample supply|"
+                            r"(?:crop|harvest|yield|production|output|supply|supplies)\w*"
+                            r"(?:\s+\w+){0,2}\s+strong\w*|"
+                            r"strong\w*(?:\s+\w+){0,2}\s+(?:crop|harvest|yield|production|output|supply|supplies)|"
+                            r"strengthen\w* yield)", "signal": "Ample supply"},
                 {"pattern": r"(rainfall|weather).{0,18}(improv\w+|favorable)", "signal": "Improving crop conditions"},
                 {"pattern": r"(ending stocks?|carryout|stocks?[- ]to[- ]use|grain stocks?).{0,26}(ris\w*|rose|build\w*|built|increas\w+|above|ample|raise\w*)", "signal": "Stocks building"},
                 {"pattern": r"(wasde|usda).{0,30}(rais\w+|increas\w+|higher).{0,20}(yield|production|stocks?|acreage)", "signal": "WASDE upgrade"},
@@ -763,13 +822,28 @@ def get_commodity_rulebook() -> Dict[str, Dict[str, List[Dict[str, str]]]]:
         "copper": {
             "bullish": [
                 {"pattern": r"(mine|mining|smelter).{0,30}(strike|halt\w*\w*|disrupt\w+|landslide|outage|force majeure)", "signal": "Mine supply disruption"},
-                {"pattern": r"(lme|shfe|comex|exchange).{0,26}(stocks?|inventor\w+).{0,20}(fall\w*|fell|drop\w*|draw\w*|drew|declin\w+|low)", "signal": "Exchange stock draw"},
+                # The exchange name had to come FIRST, so "Copper inventories
+                # rose sharply at LME warehouses" matched nothing and fell
+                # through to tone — the failure mode this rulebook exists to
+                # prevent. `inventor`/`stockpile` are unambiguous and no longer
+                # need the qualifier; bare `stocks` still does, because "Copper
+                # Stocks Sink as Tariff Uncertainty Spooks Traders" is a real
+                # headline about mining EQUITIES, and reading it as an inventory
+                # draw would score a selloff as bullish.
+                {"pattern": r"(?:(?:lme|shfe|comex|exchange|warehouse)\w*.{0,26}stocks?|"
+                            r"(?:inventor\w+|stockpiles?))"
+                            r".{0,26}(fall\w*|fell|drop\w*|draw\w*|drew|declin\w+|slid\w*|"
+                            r"lowest|three-year low|multi-year low|low)", "signal": "Exchange stock draw"},
                 {"pattern": r"(grid|electrification|ev|data cent\w+|renewable).{0,26}(demand|build\w*|built[- ]?out|investment)", "signal": "Electrification demand"},
                 {"pattern": r"(treatment charge|tc/rc|spot tc).{0,24}(fall\w*|fell|drop\w*|collaps\w+|negative)", "signal": "Concentrate tightness"},
                 {"pattern": r"(china|chinese).{0,24}(stimulus|infrastructure|property support)", "signal": "China stimulus"},
             ],
             "bearish": [
-                {"pattern": r"(lme|shfe|comex|exchange).{0,26}(stocks?|inventor\w+).{0,20}(ris\w*|rose|build\w*|built|surge\w*|surging|climb\w*)", "signal": "Exchange stock build"},
+                # Mirror of the draw rule. _MIRROR_PAIRS asserts equal weight.
+                {"pattern": r"(?:(?:lme|shfe|comex|exchange|warehouse)\w*.{0,26}stocks?|"
+                            r"(?:inventor\w+|stockpiles?))"
+                            r".{0,26}(ris\w*|rose|build\w*|built|surge\w*|surging|climb\w*|"
+                            r"swell\w*|jump\w*|highest)", "signal": "Exchange stock build"},
                 {"pattern": r"(mine|smelter).{0,26}(expansion|ramp[- ]?up|restart\w*|new supply)", "signal": "Mine supply growth"},
                 {"pattern": r"(china|chinese).{0,26}(pmi|property|construction).{0,20}(weak\w*|contract\w+|slump|fall\w*|fell)", "signal": "China demand weakness"},
                 {"pattern": r"(treatment charge|tc/rc).{0,24}(ris\w*|rose|increas\w+|widen)", "signal": "Concentrate surplus"},
