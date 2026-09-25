@@ -633,6 +633,29 @@ def get_commodity_rulebook() -> Dict[str, Dict[str, List[Dict[str, str]]]]:
                 # tone alone and came out bearish for crude.
                 {"pattern": r"(hormuz|suez|bab el[- ]?mandeb|malacca|bosphorus|dardanelles|panama canal|red sea|strait|chokepoint).{0,44}(slump\w*|fall\w*|fell|drop\w*|plunge\w*|halt\w*|clos\w+|block\w*|disrupt\w*|divert\w*|avoid\w*|reroute\w*|suspend\w*|down \d)", "signal": "Chokepoint disruption"},
                 {"pattern": r"(traffic|transit\w*|flow\w*|shipment\w*|voyage\w*|passage).{0,30}(hormuz|suez|bab el[- ]?mandeb|malacca|red sea|strait|canal).{0,30}(slump\w*|fall\w*|fell|drop\w*|plunge\w*|halt\w*|disrupt\w*|down \d)", "signal": "Chokepoint disruption"},
+                # A closed waterway is usually reported as a MEASUREMENT, not
+                # as the word "disruption". Both of these ran on the live feed
+                # during the Hormuz crisis and fired nothing:
+                #
+                #   "Hormuz Traffic Running 80% Below Its 10-Day Average"
+                #   "Just One Commodity Vessel Left the Strait of Hormuz"
+                #
+                # The rules above want a disruption verb adjacent to the place
+                # name. Tanker-tracking copy states the shortfall in numbers
+                # instead, which is the more precise statement and the one the
+                # market actually trades.
+                {"pattern": r"(hormuz|suez|bab el[- ]?mandeb|malacca|bosphorus|dardanelles|panama canal|red sea|strait|chokepoint)"
+                            r".{0,40}(traffic|transit\w*|flow\w*|shipment\w*|vessel\w*|tanker\w*|cargo\w*|volume\w*)"
+                            r".{0,30}(below|under|beneath|short of)", "signal": "Chokepoint disruption"},
+                {"pattern": r"(traffic|transit\w*|flow\w*|vessel\w*|tanker\w*|shipment\w*)"
+                            r".{0,36}(below|under)\s+(?:its\s+|the\s+)?\w*\s*(average|norm\w*|usual|typical|baseline)"
+                            r".{0,44}(hormuz|suez|bab el[- ]?mandeb|malacca|red sea|strait|canal)?", "signal": "Chokepoint disruption"},
+                # "Just one vessel left the Strait of Hormuz" — a count so low
+                # it is the story. Bounded to small numbers written as words or
+                # single digits, so "21 tankers transited" does not match.
+                {"pattern": r"(?:just|only|no more than)\s+(?:one|two|three|a handful of|\d)\s+"
+                            r"[\w\s-]{0,24}?(vessel\w*|tanker\w*|ship\w*|cargo\w*)"
+                            r".{0,44}(hormuz|suez|bab el[- ]?mandeb|malacca|red sea|strait|canal)", "signal": "Chokepoint disruption"},
                 {"pattern": r"(export|shipment|loading|output|production).{0,24}(halt\w*\w*|suspend\w*|stopp?\w*|curtail\w*)", "signal": "Export halt"},
                 {"pattern": r"demand.{0,18}(ris\w*|rose|strong\w*|strengthen\w*|increas\w+|recover\w*)", "signal": "Demand strengthening"},
                 # Demand as a flow. A refiner does not "demand" crude in a
@@ -971,15 +994,23 @@ def analyze_fundamental_direction(text: str, commodity: Optional[str]) -> Dict[s
             "matched_signals": [],
             "rule_bias": "NONE"
         }
-    text_lower = text.lower()
+    # Searched against the ORIGINAL text with re.I rather than a lowercased
+    # copy, so the span a rule matched can be quoted back as it was written.
+    # That span is the evidence — "Gold slips", "Export Shipments Remain
+    # Strong" — and it is what makes a driver readable instead of a category.
     bullish_matches = []
     bearish_matches = []
+    phrases: Dict[str, str] = {}
     for entry in rulebook[normalized]["bullish"]:
-        if re.search(entry["pattern"], text_lower):
+        found = re.search(entry["pattern"], text, re.I)
+        if found:
             bullish_matches.append(entry["signal"])
+            phrases.setdefault(entry["signal"], found.group(0).strip())
     for entry in rulebook[normalized]["bearish"]:
-        if re.search(entry["pattern"], text_lower):
+        found = re.search(entry["pattern"], text, re.I)
+        if found:
             bearish_matches.append(entry["signal"])
+            phrases.setdefault(entry["signal"], found.group(0).strip())
     # Distinct signals, weighted. Two patterns can emit the same signal name --
     # "Infrastructure attack" has both an attack-then-noun and a noun-then-attack
     # form -- and one event described twice is not two pieces of evidence.
@@ -996,10 +1027,20 @@ def analyze_fundamental_direction(text: str, commodity: Optional[str]) -> Dict[s
     else:
         bias = "NEUTRAL"
     matched = [
-        {"signal": signal, "direction": "bullish", "weight": signal_weight(signal)}
+        {
+            "signal": signal,
+            "direction": "bullish",
+            "weight": signal_weight(signal),
+            "phrase": phrases.get(signal, ""),
+        }
         for signal in bullish_unique
     ] + [
-        {"signal": signal, "direction": "bearish", "weight": signal_weight(signal)}
+        {
+            "signal": signal,
+            "direction": "bearish",
+            "weight": signal_weight(signal),
+            "phrase": phrases.get(signal, ""),
+        }
         for signal in bearish_unique
     ]
     return {
@@ -1284,6 +1325,65 @@ _DRIVER_FALSE_FORMS = {
     "gas": {"gasket", "gaskets"},
     "corn": {"cornerstone", "corner", "cornered"},
 }
+
+
+# What the app calls "Key Sentiment Drivers".
+#
+# extract_keywords below answers with nouns off a fixed list — "oil", "price",
+# "supply", "demand" — which is a description of the topic and not of the
+# reading. Every one of those words is equally present in a headline that sent
+# the market up and one that sent it down, so as an explanation of a score it
+# explains nothing.
+#
+# The rulebook already knows better and was throwing it away. A fired rule
+# carries a named signal, a direction, a weight and — now that the matcher
+# keeps it — the span of text that triggered it. "Price action down · 'Gold
+# slips'" says what the engine read and why it read it that way.
+#
+# The generic terms remain as the fallback for text where no rule fires, marked
+# as context rather than as a driver, because naming the subject is still
+# better than saying nothing.
+def extract_key_drivers(
+    text: str, commodity: Optional[str] = None, limit: int = 5
+) -> List[Dict[str, Any]]:
+    """Contextual drivers behind a reading: what fired, which way, on what words.
+
+    Ordered by weight, so the evidence that governed the score leads. Falls back
+    to topic terms only when the rulebook found nothing to say.
+    """
+    if not text:
+        return []
+
+    fundamental = analyze_fundamental_direction(text, commodity)
+    drivers: List[Dict[str, Any]] = []
+    for signal in sorted(
+        fundamental.get("matched_signals", []),
+        key=lambda s: s.get("weight", 0),
+        reverse=True,
+    ):
+        phrase = (signal.get("phrase") or "").strip()
+        drivers.append({
+            "driver": signal["signal"],
+            "phrase": phrase,
+            "direction": signal["direction"],
+            "weight": signal.get("weight", 0.0),
+            # One string for clients that want a label and not a structure.
+            # NewsFeed.js renders `key_drivers` as chips and cannot use a dict.
+            "label": f"{signal['signal']} · \u201c{phrase}\u201d" if phrase else signal["signal"],
+        })
+
+    if drivers:
+        return drivers[:limit]
+
+    return [
+        {"driver": term, "phrase": "", "direction": "context", "weight": 0.0, "label": term}
+        for term in extract_keywords(text)[:limit]
+    ]
+
+
+def driver_labels(text: str, commodity: Optional[str] = None, limit: int = 5) -> List[str]:
+    """extract_key_drivers flattened to strings, for clients expecting a list."""
+    return [d["label"] for d in extract_key_drivers(text, commodity, limit)]
 
 
 def extract_keywords(text: str) -> List[str]:
