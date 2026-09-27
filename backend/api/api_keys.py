@@ -19,8 +19,10 @@ from typing import Any, Dict, List, Optional
 from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel, Field
 
+from services import usage_alerts, usage_stats
 from services.api_key_auth import generate_key
 from services.entitlement import resolve as resolve_entitlement
+from services.rate_limit import plan_spec
 from services.supabase_jwt import verify_supabase_jwt
 
 logger = logging.getLogger(__name__)
@@ -231,3 +233,123 @@ def _enforce_key_quota(supabase: Any, user_id: str) -> None:
             status_code=429,
             detail=f"key quota reached ({MAX_KEYS_PER_USER}); revoke one first",
         )
+
+
+# ---------------------------------------------------------------------------
+# Usage, limits and alerts
+#
+# These three back the dashboard tabs that said "Soon" while api_key_usage
+# quietly accumulated every request since launch. Nothing new is measured here;
+# what was missing was a way for the person paying to read it.
+#
+# All three derive user_id from the verified JWT. That is load-bearing for the
+# usage RPCs in particular: they are `security definer` and filter on the
+# p_user_id they are handed, so passing an id from the request would let any
+# authenticated caller read another account's usage.
+# ---------------------------------------------------------------------------
+
+
+class AlertConfigRequest(BaseModel):
+    enabled: bool = True
+    thresholds: List[int] = Field(default_factory=lambda: list(usage_alerts.DEFAULT_THRESHOLDS))
+    webhook_url: Optional[str] = None
+
+
+def _client_or_503() -> Any:
+    from services._supabase import get_supabase_client
+
+    supabase = get_supabase_client()
+    if supabase is None:
+        raise HTTPException(status_code=503, detail="storage unavailable")
+    return supabase
+
+
+def _entitled(supabase: Any, auth: Dict[str, Any]) -> Any:
+    """Resolve the caller's entitlement, refusing accounts with no API access.
+
+    Usage and alerts are gated the same way key creation is. An account with no
+    entitlement has no keys, so the pages would be empty anyway — a 403 that
+    names the upgrade path is more use than an empty table.
+    """
+    ent = resolve_entitlement(supabase, auth["user_id"], auth.get("email"))
+    if not ent.scopes:
+        raise HTTPException(
+            status_code=403,
+            detail=(
+                "this account has no API entitlement. Start the free beta or "
+                "subscribe at https://dashboard.integramarkets.app/api-tier"
+            ),
+        )
+    return ent
+
+
+@router.get("/limits")
+async def get_limits(auth: Dict[str, Any] = Depends(verify_supabase_jwt)) -> Dict[str, Any]:
+    """The limits actually enforced for this account.
+
+    Exists because the dashboard used to state them as hand-typed copy — "100k
+    requests / month, 100 req/sec burst" — while the enforced monthly cap was
+    50,000 and no per-second limiter existed at all. A paying customer was
+    promised double their allowance and would have been refused at half of the
+    advertised number with no explanation matching anything they had read.
+
+    Serving the numbers from the constants that enforce them is the fix. Copy
+    cannot drift from behaviour when nobody types it.
+    """
+    supabase = _client_or_503()
+    ent = _entitled(supabase, auth)
+    return {**plan_spec(ent.tier), "max_keys": MAX_KEYS_PER_USER}
+
+
+@router.get("/usage")
+async def get_usage(auth: Dict[str, Any] = Depends(verify_supabase_jwt)) -> Dict[str, Any]:
+    """Usage for the current UTC calendar month, plus a 30-day daily series.
+
+    The period is the calendar month because that is the period the limit is
+    enforced over (services/rate_limit.period_start). A rolling window here
+    beside a "remaining" figure computed from calendar months would disagree
+    with itself by construction.
+    """
+    supabase = _client_or_503()
+    ent = _entitled(supabase, auth)
+    return usage_stats.summarise(supabase, auth["user_id"], ent.tier)
+
+
+@router.get("/alerts")
+async def get_alerts(auth: Dict[str, Any] = Depends(verify_supabase_jwt)) -> Dict[str, Any]:
+    supabase = _client_or_503()
+    _entitled(supabase, auth)
+    config = usage_alerts.load(supabase, auth["user_id"])
+    return {
+        **config,
+        "available_thresholds": list(usage_alerts.ALLOWED_THRESHOLDS),
+        "max_thresholds": usage_alerts.MAX_THRESHOLDS,
+        # Named so the UI can explain the channel rather than implying email.
+        "delivery": "webhook",
+    }
+
+
+@router.put("/alerts")
+async def put_alerts(
+    payload: AlertConfigRequest,
+    auth: Dict[str, Any] = Depends(verify_supabase_jwt),
+) -> Dict[str, Any]:
+    supabase = _client_or_503()
+    _entitled(supabase, auth)
+
+    # Validated here rather than in the model so the 400 carries the message
+    # usage_alerts writes for a person, instead of a pydantic schema dump.
+    try:
+        thresholds = usage_alerts.normalise_thresholds(payload.thresholds)
+        webhook = usage_alerts.validate_webhook_url(payload.webhook_url)
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc))
+
+    try:
+        saved = usage_alerts.save(
+            supabase, auth["user_id"], payload.enabled, thresholds, webhook
+        )
+    except Exception as exc:  # noqa: BLE001
+        logger.exception("usage alert save failed")
+        raise HTTPException(status_code=500, detail=str(exc))
+    return {**saved, "available_thresholds": list(usage_alerts.ALLOWED_THRESHOLDS)}

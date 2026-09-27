@@ -79,10 +79,26 @@ async function TierSections({
       <section className="space-y-3">
         <h2 className="text-lg font-semibold">Subscription</h2>
         {hasApiTier ? (
+          // Deliberately carries NO numbers.
+          //
+          // It used to read "100k requests / month, 100 req/sec burst" as
+          // hand-typed copy. The enforced monthly cap for this plan was 50,000
+          // and there was no per-second limiter anywhere in the codebase — so a
+          // paying customer was promised double their allowance and would have
+          // been refused at half the advertised figure with nothing to explain
+          // it. The real figures now live on /account/usage, read out of the
+          // constants that enforce them (GET /api/keys/limits), which is the
+          // only arrangement where copy cannot drift from behaviour.
           <div className="rounded-lg border border-accent-positive bg-bg-secondary p-6 text-sm">
             <span className="font-semibold text-text-primary">API tier active.</span>{" "}
-            100k requests / month, 100 req/sec burst, up to 10 keys. Manage or
-            cancel from the Stripe billing portal link emailed after purchase.
+            <a className="text-accent-primary underline" href="/account/usage">
+              See your limits and this month&apos;s usage
+            </a>
+            , or{" "}
+            <a className="text-accent-primary underline" href="/account/billing">
+              manage billing
+            </a>
+            .
           </div>
         ) : (
           <>

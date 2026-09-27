@@ -106,4 +106,141 @@ export function createStripeCheckout(jwt: string, tier: "api" = "api") {
   });
 }
 
-export type { KeyRow, CreateKeyResponse, EntitlementResponse };
+// ---- Plan limits, usage and alerts --------------------------------------
+
+/**
+ * The limits ACTUALLY enforced for the caller's plan.
+ *
+ * Fetched rather than written down. The subscription panel used to state
+ * "100k requests / month, 100 req/sec burst" as hand-typed copy while the
+ * backend enforced 50,000/month and had no per-second limiter at all — so a
+ * paying customer was promised double their allowance and would have been
+ * refused at half the advertised figure. These numbers now come out of the
+ * constants that enforce them, which is the only way copy cannot drift.
+ *
+ * `null` on a depth field means unlimited: math.inf is not representable in
+ * JSON, so the backend serialises it as null.
+ */
+type PlanLimits = {
+  tier: string;
+  requests_per_month: number;
+  requests_per_second: number;
+  burst_capacity: number;
+  query_depth_days: number | null;
+  export_depth_days: number | null;
+  exports_per_month: number;
+  export_rows_per_call: number;
+  export_rows_per_call_xlsx: number;
+  enforced: boolean;
+  max_keys: number;
+};
+
+/**
+ * Each section carries its own `available` flag. A section whose query failed
+ * must render as "couldn't load", never as zero — a usage page showing 0
+ * requests tells a customer their integration is dead.
+ */
+type UsageSection<T> = { available: boolean; rows: T[] };
+
+type UsageKeyRow = {
+  key_id: string;
+  name: string;
+  prefix: string;
+  revoked: boolean;
+  requests: number;
+  errors: number;
+  rate_limited: number;
+  p50_ms: number | null;
+  p95_ms: number | null;
+  last_used_at: string | null;
+};
+
+type UsageDayRow = { day: string; requests: number; errors: number };
+
+type UsageEndpointRow = {
+  endpoint: string;
+  method: string;
+  requests: number;
+  errors: number;
+  p95_ms: number | null;
+};
+
+type UsageSummary = {
+  period: { start: string; end: string; label: string };
+  plan: Omit<PlanLimits, "max_keys">;
+  current: {
+    available: boolean;
+    requests: number | null;
+    errors: number | null;
+    rate_limited: number | null;
+    limit: number;
+    remaining: number | null;
+    percent_used: number | null;
+    error_rate: number | null;
+  };
+  by_key: UsageSection<UsageKeyRow>;
+  daily: UsageSection<UsageDayRow> & { window_days: number };
+  by_endpoint: UsageSection<UsageEndpointRow>;
+};
+
+type AlertConfig = {
+  enabled: boolean;
+  thresholds: number[];
+  webhook_url: string | null;
+  last_notified_period: string | null;
+  last_notified_threshold: number | null;
+  configured: boolean;
+  available_thresholds: number[];
+  max_thresholds?: number;
+  delivery?: string;
+  unavailable?: boolean;
+};
+
+export function fetchPlanLimits(token: string) {
+  return call<PlanLimits>("/api/keys/limits", { headers: authHeaders(token) });
+}
+
+export function fetchUsage(token: string) {
+  return call<UsageSummary>("/api/keys/usage", { headers: authHeaders(token) });
+}
+
+export function fetchAlerts(token: string) {
+  return call<AlertConfig>("/api/keys/alerts", { headers: authHeaders(token) });
+}
+
+export function saveAlerts(
+  token: string,
+  config: { enabled: boolean; thresholds: number[]; webhook_url: string | null }
+) {
+  return call<AlertConfig>("/api/keys/alerts", {
+    method: "PUT",
+    headers: authHeaders(token),
+    body: JSON.stringify(config),
+  });
+}
+
+/**
+ * Stripe's hosted billing portal. 409 means there is no Stripe customer on this
+ * login — a comp grant, the free beta, or an App Store purchase — and the
+ * message the backend returns says which, so it is shown verbatim rather than
+ * replaced with a generic failure.
+ */
+export function createBillingPortalSession(jwt: string, returnPath = "/account/billing") {
+  return call<{ url: string }>("/api/stripe/portal", {
+    method: "POST",
+    headers: authHeaders(jwt),
+    body: JSON.stringify({ return_path: returnPath }),
+  });
+}
+
+export type {
+  KeyRow,
+  CreateKeyResponse,
+  EntitlementResponse,
+  PlanLimits,
+  UsageSummary,
+  UsageKeyRow,
+  UsageDayRow,
+  UsageEndpointRow,
+  AlertConfig,
+};
