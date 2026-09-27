@@ -159,17 +159,44 @@ logger = logging.getLogger(__name__)
 app = FastAPI(title="Integra AI Backend", description="Financial AI Analysis API")
 
 
-# Declare the public API's auth scheme in the published spec. Without it every
-# /v1 operation generates into an SDK that cannot authenticate -- see
-# services/openapi_security.py for why this is post-processing rather than a
-# swap to fastapi.security.HTTPBearer.
+# The published spec: the CUSTOMER surface, carrying the auth scheme.
+#
+# Two separate fixes live here.
+#
+# 1. Auth. The /v1 dependency reads a plain Authorization header rather than
+#    using fastapi.security, so FastAPI emitted no securitySchemes at all and
+#    anything generated from the spec had no way to send the key — on exactly
+#    the endpoints customers pay for. See services/openapi_security.py for why
+#    this is post-processing rather than a swap to HTTPBearer.
+#
+# 2. Scope. /openapi.json served all 66 routes, 23 of them internal — the whole
+#    Kalshi trading surface, the Stripe routes, the subscription webhook. The
+#    filtered customer spec existed (scripts/build_openapi_spec.py) and was
+#    served nowhere, so the reachable spec was the wrong one. It now describes
+#    /v1 and nothing else. Documentation only: the internal routes are still
+#    registered and still work, we simply stop advertising them.
 try:
-    from services.openapi_security import build_schema as _build_openapi_schema
+    from services.openapi_security import (
+        build_public_schema as _build_public_openapi,
+        build_schema as _build_full_openapi,
+    )
 
-    app.openapi = lambda: _build_openapi_schema(app, get_openapi)
+    app.openapi = lambda: _build_public_openapi(app, get_openapi)
+
+    # The full schema, for debugging a route that is missing from the public one.
+    # Off by default: it is the thing we just stopped publishing.
+    if os.environ.get("INTEGRA_INTERNAL_OPENAPI") == "1":
+        @app.get("/internal/openapi.json", include_in_schema=False)
+        async def _internal_openapi():
+            return _build_full_openapi(app, get_openapi)
+
+        logging.getLogger(__name__).warning(
+            "INTEGRA_INTERNAL_OPENAPI=1 — the unfiltered spec is being served at "
+            "/internal/openapi.json, including internal routes"
+        )
 except ImportError as _sec_exc:  # pragma: no cover - spec degrades, API does not
     logging.getLogger(__name__).warning(
-        "openapi security scheme unavailable, spec will omit it: %s", _sec_exc
+        "openapi customisation unavailable, spec will be unfiltered: %s", _sec_exc
     )
 
 # Lifespan events

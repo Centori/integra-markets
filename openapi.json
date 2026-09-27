@@ -3,7 +3,7 @@
   "info": {
     "title": "Integra Markets API",
     "version": "1.0.0",
-    "description": "Commodity news sentiment, narratives and prediction-market divergence.\n\nAuthenticate with `Authorization: Bearer <api_key>`; keys look like `ik_live_...` and are created at https://dashboard.integramarkets.app/account/api\n\n**`sentiment_score` is signed, -1..+1, 0 = neutral** \u2014 that is the field to chart. `confidence` is a separate magnitude and is NOT directional. Before 2026-09-02 the API exposed the confidence value under the name `score`; bearish rows scored higher than bullish ones, so any cached values from before that date must be discarded."
+    "description": "Commodity news sentiment, narratives and prediction-market divergence.\n\nAuthenticate with `Authorization: Bearer <api_key>`; keys look like `ik_live_...` and are created at https://dashboard.integramarkets.app/account/api\n\n**`sentiment_score` is signed, -1..+1, 0 = neutral** \u2014 that is the field to chart. `confidence` is a separate magnitude and is NOT directional. Before 2026-09-02 the API exposed the confidence value under the name `score`; bearish rows scored higher than bullish ones, so any cached values from before that date must be discarded.\n\nRate limits are per key and are reported on every response as `X-RateLimit-Limit`, `X-RateLimit-Remaining`, `X-RateLimit-Rate` and `X-RateLimit-Reset`. A 429 carries `Retry-After` in seconds \u2014 honour it rather than retrying immediately, because both a monthly allowance and a per-second rate are enforced. Your plan's actual numbers are at https://dashboard.integramarkets.app/account/usage\n\nList endpoints paginate with an opaque `cursor`: when a response carries `has_more: true` it also carries `next_cursor`, which you pass back as `?cursor=`. Do not construct or parse cursors."
   },
   "servers": [
     {
@@ -17,7 +17,7 @@
           "sentiment-history"
         ],
         "summary": "List Commodities",
-        "description": "Return distinct commodities that have at least one scored document.",
+        "description": "Commodities with scored articles in the last 30 days, busiest first.\n\nTHE BUG THIS REPLACES. The previous implementation asked for 10,000 rows of\nentity_mentions with no ORDER BY and no time filter, then took the distinct\nset in Python. Postgres may return any 10,000 rows for such a query, and it\nreturned a block from the archive backfill: this endpoint reported that\n`bitcoin` was the only commodity with data, while the same table held 22 oil\nmentions, 3 gold and 1 copper from the previous 24 hours alone.\n\nA paid endpoint was telling customers the product was empty, and the MCP\ntool built on it was repeating that to their assistant. DISTINCT now happens\nin the database, where it is exact rather than a sample.\n\nCounts ride along because they were free once the grouping existed, and they\nanswer the question behind the question: not \"what can I ask about\" but\n\"what is worth asking about\".",
         "operationId": "list_commodities",
         "parameters": [
           {
@@ -59,7 +59,12 @@
               }
             }
           }
-        }
+        },
+        "security": [
+          {
+            "ApiKeyAuth": []
+          }
+        ]
       }
     },
     "/v1/sentiment/{commodity}/now": {
@@ -119,7 +124,12 @@
               }
             }
           }
-        }
+        },
+        "security": [
+          {
+            "ApiKeyAuth": []
+          }
+        ]
       }
     },
     "/v1/sentiment/{commodity}/history": {
@@ -227,7 +237,12 @@
               }
             }
           }
-        }
+        },
+        "security": [
+          {
+            "ApiKeyAuth": []
+          }
+        ]
       }
     },
     "/v1/sentiment/{commodity}/daily": {
@@ -299,7 +314,12 @@
               }
             }
           }
-        }
+        },
+        "security": [
+          {
+            "ApiKeyAuth": []
+          }
+        ]
       }
     },
     "/v1/markets/overlay": {
@@ -384,7 +404,12 @@
               }
             }
           }
-        }
+        },
+        "security": [
+          {
+            "ApiKeyAuth": []
+          }
+        ]
       }
     },
     "/v1/agent/templates": {
@@ -434,7 +459,12 @@
               }
             }
           }
-        }
+        },
+        "security": [
+          {
+            "ApiKeyAuth": []
+          }
+        ]
       }
     },
     "/v1/agent/ask": {
@@ -493,7 +523,12 @@
               }
             }
           }
-        }
+        },
+        "security": [
+          {
+            "ApiKeyAuth": []
+          }
+        ]
       }
     },
     "/v1/topics": {
@@ -544,7 +579,12 @@
               }
             }
           }
-        }
+        },
+        "security": [
+          {
+            "ApiKeyAuth": []
+          }
+        ]
       }
     },
     "/v1/markets/divergence/{topic}": {
@@ -628,7 +668,12 @@
               }
             }
           }
-        }
+        },
+        "security": [
+          {
+            "ApiKeyAuth": []
+          }
+        ]
       }
     },
     "/v1/markets/divergence": {
@@ -714,7 +759,12 @@
               }
             }
           }
-        }
+        },
+        "security": [
+          {
+            "ApiKeyAuth": []
+          }
+        ]
       }
     },
     "/v1/sentiment": {
@@ -731,10 +781,10 @@
             "required": true,
             "schema": {
               "type": "string",
-              "description": "Commodity ticker, e.g. 'brent'",
+              "description": "Canonical commodity name, e.g. 'oil', 'gas', 'copper'. This is matched against entity_mentions.entity, which stores the name the sentiment engine normalises to \u2014 not a market ticker, so 'brent' matches nothing.",
               "title": "Commodity"
             },
-            "description": "Commodity ticker, e.g. 'brent'"
+            "description": "Canonical commodity name, e.g. 'oil', 'gas', 'copper'. This is matched against entity_mentions.entity, which stores the name the sentiment engine normalises to \u2014 not a market ticker, so 'brent' matches nothing."
           },
           {
             "name": "window",
@@ -787,7 +837,12 @@
               }
             }
           }
-        }
+        },
+        "security": [
+          {
+            "ApiKeyAuth": []
+          }
+        ]
       }
     },
     "/v1/narratives": {
@@ -861,7 +916,12 @@
               }
             }
           }
-        }
+        },
+        "security": [
+          {
+            "ApiKeyAuth": []
+          }
+        ]
       }
     },
     "/v1/brief": {
@@ -923,7 +983,12 @@
               }
             }
           }
-        }
+        },
+        "security": [
+          {
+            "ApiKeyAuth": []
+          }
+        ]
       }
     },
     "/v1/historical/analogs": {
@@ -1005,7 +1070,12 @@
               }
             }
           }
-        }
+        },
+        "security": [
+          {
+            "ApiKeyAuth": []
+          }
+        ]
       }
     },
     "/v1/export/sentiment": {
@@ -1111,7 +1181,12 @@
               }
             }
           }
-        }
+        },
+        "security": [
+          {
+            "ApiKeyAuth": []
+          }
+        ]
       }
     }
   },
@@ -1274,13 +1349,8 @@
       "ApiKeyAuth": {
         "type": "http",
         "scheme": "bearer",
-        "description": "An Integra API key, e.g. ik_live_..."
+        "description": "An Integra API key, e.g. ik_live_..., sent as `Authorization: Bearer <key>`. Keys carry the scopes of the subscription that created them, resolved live per request; a valid key with no active entitlement receives 403 rather than 401. Manage keys at https://dashboard.integramarkets.app/account/api"
       }
     }
-  },
-  "security": [
-    {
-      "ApiKeyAuth": []
-    }
-  ]
+  }
 }

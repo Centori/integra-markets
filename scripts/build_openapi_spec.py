@@ -1,130 +1,76 @@
-"""Build the customer-facing OpenAPI spec from the live FastAPI schema.
+"""Write the committed customer-facing OpenAPI spec from a live schema dump.
 
-Why filtered rather than a straight copy of /openapi.json
---------------------------------------------------------
-The live app serves 61 paths. Most are internal: /kalshi/* (trading against
-Integra's own account), /api/stripe/*, /api/subscriptions/webhook, /health.
-Generating a customer SDK from all of them would hand every API subscriber typed
-client methods for placing Kalshi orders and firing subscription webhooks.
+    curl -s https://api.integramarkets.app/openapi.json > live_openapi.json
+    python3 scripts/build_openapi_spec.py
 
-So the published spec is the /v1 surface only — the endpoints an API customer
-actually buys. Account-management endpoints (/api/keys) are deliberately out
-too: they authenticate with a Supabase JWT, not an API key, so they belong to
-the dashboard rather than to a key-holding client.
+The filtering itself no longer lives here. It moved to
+`backend/services/openapi_public.py` so the API serves the same spec this script
+writes — they had to agree about which paths are public, what the operation IDs
+are and what the security scheme is called, and "had to agree" between a build
+script and a runtime path is a drift waiting to happen. It had already drifted
+once: the committed openapi.json described 29 paths, ZERO of them under /v1,
+plus 21 routes that no longer existed, and both SDKs were generated from it —
+which is why neither had a single method for the product being sold.
 
-The previously committed openapi.json described neither: 29 paths, ZERO under
-/v1, plus 21 routes that no longer exist at all (/ai/analyze, /api/lexicon/*).
-Both SDKs were generated from it, which is why neither had a single method for
-the product being sold.
+This script is now a thin wrapper kept for two reasons: it produces the
+committed artifact that can be diffed in review, and it fails loudly if the
+live deployment stops serving a recognisable public surface.
+
+Idempotent with respect to the input. Filtering an already-filtered spec is a
+no-op, so this works against both a deployment that serves the full schema and
+one that serves the filtered one.
 """
+
 import json
-import re
+import os
 import sys
+
+sys.path.insert(0, os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "backend"))
+
+from services.openapi_public import filter_to_public  # noqa: E402
+from services.openapi_security import apply_security  # noqa: E402
 
 LIVE = "live_openapi.json"
 OUT = "openapi.json"
 
-spec = json.load(open(LIVE))
+if not os.path.exists(LIVE):
+    sys.exit(
+        f"{LIVE} not found. Fetch it first:\n"
+        f"  curl -s https://api.integramarkets.app/openapi.json > {LIVE}"
+    )
 
-paths = {p: v for p, v in spec.get("paths", {}).items() if p.startswith("/v1")}
-if not paths:
-    sys.exit("no /v1 paths in the live spec — refusing to write an empty API")
+with open(LIVE) as handle:
+    live = json.load(handle)
 
-# Walk $refs transitively so only schemas the /v1 surface actually uses survive.
-all_schemas = spec.get("components", {}).get("schemas", {})
-needed: set[str] = set()
+incoming = len(live.get("paths") or {})
 
+try:
+    spec = apply_security(filter_to_public(live))
+except ValueError as exc:
+    sys.exit(str(exc))
 
-def walk(node) -> None:
-    if isinstance(node, dict):
-        ref = node.get("$ref")
-        if isinstance(ref, str):
-            m = re.match(r"#/components/schemas/(.+)$", ref)
-            if m and m.group(1) not in needed:
-                needed.add(m.group(1))
-                walk(all_schemas.get(m.group(1), {}))
-        for v in node.values():
-            walk(v)
-    elif isinstance(node, list):
-        for v in node:
-            walk(v)
+with open(OUT, "w") as handle:
+    json.dump(spec, handle, indent=2)
+    handle.write("\n")
 
-
-walk(paths)
-
-
-# Clean, stable method names.
-#
-# FastAPI derives operationId from the function name plus the route, giving
-# `sentiment_v1_sentiment_get` and `export_sentiment_v1_export_sentiment_get`.
-# The generator turns those verbatim into SDK method names, and once a customer
-# writes code against them they cannot be changed without breaking that code.
-# Pinning them here makes the ergonomics a deliberate choice rather than an
-# artefact of how a Python function happened to be named.
-OPERATION_IDS = {
-    ("/v1/sentiment", "get"): "get_sentiment",
-    ("/v1/sentiment/{commodity}/now", "get"): "get_sentiment_now",
-    ("/v1/sentiment/{commodity}/history", "get"): "get_sentiment_history",
-    ("/v1/sentiment/{commodity}/daily", "get"): "get_sentiment_daily",
-    ("/v1/commodities", "get"): "list_commodities",
-    ("/v1/narratives", "get"): "get_narratives",
-    ("/v1/brief", "get"): "get_brief",
-    ("/v1/export/sentiment", "get"): "export_sentiment",
-    ("/v1/topics", "get"): "list_topics",
-    ("/v1/markets/divergence", "get"): "get_divergence",
-    ("/v1/markets/divergence/{topic}", "get"): "get_divergence_for_topic",
-    ("/v1/markets/overlay", "get"): "get_market_overlay",
-    ("/v1/historical/analogs", "get"): "find_historical_analogs",
-    ("/v1/agent/templates", "get"): "list_agent_templates",
-    ("/v1/agent/ask", "post"): "ask_agent",
-}
-
-renamed = 0
-for path, ops in paths.items():
-    for method, op in ops.items():
-        if not isinstance(op, dict):
-            continue
-        new_id = OPERATION_IDS.get((path, method.lower()))
-        if new_id:
-            op["operationId"] = new_id
-            renamed += 1
-print(f"pinned {renamed} operationIds")
-
-out = {
-    "openapi": spec.get("openapi", "3.1.0"),
-    "info": {
-        "title": "Integra Markets API",
-        "version": "1.0.0",
-        "description": (
-            "Commodity news sentiment, narratives and prediction-market divergence.\n\n"
-            "Authenticate with `Authorization: Bearer <api_key>`; keys look like "
-            "`ik_live_...` and are created at "
-            "https://dashboard.integramarkets.app/account/api\n\n"
-            "**`sentiment_score` is signed, -1..+1, 0 = neutral** — that is the field to "
-            "chart. `confidence` is a separate magnitude and is NOT directional. Before "
-            "2026-09-02 the API exposed the confidence value under the name `score`; "
-            "bearish rows scored higher than bullish ones, so any cached values from "
-            "before that date must be discarded."
-        ),
-    },
-    "servers": [{"url": "https://api.integramarkets.app"}],
-    "paths": paths,
-    "components": {
-        "schemas": {k: all_schemas[k] for k in sorted(needed) if k in all_schemas},
-        "securitySchemes": {
-            "ApiKeyAuth": {
-                "type": "http",
-                "scheme": "bearer",
-                "description": "An Integra API key, e.g. ik_live_...",
-            }
-        },
-    },
-    "security": [{"ApiKeyAuth": []}],
-}
-
-json.dump(out, open(OUT, "w"), indent=2)
+paths = spec["paths"]
 print(f"wrote {OUT}")
+print(f"  read:    {incoming} paths from {LIVE}")
 print(f"  paths:   {len(paths)}")
-print(f"  schemas: {len(out['components']['schemas'])}")
-for p in sorted(paths):
-    print("   ", p)
+print(f"  schemas: {len(spec['components']['schemas'])}")
+missing = [
+    f"{method.upper()} {path}"
+    for path, ops in sorted(paths.items())
+    for method, op in ops.items()
+    if isinstance(op, dict) and method in ("get", "post", "put", "patch", "delete")
+    and not op.get("operationId", "").islower()
+]
+for path in sorted(paths):
+    print("   ", path)
+if missing:
+    # Not fatal: an unpinned operationId generates an ugly method name, it does
+    # not break anything. Worth saying, because the fix is one line in
+    # openapi_public.OPERATION_IDS and nobody will notice otherwise.
+    print("\n  unpinned operationIds (add to openapi_public.OPERATION_IDS):")
+    for item in missing:
+        print("   ", item)

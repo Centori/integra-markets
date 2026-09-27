@@ -14,9 +14,18 @@ Endpoints
        24h average. Recency check uses the latest row in
        raw_documents joined to sentiment_scores.
 
-  GET  /v1/sentiment/{commodity}/history?from=&to=
+  GET  /v1/sentiment/{commodity}/history?from=&to=&cursor=
        Time-series of individual scored documents within a window.
-       Capped at 1000 rows per call; clients paginate via from/to.
+       Capped at 1000 rows per call; paginate with the opaque `cursor`
+       returned as `next_cursor` whenever `has_more` is true.
+
+       The previous instruction here was "clients paginate via from/to",
+       which cannot be done correctly. Rows are ordered by published_at
+       and feeds publish many articles on the same timestamp, so a client
+       re-issuing with to=<last published_at> either re-reads the tied
+       rows or, using a strict bound, skips ones it never saw. Both are
+       invisible client-side and unfixable there. Keyset pagination on
+       (published_at, document_id) is a total order, so neither happens.
 
   GET  /v1/sentiment/{commodity}/daily?days=30
        Daily aggregates (avg sentiment, article count, momentum)
@@ -47,6 +56,7 @@ from services.api_key_auth import (
     require_scopes,
     verify_api_key,
 )
+from services.pagination import decode_cursor, encode_cursor
 
 logger = logging.getLogger(__name__)
 
@@ -221,15 +231,42 @@ async def sentiment_now(
     }
 
 
+def _keyset_filter(published_at: str, document_id: str) -> str:
+    """PostgREST `or=` expression for "strictly after this row" in desc order.
+
+    Values are double-quoted because a timestamptz rendered by Postgres carries
+    `+00:00`, and `+` is the one character whose meaning changes if any layer
+    between here and the database decodes the query string as a form body.
+    Quoting is PostgREST's documented escape for reserved characters in a filter
+    value, so it costs nothing and removes the question.
+    """
+    return (
+        f'published_at.lt."{published_at}",'
+        f'and(published_at.eq."{published_at}",document_id.lt."{document_id}")'
+    )
+
+
 @router.get("/sentiment/{commodity}/history")
 async def sentiment_history(
     commodity: str,
     from_: Optional[str] = Query(default=None, alias="from", description="ISO 8601 UTC timestamp"),
     to: Optional[str] = Query(default=None, description="ISO 8601 UTC timestamp"),
     limit: int = Query(default=DEFAULT_HISTORY_LIMIT, ge=1, le=MAX_HISTORY_LIMIT),
+    cursor: Optional[str] = Query(
+        default=None,
+        description=(
+            "Opaque pagination cursor. Pass the `next_cursor` from the previous "
+            "response to continue; omit it for the first page. Do not construct "
+            "or parse it."
+        ),
+    ),
     auth: Dict[str, Any] = Depends(require_scopes(HISTORY_SCOPE)),
 ) -> Dict[str, Any]:
-    """Time-series of individual scored documents for `commodity`."""
+    """Time-series of individual scored documents for `commodity`.
+
+    Paginated with a keyset cursor. `from` and `to` still bound the window and
+    are re-sent on every page; the cursor carries only the position within it.
+    """
     supabase = _supabase()
     commodity_lc = commodity.strip().lower()
 
@@ -238,6 +275,25 @@ async def sentiment_history(
     if start >= end:
         raise HTTPException(status_code=400, detail="'from' must be earlier than 'to'")
 
+    # A malformed cursor is a 400, never a silent restart from page one. A client
+    # that corrupts its cursor should be told, not handed the first page forever
+    # while it believes it is advancing.
+    try:
+        keyset = decode_cursor(cursor)
+    except ValueError:
+        raise HTTPException(status_code=400, detail="malformed cursor")
+
+    if keyset is not None:
+        if not isinstance(keyset, dict) or not keyset.get("p") or not keyset.get("d"):
+            raise HTTPException(status_code=400, detail="malformed cursor")
+        if keyset.get("e") != commodity_lc:
+            # Cursors are per-series. Accepting one issued for another commodity
+            # would return that commodity's position under this name.
+            raise HTTPException(
+                status_code=400,
+                detail="cursor belongs to a different commodity; start a new page",
+            )
+
     # Depth gate measured from NOW to the OLDEST point requested. Measuring the
     # WIDTH of [start, end] let a narrow window sitting far in the past through:
     # from=2015-01-01&to=2015-03-01 is 59 days wide and passed a 90-day cap.
@@ -245,28 +301,53 @@ async def sentiment_history(
     assert_history_depth(auth, (now - start).total_seconds() / 86400.0)
 
     try:
-        rows = (
+        query = (
             supabase.table("entity_mentions")
             .select("document_id, sentiment, sentiment_score, confidence, published_at")
             .eq("entity", commodity_lc)
             .gte("published_at", start.isoformat())
             .lte("published_at", end.isoformat())
+        )
+        if keyset is not None:
+            query = query.or_(_keyset_filter(keyset["p"], keyset["d"]))
+        rows = (
+            query
+            # document_id is the tiebreaker, and it must be in the ORDER BY for
+            # the keyset to mean anything: without it Postgres may return rows
+            # sharing a timestamp in any order, so "everything after (p, d)" is
+            # not a well-defined position.
             .order("published_at", desc=True)
-            .limit(limit)
+            .order("document_id", desc=True)
+            # One more row than asked for. The extra is never returned — it only
+            # proves another page exists, which avoids the off-by-one a separate
+            # count query invites on the exact boundary.
+            .limit(limit + 1)
             .execute()
         ).data or []
     except Exception as exc:  # noqa: BLE001
         logger.warning("sentiment_history query failed: %s", exc)
         rows = []
 
-    return {
+    has_more = len(rows) > limit
+    page = rows[:limit]
+
+    body: Dict[str, Any] = {
         "commodity": commodity_lc,
         "from": start.isoformat(),
         "to": end.isoformat(),
-        "count": len(rows),
+        "count": len(page),
         "limit": limit,
-        "items": rows,
+        "has_more": has_more,
+        "items": page,
     }
+    if has_more and page:
+        last = page[-1]
+        body["next_cursor"] = encode_cursor({
+            "p": last["published_at"],
+            "d": last["document_id"],
+            "e": commodity_lc,
+        })
+    return body
 
 
 @router.get("/sentiment/{commodity}/daily")

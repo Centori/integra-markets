@@ -117,7 +117,10 @@ async function TierSections({
         {hasApiTier ? (
           <>
             <p className="text-text-secondary text-sm">
-              Each key is shown once at creation — copy it then. Up to 10 active keys.
+              Each key is shown once at creation — copy it then. Up to 10
+              active keys, revocable independently, so one per environment or
+              per service is the intended pattern. Usage is attributed per key,
+              so you can see which one is spending the allowance.
             </p>
             {fetchError ? (
               <div className="rounded-lg border border-accent-negative bg-bg-secondary p-4 text-sm">
@@ -140,7 +143,8 @@ async function TierSections({
         <section className="space-y-3">
           <h2 className="text-lg font-semibold">Test the API</h2>
           <p className="text-text-secondary text-sm">
-            Fire a real request without leaving the dashboard.
+            Fire a real request without leaving the dashboard — the fastest way
+            to prove a key works before there is any code to blame.
           </p>
           <TryIt />
         </section>
@@ -152,9 +156,55 @@ async function TierSections({
       <section className="space-y-3">
         <h2 className="text-lg font-semibold">Using your key</h2>
         <p className="text-text-secondary text-sm">
-          Plain HTTP, no SDK to install. Any language that can set a header can
-          call this.
+          Plain HTTP, no SDK to install — if it can set a header, it can call
+          this. Want a typed client? Generate one from the{" "}
+          <a
+            className="text-accent-primary underline"
+            href="https://api.integramarkets.app/openapi.json"
+            rel="noreferrer"
+          >
+            OpenAPI spec
+          </a>{" "}
+          and pin it to a version you control rather than one we ship.
         </p>
+        <ul className="text-text-secondary space-y-2 text-sm">
+          <li>
+            <span className="text-text-primary">Signed scores.</span>{" "}
+            <code className="text-xs">sentiment_score</code> runs &minus;1 to +1
+            with 0 neutral — that is the field to chart.{" "}
+            <code className="text-xs">confidence</code> is a separate magnitude
+            and is not directional.
+          </li>
+          <li>
+            <span className="text-text-primary">
+              Sample sizes ship with the number.
+            </span>{" "}
+            Every aggregate carries the article count behind it, so you can
+            weight a thin reading or discard it.
+          </li>
+          <li>
+            <span className="text-text-primary">
+              Rate limits are on every response.
+            </span>{" "}
+            Read <code className="text-xs">X-RateLimit-Remaining</code> and{" "}
+            <code className="text-xs">X-RateLimit-Rate</code> to self-throttle.
+            Honour <code className="text-xs">Retry-After</code> on a 429 rather
+            than retrying immediately — a monthly allowance and a per-second
+            rate are both enforced, and only one of them clears with time.
+          </li>
+          <li>
+            <span className="text-text-primary">Lists paginate with a cursor.</span>{" "}
+            When a response carries <code className="text-xs">has_more</code> it
+            also carries <code className="text-xs">next_cursor</code>; pass it
+            back as <code className="text-xs">?cursor=</code>. Treat it as
+            opaque — don&apos;t construct or parse one.
+          </li>
+          <li>
+            <span className="text-text-primary">Bulk goes through export.</span>{" "}
+            CSV or XLSX in a single call, which is one line into pandas and far
+            faster than paging the read endpoints for a backfill.
+          </li>
+        </ul>
         <QuickStart />
       </section>
 
@@ -196,7 +246,8 @@ export default async function AccountApiPage({
       <div>
         <h1 className="text-2xl font-semibold">API &amp; integrations</h1>
         <p className="text-text-secondary mt-1 text-sm">
-          Your subscription, API keys, and the Claude connector in one place.
+          Commodity sentiment that shows its work — over plain HTTP, or inside
+          Claude. Your subscription, keys and connector in one place.
         </p>
       </div>
 
@@ -226,6 +277,12 @@ export default async function AccountApiPage({
           than waiting behind the tier lookup. */}
       <section className="space-y-3">
         <h2 className="text-lg font-semibold">Claude MCP connector</h2>
+        <p className="text-text-secondary text-sm">
+          The same data, asked for in plain English. Add Integra to Claude with
+          the key above, then ask it for a market brief, a sentiment read, or
+          where the model disagrees with the prediction markets — no client to
+          build and no schema to learn.
+        </p>
         <ConnectClaude />
       </section>
     </div>
