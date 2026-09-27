@@ -156,6 +156,7 @@ def _score(articles: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
             basic_sentiment_analysis,
             extract_commodity_tickers,
             extract_keywords,
+            driver_labels,
             normalize_commodity,
         )
         # NOT `vader_analyzer` — that global is None at import time and only
@@ -207,6 +208,12 @@ def _score(articles: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
             "categories": [article.get("category", "general")],
             "tickers": extract_commodity_tickers(text),
             "keywords": extract_keywords(text),
+            # The contextual form. `keywords` stays because archived rows and
+            # older mobile builds read it, but it answers with topic nouns —
+            # "oil", "price", "supply" — which are equally present in a
+            # headline that sent the market up and one that sent it down, and
+            # so explain nothing about the score they sit beside.
+            "key_drivers": driver_labels(text, commodity),
             "commodity": commodity,
             # See the note on the unscored path above: omit this and the image
             # captured at fetch time never reaches archive_writer.

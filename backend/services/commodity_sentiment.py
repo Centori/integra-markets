@@ -253,8 +253,16 @@ _SIGNAL_WEIGHTS: Dict[str, float] = {
     # Industrial metals and the newly covered markets
     "Mine supply disruption": 0.9,
     "Mine supply growth": 0.9,
-    "Exchange stock draw": 0.8,
-    "Exchange stock build": 0.8,
+    # 0.8 put these BELOW SENTIMENT_RULE_DOMINANCE_WEIGHT, so a reported
+    # inventory move never governed the reading: "Copper inventories rose
+    # sharply at LME warehouses" fired the bearish rule and still scored
+    # NEUTRAL, because tone was allowed to argue with it. The grain equivalent
+    # — "Stocks tightening" / "Stocks building" — has always been 0.9 for the
+    # same kind of statement. Exchange stocks are daily observed warehouse
+    # data and grain stocks are a periodic official estimate, so if anything
+    # the metals version is the more direct evidence. Aligned.
+    "Exchange stock draw": 0.9,
+    "Exchange stock build": 0.9,
     "Concentrate tightness": 0.7,
     "Concentrate surplus": 0.7,
     "China stimulus": 0.7,
@@ -339,11 +347,48 @@ def signal_weight(signal: str) -> float:
 # So the gap is tempered — any characters EXCEPT ones that start a quantity
 # noun. The price may extend, ease or edge its way to the verb; inventories,
 # stocks, output and yields may not stand in for it.
-_NOT_A_QUANTITY = (
-    r"(?:(?!\b(?:inventor|stock|stockpile|carryout|carry-out|production|output|"
+# Words that must not appear between a price subject and its verb.
+#
+# QUANTITY nouns, because "copper inventories rose" is a supply statement and
+# not a price one.
+_QUANTITY_NOUNS = (
+    r"inventor|stock|stockpile|carryout|carry-out|production|output|"
     r"supply|supplies|export|import|reserve|storage|yield|acreage|harvest|"
-    r"capacity|volume|shipment|cargo)\w*)[\s\S]){0,28}"
+    r"capacity|volume|shipment|cargo"
 )
+
+# The verbs of the OPPOSING direction, which is the harder lesson.
+#
+# "Gold slips as rising oil prices, Treasury yields dent appeal" scored BULLISH.
+# The subject was right — gold — and the gap then carried the match over the
+# actual predicate, "slips", to reach "rising" nine characters later. A gap wide
+# enough to be useful is wide enough to skip the word that answers the question,
+# and the first directional verb after the subject is the one that governs it.
+#
+# So each direction's gap forbids the other's verbs. The pattern can still reach
+# across "prices" or "futures", and can no longer reach across "fell".
+_PRICE_UP_VERBS = (
+    r"surg\w+|soar\w*|jump\w*|rall\w+|climb\w*|spike\w*|rose|ris\w*|gain\w*|"
+    r"hit\w*|top\w*|highest|record high"
+)
+# slip/ease/retreat/soften/dip/pare were absent entirely, which is why "Gold
+# slips" had no down rule to fire even before the gap carried it upward.
+# Spelled out rather than stemmed where a stem would over-match: `eas\w+` also
+# matches "east", and `dip\w*` matches "diplomacy".
+_PRICE_DOWN_VERBS = (
+    r"slump\w*|plunge\w*|tumbl\w+|slid\w*|slip\w*|sank|sink\w*|fall\w*|fell|"
+    r"drop\w*|declin\w+|retreat\w*|eased|eases|easing|soften\w*|dipped|dips|"
+    r"dipping|pared|pares|paring|shed|lowest|record low"
+)
+
+
+def _price_gap(opposing_verbs: str) -> str:
+    """Up to 28 characters that contain neither a quantity noun nor a reversal."""
+    return r"(?:(?!\b(?:" + _QUANTITY_NOUNS + r"|" + opposing_verbs + r")\w*)[\s\S]){0,28}"
+
+
+# Kept for the rules that only need the quantity guard.
+_NOT_A_QUANTITY = r"(?:(?!\b(?:" + _QUANTITY_NOUNS + r")\w*)[\s\S]){0,28}"
 
 
 
@@ -404,14 +449,14 @@ _CURVE_RULES: Dict[str, List[Dict[str, str]]] = {
                 # Mount" scored NEUTRAL because the only rule that fired was the
                 # war risk, and the word "surge" — the actual answer — was
                 # visible to VADER only, which read the sentence as fearful.
-                {"pattern": _PRICE_SUBJECT + r"(?:\s+(?:price|prices|future|futures|spot|contract|contracts|benchmark)s?)?" + _NOT_A_QUANTITY + r"(surg\w+|soar\w*|jump\w*|rall\w+|climb\w*|spike\w*|rose|ris\w*|gain\w*|hit\w*|top\w*|highest|record high)", "signal": "Price action up"},
+                {"pattern": _PRICE_SUBJECT + r"(?:\s+(?:price|prices|future|futures|spot|contract|contracts|benchmark)s?)?" + _price_gap(_PRICE_DOWN_VERBS) + r"(" + _PRICE_UP_VERBS + r")", "signal": "Price action up"},
         {"pattern": r"(prompt|time|front)[- ]spread\w*.{0,24}(widen\w*|strengthen\w*|firm\w*)", "signal": "Prompt spread firming"},
         {"pattern": r"curve.{0,24}(flip\w*|mov\w+).{0,16}backwardat\w+", "signal": "Backwardation"},
     ],
     "bearish": [
         {"pattern": r"contango", "signal": "Contango"},
                 # Mirror of Price action up. _MIRROR_PAIRS asserts equal weight.
-                {"pattern": _PRICE_SUBJECT + r"(?:\s+(?:price|prices|future|futures|spot|contract|contracts|benchmark)s?)?" + _NOT_A_QUANTITY + r"(slump\w*|plunge\w*|tumbl\w+|slid\w*|sank|sink\w*|fall\w*|fell|drop\w*|declin\w+|lowest|record low)", "signal": "Price action down"},
+                {"pattern": _PRICE_SUBJECT + r"(?:\s+(?:price|prices|future|futures|spot|contract|contracts|benchmark)s?)?" + _price_gap(_PRICE_UP_VERBS) + r"(" + _PRICE_DOWN_VERBS + r")", "signal": "Price action down"},
         {"pattern": r"(floating storage|storage economics|carry trade)", "signal": "Storage economics"},
         {"pattern": r"(prompt|time|front)[- ]spread\w*.{0,24}(collaps\w+|weaken\w*|narrow\w*)", "signal": "Prompt spread weakening"},
     ],
@@ -588,6 +633,29 @@ def get_commodity_rulebook() -> Dict[str, Dict[str, List[Dict[str, str]]]]:
                 # tone alone and came out bearish for crude.
                 {"pattern": r"(hormuz|suez|bab el[- ]?mandeb|malacca|bosphorus|dardanelles|panama canal|red sea|strait|chokepoint).{0,44}(slump\w*|fall\w*|fell|drop\w*|plunge\w*|halt\w*|clos\w+|block\w*|disrupt\w*|divert\w*|avoid\w*|reroute\w*|suspend\w*|down \d)", "signal": "Chokepoint disruption"},
                 {"pattern": r"(traffic|transit\w*|flow\w*|shipment\w*|voyage\w*|passage).{0,30}(hormuz|suez|bab el[- ]?mandeb|malacca|red sea|strait|canal).{0,30}(slump\w*|fall\w*|fell|drop\w*|plunge\w*|halt\w*|disrupt\w*|down \d)", "signal": "Chokepoint disruption"},
+                # A closed waterway is usually reported as a MEASUREMENT, not
+                # as the word "disruption". Both of these ran on the live feed
+                # during the Hormuz crisis and fired nothing:
+                #
+                #   "Hormuz Traffic Running 80% Below Its 10-Day Average"
+                #   "Just One Commodity Vessel Left the Strait of Hormuz"
+                #
+                # The rules above want a disruption verb adjacent to the place
+                # name. Tanker-tracking copy states the shortfall in numbers
+                # instead, which is the more precise statement and the one the
+                # market actually trades.
+                {"pattern": r"(hormuz|suez|bab el[- ]?mandeb|malacca|bosphorus|dardanelles|panama canal|red sea|strait|chokepoint)"
+                            r".{0,40}(traffic|transit\w*|flow\w*|shipment\w*|vessel\w*|tanker\w*|cargo\w*|volume\w*)"
+                            r".{0,30}(below|under|beneath|short of)", "signal": "Chokepoint disruption"},
+                {"pattern": r"(traffic|transit\w*|flow\w*|vessel\w*|tanker\w*|shipment\w*)"
+                            r".{0,36}(below|under)\s+(?:its\s+|the\s+)?\w*\s*(average|norm\w*|usual|typical|baseline)"
+                            r".{0,44}(hormuz|suez|bab el[- ]?mandeb|malacca|red sea|strait|canal)?", "signal": "Chokepoint disruption"},
+                # "Just one vessel left the Strait of Hormuz" — a count so low
+                # it is the story. Bounded to small numbers written as words or
+                # single digits, so "21 tankers transited" does not match.
+                {"pattern": r"(?:just|only|no more than)\s+(?:one|two|three|a handful of|\d)\s+"
+                            r"[\w\s-]{0,24}?(vessel\w*|tanker\w*|ship\w*|cargo\w*)"
+                            r".{0,44}(hormuz|suez|bab el[- ]?mandeb|malacca|red sea|strait|canal)", "signal": "Chokepoint disruption"},
                 {"pattern": r"(export|shipment|loading|output|production).{0,24}(halt\w*\w*|suspend\w*|stopp?\w*|curtail\w*)", "signal": "Export halt"},
                 {"pattern": r"demand.{0,18}(ris\w*|rose|strong\w*|strengthen\w*|increas\w+|recover\w*)", "signal": "Demand strengthening"},
                 # Demand as a flow. A refiner does not "demand" crude in a
@@ -720,13 +788,27 @@ def get_commodity_rulebook() -> Dict[str, Dict[str, List[Dict[str, str]]]]:
         "corn": {
             "bullish": [
                 {"pattern": r"(drought|heatwave|crop stress|yield loss)", "signal": "Crop stress"},
-                {"pattern": r"(ethanol demand|export sales).{0,18}(ris\w*|rose|strong\w*|strengthen\w*)", "signal": "Demand support"},
+                # "export shipments" and "export inspections" are the USDA's own
+                # weekly vocabulary and appear in headlines far more often than
+                # "export sales"; the bearish mirror already knew "inspections".
+                {"pattern": r"(ethanol demand|export sales?|export shipments?|export inspections?|export demand)"
+                            r".{0,24}(ris\w*|rose|strong\w*|strengthen\w*|robust|brisk|remain\w* strong)",
+                 "signal": "Demand support"},
                 {"pattern": r"(ending stocks?|carryout|stocks?[- ]to[- ]use|grain stocks?).{0,26}(fall\w*|fell|drop\w*|declin\w+|tighten\w*|below|cut\w*)", "signal": "Stocks tightening"},
                 {"pattern": r"(wasde|usda).{0,30}(cut\w*|lower\w*|reduc\w+).{0,20}(yield|production|stocks?|acreage)", "signal": "WASDE downgrade"},
                 {"pattern": r"(crop conditions?|good[- ]to[- ]excellent|good/excellent).{0,24}(fall\w*|fell|drop\w*|declin\w+|deteriorat\w+)", "signal": "Crop conditions deteriorating"},
             ],
             "bearish": [
-                {"pattern": r"(record crop|strong\w*|strengthen\w* yield|ample supply)", "signal": "Ample supply"},
+                # `strong\w*` sat here unanchored, so ANY "strong" in the
+                # sentence meant ample supply: "Corn Bulls Flock Back in as
+                # Export Shipments Remain Strong" scored BEARISH on the word
+                # "Strong" alone, while strong exports are demand and bullish.
+                # Bound to the nouns that make it a supply statement.
+                {"pattern": r"(record\s+(?:\w+\s+){0,2}crops?|ample supply|"
+                            r"(?:crop|harvest|yield|production|output|supply|supplies)\w*"
+                            r"(?:\s+\w+){0,2}\s+strong\w*|"
+                            r"strong\w*(?:\s+\w+){0,2}\s+(?:crop|harvest|yield|production|output|supply|supplies)|"
+                            r"strengthen\w* yield)", "signal": "Ample supply"},
                 {"pattern": r"(rainfall|weather).{0,18}(improv\w+|favorable)", "signal": "Improving crop conditions"},
                 {"pattern": r"(ending stocks?|carryout|stocks?[- ]to[- ]use|grain stocks?).{0,26}(ris\w*|rose|build\w*|built|increas\w+|above|ample|raise\w*)", "signal": "Stocks building"},
                 {"pattern": r"(wasde|usda).{0,30}(rais\w+|increas\w+|higher).{0,20}(yield|production|stocks?|acreage)", "signal": "WASDE upgrade"},
@@ -763,13 +845,28 @@ def get_commodity_rulebook() -> Dict[str, Dict[str, List[Dict[str, str]]]]:
         "copper": {
             "bullish": [
                 {"pattern": r"(mine|mining|smelter).{0,30}(strike|halt\w*\w*|disrupt\w+|landslide|outage|force majeure)", "signal": "Mine supply disruption"},
-                {"pattern": r"(lme|shfe|comex|exchange).{0,26}(stocks?|inventor\w+).{0,20}(fall\w*|fell|drop\w*|draw\w*|drew|declin\w+|low)", "signal": "Exchange stock draw"},
+                # The exchange name had to come FIRST, so "Copper inventories
+                # rose sharply at LME warehouses" matched nothing and fell
+                # through to tone — the failure mode this rulebook exists to
+                # prevent. `inventor`/`stockpile` are unambiguous and no longer
+                # need the qualifier; bare `stocks` still does, because "Copper
+                # Stocks Sink as Tariff Uncertainty Spooks Traders" is a real
+                # headline about mining EQUITIES, and reading it as an inventory
+                # draw would score a selloff as bullish.
+                {"pattern": r"(?:(?:lme|shfe|comex|exchange|warehouse)\w*.{0,26}stocks?|"
+                            r"(?:inventor\w+|stockpiles?))"
+                            r".{0,26}(fall\w*|fell|drop\w*|draw\w*|drew|declin\w+|slid\w*|"
+                            r"lowest|three-year low|multi-year low|low)", "signal": "Exchange stock draw"},
                 {"pattern": r"(grid|electrification|ev|data cent\w+|renewable).{0,26}(demand|build\w*|built[- ]?out|investment)", "signal": "Electrification demand"},
                 {"pattern": r"(treatment charge|tc/rc|spot tc).{0,24}(fall\w*|fell|drop\w*|collaps\w+|negative)", "signal": "Concentrate tightness"},
                 {"pattern": r"(china|chinese).{0,24}(stimulus|infrastructure|property support)", "signal": "China stimulus"},
             ],
             "bearish": [
-                {"pattern": r"(lme|shfe|comex|exchange).{0,26}(stocks?|inventor\w+).{0,20}(ris\w*|rose|build\w*|built|surge\w*|surging|climb\w*)", "signal": "Exchange stock build"},
+                # Mirror of the draw rule. _MIRROR_PAIRS asserts equal weight.
+                {"pattern": r"(?:(?:lme|shfe|comex|exchange|warehouse)\w*.{0,26}stocks?|"
+                            r"(?:inventor\w+|stockpiles?))"
+                            r".{0,26}(ris\w*|rose|build\w*|built|surge\w*|surging|climb\w*|"
+                            r"swell\w*|jump\w*|highest)", "signal": "Exchange stock build"},
                 {"pattern": r"(mine|smelter).{0,26}(expansion|ramp[- ]?up|restart\w*|new supply)", "signal": "Mine supply growth"},
                 {"pattern": r"(china|chinese).{0,26}(pmi|property|construction).{0,20}(weak\w*|contract\w+|slump|fall\w*|fell)", "signal": "China demand weakness"},
                 {"pattern": r"(treatment charge|tc/rc).{0,24}(ris\w*|rose|increas\w+|widen)", "signal": "Concentrate surplus"},
@@ -897,15 +994,23 @@ def analyze_fundamental_direction(text: str, commodity: Optional[str]) -> Dict[s
             "matched_signals": [],
             "rule_bias": "NONE"
         }
-    text_lower = text.lower()
+    # Searched against the ORIGINAL text with re.I rather than a lowercased
+    # copy, so the span a rule matched can be quoted back as it was written.
+    # That span is the evidence — "Gold slips", "Export Shipments Remain
+    # Strong" — and it is what makes a driver readable instead of a category.
     bullish_matches = []
     bearish_matches = []
+    phrases: Dict[str, str] = {}
     for entry in rulebook[normalized]["bullish"]:
-        if re.search(entry["pattern"], text_lower):
+        found = re.search(entry["pattern"], text, re.I)
+        if found:
             bullish_matches.append(entry["signal"])
+            phrases.setdefault(entry["signal"], found.group(0).strip())
     for entry in rulebook[normalized]["bearish"]:
-        if re.search(entry["pattern"], text_lower):
+        found = re.search(entry["pattern"], text, re.I)
+        if found:
             bearish_matches.append(entry["signal"])
+            phrases.setdefault(entry["signal"], found.group(0).strip())
     # Distinct signals, weighted. Two patterns can emit the same signal name --
     # "Infrastructure attack" has both an attack-then-noun and a noun-then-attack
     # form -- and one event described twice is not two pieces of evidence.
@@ -922,10 +1027,20 @@ def analyze_fundamental_direction(text: str, commodity: Optional[str]) -> Dict[s
     else:
         bias = "NEUTRAL"
     matched = [
-        {"signal": signal, "direction": "bullish", "weight": signal_weight(signal)}
+        {
+            "signal": signal,
+            "direction": "bullish",
+            "weight": signal_weight(signal),
+            "phrase": phrases.get(signal, ""),
+        }
         for signal in bullish_unique
     ] + [
-        {"signal": signal, "direction": "bearish", "weight": signal_weight(signal)}
+        {
+            "signal": signal,
+            "direction": "bearish",
+            "weight": signal_weight(signal),
+            "phrase": phrases.get(signal, ""),
+        }
         for signal in bearish_unique
     ]
     return {
@@ -1210,6 +1325,65 @@ _DRIVER_FALSE_FORMS = {
     "gas": {"gasket", "gaskets"},
     "corn": {"cornerstone", "corner", "cornered"},
 }
+
+
+# What the app calls "Key Sentiment Drivers".
+#
+# extract_keywords below answers with nouns off a fixed list — "oil", "price",
+# "supply", "demand" — which is a description of the topic and not of the
+# reading. Every one of those words is equally present in a headline that sent
+# the market up and one that sent it down, so as an explanation of a score it
+# explains nothing.
+#
+# The rulebook already knows better and was throwing it away. A fired rule
+# carries a named signal, a direction, a weight and — now that the matcher
+# keeps it — the span of text that triggered it. "Price action down · 'Gold
+# slips'" says what the engine read and why it read it that way.
+#
+# The generic terms remain as the fallback for text where no rule fires, marked
+# as context rather than as a driver, because naming the subject is still
+# better than saying nothing.
+def extract_key_drivers(
+    text: str, commodity: Optional[str] = None, limit: int = 5
+) -> List[Dict[str, Any]]:
+    """Contextual drivers behind a reading: what fired, which way, on what words.
+
+    Ordered by weight, so the evidence that governed the score leads. Falls back
+    to topic terms only when the rulebook found nothing to say.
+    """
+    if not text:
+        return []
+
+    fundamental = analyze_fundamental_direction(text, commodity)
+    drivers: List[Dict[str, Any]] = []
+    for signal in sorted(
+        fundamental.get("matched_signals", []),
+        key=lambda s: s.get("weight", 0),
+        reverse=True,
+    ):
+        phrase = (signal.get("phrase") or "").strip()
+        drivers.append({
+            "driver": signal["signal"],
+            "phrase": phrase,
+            "direction": signal["direction"],
+            "weight": signal.get("weight", 0.0),
+            # One string for clients that want a label and not a structure.
+            # NewsFeed.js renders `key_drivers` as chips and cannot use a dict.
+            "label": f"{signal['signal']} · \u201c{phrase}\u201d" if phrase else signal["signal"],
+        })
+
+    if drivers:
+        return drivers[:limit]
+
+    return [
+        {"driver": term, "phrase": "", "direction": "context", "weight": 0.0, "label": term}
+        for term in extract_keywords(text)[:limit]
+    ]
+
+
+def driver_labels(text: str, commodity: Optional[str] = None, limit: int = 5) -> List[str]:
+    """extract_key_drivers flattened to strings, for clients expecting a list."""
+    return [d["label"] for d in extract_key_drivers(text, commodity, limit)]
 
 
 def extract_keywords(text: str) -> List[str]:
