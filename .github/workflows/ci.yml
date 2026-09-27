@@ -103,6 +103,14 @@ jobs:
       - name: MCP tool lists in sync with the dashboard
         run: node mcp/integra-mcp/scripts/check-tool-parity.mjs
 
+      # Navigation dead ends. Three have shipped from dashboard/: a "Docs" link
+      # pointing at a 404 mintlify host for weeks, a header logo whose target
+      # bounced signed-out visitors back to the page they were on, and no link
+      # anywhere to the marketing site — so signing out left you on a login form
+      # with no route onward. All three are static properties of the source.
+      - name: Dashboard links resolve and offer a way out
+        run: node dashboard/scripts/check-links.mjs
+
       # The OAuth flow is how every Claude.ai user now authenticates — their
       # dialog has no field for a static header — so it is an auth surface on a
       # production host. The test starts the built server and drives the whole
