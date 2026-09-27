@@ -315,3 +315,150 @@ def check_and_consume_export(
         "reset": period_end(now),
         "used": used,
     }
+
+
+# ---------------------------------------------------------------------------
+# Burst limiting (requests per second)
+#
+# The dashboard advertised "100 req/sec burst" and no per-second limiter existed
+# anywhere in this codebase. Monthly metering does not constrain rate at all: a
+# key with 50,000 calls left can spend them as fast as the network allows, so
+# one loop could saturate the backend for every other customer while remaining
+# inside its plan.
+#
+# WHAT IS ENFORCED, precisely, because the published number has to be a promise
+# we keep: a token bucket per (key, process). There is no shared counter —
+# Railway runs this image behind a load balancer and no Redis is provisioned —
+# so with N replicas a key's true ceiling is N * RATE.
+#
+# That asymmetry decides which number we publish. We publish the PER-PROCESS
+# rate, which is therefore a FLOOR: a key is never refused below it, and may be
+# allowed above it when traffic spreads across replicas. Publishing N * RATE
+# would be the other way round — a number we could not honour the moment the
+# load balancer pinned a client to one replica, which is exactly the shape of
+# the bug this replaces.
+#
+# The bucket also allows a genuine burst: capacity is BURST_CAPACITY_FACTOR
+# seconds' worth of tokens, so a client that has been idle can fire a batch of
+# parallel requests without being refused, then settles to the sustained rate.
+# ---------------------------------------------------------------------------
+
+_BURST_RATES: Dict[str, float] = {
+    "api_trial":   float(os.environ.get("INTEGRA_BURST_API_TRIAL", "5")),
+    "api_basic":   float(os.environ.get("INTEGRA_BURST_API_BASIC", "25")),
+    "api":         float(os.environ.get("INTEGRA_BURST_API", "25")),
+    "api_history": float(os.environ.get("INTEGRA_BURST_API_HISTORY", "50")),
+}
+_BURST_RATE_FALLBACK = float(os.environ.get("INTEGRA_BURST_UNKNOWN", "5"))
+
+# Seconds of allowance a bucket may bank while idle. 2s at 25/s lets an MCP
+# client fan out ~50 parallel calls for one question, which is the realistic
+# burst shape, without letting an idle key bank a minute's worth.
+BURST_CAPACITY_FACTOR = float(os.environ.get("INTEGRA_BURST_CAPACITY_FACTOR", "2"))
+
+
+def burst_rate_for_tier(tier: Optional[str]) -> float:
+    """Sustained requests per second per key. See the module note on replicas."""
+    return _BURST_RATES.get(tier or "", _BURST_RATE_FALLBACK)
+
+
+class _Bucket:
+    __slots__ = ("tokens", "updated_at")
+
+    def __init__(self, tokens: float, updated_at: float) -> None:
+        self.tokens = tokens
+        self.updated_at = updated_at
+
+
+_buckets: Dict[str, _Bucket] = {}
+_bucket_lock = threading.Lock()
+
+# Bound memory. Buckets are keyed by api key id and only created on use, but a
+# long-lived process serving many keys would otherwise grow without limit.
+_MAX_BUCKETS = int(os.environ.get("INTEGRA_BURST_MAX_BUCKETS", "10000"))
+
+
+def reset_burst_cache() -> None:
+    """Drop all buckets. For tests."""
+    with _bucket_lock:
+        _buckets.clear()
+
+
+def check_burst(
+    key_id: str,
+    tier: Optional[str],
+    now: Optional[float] = None,
+) -> Tuple[bool, Dict[str, Any]]:
+    """Take one token from the key's bucket.
+
+    Returns ``(allowed, info)`` where info carries the rate and the wait in
+    seconds until a token is available, for Retry-After.
+
+    Unlike monthly metering this needs no backend, so there is no fail-open
+    path — it cannot be degraded by Supabase being unreachable. It is still
+    suppressed by INTEGRA_METERING_ENABLED=0 along with the monthly cap, so one
+    switch disables all enforcement during an incident.
+    """
+    rate = burst_rate_for_tier(tier)
+    capacity = max(rate * BURST_CAPACITY_FACTOR, 1.0)
+    monotonic = now if now is not None else __import__("time").monotonic()
+
+    with _bucket_lock:
+        if len(_buckets) > _MAX_BUCKETS:
+            _buckets.clear()
+        bucket = _buckets.get(key_id)
+        if bucket is None:
+            # A new bucket starts FULL. Starting empty would refuse the first
+            # request a key ever makes, which reads as a broken key.
+            bucket = _Bucket(capacity, monotonic)
+            _buckets[key_id] = bucket
+        else:
+            elapsed = max(0.0, monotonic - bucket.updated_at)
+            bucket.tokens = min(capacity, bucket.tokens + elapsed * rate)
+            bucket.updated_at = monotonic
+
+        if bucket.tokens >= 1.0:
+            bucket.tokens -= 1.0
+            return True, {"rate": rate, "capacity": capacity, "retry_after": 0.0}
+
+        # Not enough for a whole token: say how long until there is one.
+        deficit = 1.0 - bucket.tokens
+        wait = deficit / rate if rate > 0 else 1.0
+
+    return False, {"rate": rate, "capacity": capacity, "retry_after": wait}
+
+
+# ---------------------------------------------------------------------------
+# Published plan spec
+#
+# The dashboard said "100k requests / month, 100 req/sec burst" as hand-typed
+# copy while _DEFAULT_LIMITS enforced 50,000/month and nothing enforced a rate
+# at all. A paying customer was therefore promised twice the allowance they had
+# and would have been refused at 50,000 with no explanation that matched
+# anything they had been told.
+#
+# The fix is structural rather than a corrected string: the numbers a customer
+# is shown are READ OUT OF the constants that enforce them, through
+# /api/keys/limits. Copy cannot drift from enforcement because nobody types it.
+# ---------------------------------------------------------------------------
+
+def plan_spec(tier: Optional[str]) -> Dict[str, Any]:
+    """The limits actually enforced for `tier`, for display to its owner."""
+    from services.entitlement import export_depth_days, query_depth_days
+
+    def _finite(value: float) -> Optional[float]:
+        """inf is not JSON. None means unlimited to every client we ship."""
+        return None if value == float("inf") else value
+
+    return {
+        "tier": tier or "",
+        "requests_per_month": limit_for_tier(tier),
+        "requests_per_second": burst_rate_for_tier(tier),
+        "burst_capacity": int(max(burst_rate_for_tier(tier) * BURST_CAPACITY_FACTOR, 1)),
+        "query_depth_days": _finite(query_depth_days(tier)),
+        "export_depth_days": _finite(export_depth_days(tier)),
+        "exports_per_month": export_count_limit(tier),
+        "export_rows_per_call": export_rows_limit(tier, "csv"),
+        "export_rows_per_call_xlsx": export_rows_limit(tier, "xlsx"),
+        "enforced": ENFORCED,
+    }

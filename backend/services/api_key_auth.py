@@ -37,11 +37,14 @@ from services.entitlement import (  # noqa: E402  (kept beside the scope model i
     query_depth_days,
     resolve as resolve_entitlement,
 )
+from services import rate_limit  # noqa: E402
 from services.rate_limit import (  # noqa: E402
     check_and_consume,
+    check_burst,
     rate_limit_headers,
     retry_after_seconds,
 )
+from services import usage_alerts, usage_recorder  # noqa: E402
 
 
 def effective_scopes(auth_row: Dict[str, Any]) -> set:
@@ -190,6 +193,12 @@ async def verify_api_key(
     if row is None:
         raise HTTPException(status_code=401, detail="invalid API key")
 
+    # Staged HERE — before any check that can refuse — so the usage log records
+    # refusals too. Written by the middleware in services/usage_recorder once the
+    # response status exists; see that module for why it cannot be written from
+    # inside this dependency.
+    usage_recorder.stage(request, row["id"], request.url.path, request.method)
+
     # The key's own lifetime, independent of the subscription, so a beta key can
     # carry a hard stop even if the tier outlives it.
     expires_at = row.get("expires_at")
@@ -240,12 +249,46 @@ async def verify_api_key(
             headers={**headers, "Retry-After": str(retry)},
         )
 
+    # Per-second burst, checked after the monthly cap. Order matters: a key that
+    # is out of monthly allowance should be told that, not told to slow down and
+    # try again in 40ms when trying again will not help.
+    #
+    # In-process token bucket, so this is a floor rather than a ceiling when the
+    # image runs on more than one replica — see the note in services/rate_limit.
+    burst_ok, burst = check_burst(row["id"], ent.tier)
+    headers["X-RateLimit-Rate"] = str(int(burst["rate"]))
+    if not burst_ok and rate_limit.ENFORCED:
+        wait = burst["retry_after"]
+        raise HTTPException(
+            status_code=429,
+            detail=(
+                f"rate limit exceeded: the {ent.tier} tier allows "
+                f"{int(burst['rate'])} requests/second per key "
+                f"(bursts of {int(burst['capacity'])}). Retry in "
+                f"{wait:.2f}s, or raise the limit at "
+                f"https://dashboard.integramarkets.app/api-tier"
+            ),
+            # Retry-After must be an integer per RFC 9110, and 0 would invite an
+            # immediate retry that fails again. Ceil to 1 for a sub-second wait.
+            headers={**headers, "Retry-After": str(max(1, math.ceil(wait)))},
+        )
+
     # Success path carries the same headers so clients can self-throttle
     # instead of discovering the ceiling by hitting it.
     for header, value in headers.items():
         response.headers[header] = value
 
-    _record_usage_async(supabase, row, request, int((time.monotonic() - started) * 1000))
+    usage_recorder.set_latency(request, int((time.monotonic() - started) * 1000))
+
+    # Threshold notification. Off-thread and only past the lowest configured
+    # threshold, so the common case costs nothing.
+    usage_alerts.evaluate_async(
+        supabase,
+        row.get("user_id"),
+        ent.tier,
+        meter.get("used"),
+        meter.get("limit", 0),
+    )
     return row
 
 
@@ -293,17 +336,8 @@ def _lookup_row(supabase: Any, key: str) -> Optional[Dict[str, Any]]:
     return rows[0]
 
 
-def _record_usage_async(supabase: Any, row: Dict[str, Any], request: Request, latency_ms: int) -> None:
-    """Best-effort write; never raise from inside an authenticated request."""
-    try:
-        supabase.table("api_key_usage").insert({
-            "key_id": row["id"],
-            "endpoint": request.url.path,
-            "method": request.method,
-            "latency_ms": latency_ms,
-        }).execute()
-        supabase.table("api_keys").update({
-            "last_used_at": "now()",
-        }).eq("id", row["id"]).execute()
-    except Exception as exc:  # noqa: BLE001
-        logger.warning("api_key usage logging failed: %s", exc)
+# `_record_usage_async` used to live here. It wrote the usage row from inside
+# this dependency, which is before a status code exists — so status_code was
+# NULL on every row since launch, and requests refused at 401/403/429 were never
+# logged at all. The write now happens in services/usage_recorder, from HTTP
+# middleware, where the response is in hand.

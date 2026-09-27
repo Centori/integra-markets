@@ -324,6 +324,30 @@ app.add_middleware(
 )
 
 # ---------------------------------------------------------------------------
+# API-key usage logging.
+#
+# This sees refused requests as well as served ones, which is the point: the
+# usage row has to carry a status code, and 401/403/429 are the rows a customer
+# most needs. It works because Starlette's ExceptionMiddleware sits INSIDE the
+# whole user-middleware stack, so by the time any http middleware inspects the
+# response, an HTTPException raised in a dependency has already been converted
+# to a real 429 response by the handlers below. Position relative to the
+# request-id middleware is therefore not load-bearing.
+#
+# verify_api_key stages the record; this flushes it. See
+# services/usage_recorder for why it cannot be written from the dependency.
+# ---------------------------------------------------------------------------
+try:
+    from services.usage_recorder import install as _install_usage_recorder
+
+    _install_usage_recorder(app)
+except Exception:  # noqa: BLE001
+    # A logging path must never stop the API from booting. Loud, because with
+    # this absent every authenticated request goes unrecorded and the usage
+    # page silently reads zero.
+    logger.exception("usage recorder middleware not installed — usage will not be logged")
+
+# ---------------------------------------------------------------------------
 # Request identity + a machine-readable error envelope.
 #
 # Registered AFTER CORSMiddleware so it runs INSIDE it: Starlette applies

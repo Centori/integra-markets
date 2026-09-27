@@ -127,6 +127,105 @@ async def create_checkout(
 
 
 # ---------------------------------------------------------------------------
+# POST /api/stripe/portal — self-serve billing
+#
+# There was no way for a customer to see an invoice, change a card or cancel.
+# The dashboard's own copy said "Manage or cancel from the Stripe billing portal
+# link emailed after purchase", which is not a billing page: those links expire,
+# and a customer who has lost the email has no route at all short of emailing
+# support. For a subscription product that is both a support cost and, in the
+# EU/UK, a cancellation path a customer is entitled to find.
+#
+# Stripe's hosted portal handles invoices, payment methods, cancellation and
+# proration. The only thing needed here is a session, created against the
+# stripe_customer_id the webhook already stores on user_subscriptions.
+# ---------------------------------------------------------------------------
+
+
+class PortalRequest(BaseModel):
+    # Where Stripe sends the customer when they click "Return". Validated
+    # against an allowlist below — an open redirect would otherwise be
+    # reachable via an authenticated POST.
+    return_path: str = "/account/billing"
+
+
+_PORTAL_RETURN_ORIGIN = os.environ.get(
+    "INTEGRA_DASHBOARD_ORIGIN", "https://dashboard.integramarkets.app"
+).rstrip("/")
+
+# Paths the portal may return to. An allowlist rather than a prefix check:
+# "starts with /" admits "//evil.example.com", which browsers read as a
+# protocol-relative absolute URL.
+_ALLOWED_RETURN_PATHS = frozenset({
+    "/account/billing",
+    "/account/api",
+    "/account",
+})
+
+
+@router.post("/portal")
+async def create_portal_session(
+    payload: PortalRequest,
+    auth: Dict[str, Any] = Depends(verify_supabase_jwt),
+) -> dict:
+    """Return a one-time URL to Stripe's hosted billing portal."""
+    from services._supabase import get_supabase_client
+
+    return_path = payload.return_path if payload.return_path in _ALLOWED_RETURN_PATHS \
+        else "/account/billing"
+
+    supabase = get_supabase_client()
+    if supabase is None:
+        raise HTTPException(status_code=503, detail="supabase unavailable")
+
+    user_id = auth["user_id"]
+    try:
+        rows = (
+            supabase.table("user_subscriptions")
+            .select("stripe_customer_id, tier, source")
+            .eq("user_id", user_id)
+            .limit(1)
+            .execute()
+            .data
+            or []
+        )
+    except Exception as exc:  # noqa: BLE001
+        logger.exception("portal: subscription lookup failed")
+        raise HTTPException(status_code=500, detail=str(exc))
+
+    customer_id = rows[0].get("stripe_customer_id") if rows else None
+    if not customer_id:
+        # A real and common state, not an error: comp grants, the free beta, and
+        # anyone subscribed through the App Store have no Stripe customer. 409
+        # rather than 404 so the dashboard can tell them WHERE their billing
+        # lives instead of showing a broken button.
+        source = (rows[0].get("source") if rows else None) or "none"
+        detail = {
+            "revenuecat": (
+                "This subscription was purchased through the App Store. Manage "
+                "it in your device's subscription settings — Apple does not "
+                "allow it to be changed from here."
+            ),
+            "comp": "This account has complimentary access; there is nothing to bill.",
+        }.get(source, "No billing account is attached to this login yet.")
+        raise HTTPException(status_code=409, detail=detail)
+
+    try:
+        stripe = _stripe()
+        session = stripe.billing_portal.Session.create(
+            customer=customer_id,
+            return_url=f"{_PORTAL_RETURN_ORIGIN}{return_path}",
+        )
+    except ImportError:
+        raise HTTPException(status_code=503, detail="stripe SDK not installed on backend")
+    except Exception as exc:  # noqa: BLE001
+        logger.exception("portal: session creation failed")
+        raise HTTPException(status_code=502, detail=f"stripe error: {exc}")
+
+    return {"url": session.url}
+
+
+# ---------------------------------------------------------------------------
 # POST /api/stripe/webhook — Stripe pushes subscription state changes here
 # ---------------------------------------------------------------------------
 
