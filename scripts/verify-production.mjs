@@ -176,9 +176,21 @@ check("mcp", "OAuth discovery is advertised and answered", async () => {
 check("mcp", "custom domain serves MCP", async () => {
   const { status, text } = await req(`${MCP_CUSTOM}/health`);
   if (status !== 200) return `HTTP ${status}`;
+
   // Proving TLS terminates is not enough: a proxy that answers /health from
   // its own edge while dropping the POST body would pass that and serve
   // nothing. Exchange real MCP over it.
+  //
+  // The probe key is deliberately invalid, so the expected answer is 401 — NOT
+  // 200. This check asserted 200 and went red the day the MCP server started
+  // validating keys, then stayed red for over a week: exactly the "a check that
+  // is red on every run stops being a signal" failure this file exists to
+  // avoid, and it was masking whether the branded domain worked at all.
+  //
+  // A refusal is the stronger test anyway. Reaching it proves the POST body
+  // traversed the proxy and was parsed as JSON-RPC by the MCP server, and the
+  // WWW-Authenticate header proves response headers come back intact — neither
+  // of which a 200 from a cached edge would establish.
   const rpc = await req(`${MCP_CUSTOM}/mcp`, {
     method: "POST",
     headers: {
@@ -188,10 +200,22 @@ check("mcp", "custom domain serves MCP", async () => {
     },
     body: JSON.stringify({ jsonrpc: "2.0", id: 1, method: "tools/list" }),
   });
-  if (rpc.status !== 200) return `tools/list over the custom domain -> ${rpc.status}`;
-  if (!rpc.text.includes("get_sentiment")) {
-    return "tools/list answered over the custom domain but advertised no tools";
+  if (rpc.status !== 401) {
+    return `tools/list with an invalid key -> ${rpc.status}, expected 401`;
   }
+
+  const challenge = rpc.headers.get("www-authenticate") ?? "";
+  if (!challenge.includes("resource_metadata=")) {
+    return "401 carried no WWW-Authenticate resource_metadata — Claude.ai uses " +
+      "that header to discover OAuth, so without it the connector cannot be added";
+  }
+  // The server has to know its PUBLIC address, not the Railway origin behind
+  // the proxy. If this pointed at the origin, every client would walk the OAuth
+  // discovery chain to the wrong host.
+  if (!challenge.includes(MCP_CUSTOM)) {
+    return `WWW-Authenticate points somewhere other than ${MCP_CUSTOM}: ${challenge.slice(0, 120)}`;
+  }
+
   return JSON.parse(text).ok ? true : `health said ${text.slice(0, 80)}`;
 });
 
