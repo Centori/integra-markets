@@ -9,7 +9,15 @@ export function SignOutButton() {
   const onSignOut = async () => {
     setPending(true);
     await browserClient().auth.signOut();
-    window.location.href = "/";
+    // Straight to /login, with a flag so the page can say what just happened.
+    //
+    // This used to be "/", which is the dashboard root: it redirects to
+    // /account, and /account redirects an anonymous visitor to /login. So a
+    // sign-out took two redirects to arrive at a bare login form that gave no
+    // indication of why you were looking at it — indistinguishable from a
+    // session that had expired on its own, and with nothing linking onward to
+    // the rest of the site.
+    window.location.href = "/login?signedOut=1";
   };
 
   return (

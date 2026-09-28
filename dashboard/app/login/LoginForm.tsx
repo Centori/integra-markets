@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { useSearchParams } from "next/navigation";
 import { browserClient } from "@/lib/supabase";
+import { MARKETING_URL } from "@/lib/site";
 import {
   GOOGLE_CLIENT_ID,
   createNonce,
@@ -47,6 +48,10 @@ function AppleIcon() {
 export default function LoginForm() {
   const searchParams = useSearchParams();
   const redirect = searchParams.get("redirect") ?? "/account";
+  // Set by SignOutButton. Without it, arriving here after signing out is
+  // indistinguishable from a session that expired by itself, and the page reads
+  // as "you have been logged out unexpectedly" rather than "that worked".
+  const signedOut = searchParams.get("signedOut") === "1";
 
   const [email, setEmail] = useState("");
   const [sent, setSent] = useState(false);
@@ -213,8 +218,26 @@ export default function LoginForm() {
 
   return (
     <div className="max-w-md mx-auto mt-16 space-y-6">
+      {signedOut ? (
+        <div
+          role="status"
+          className="rounded-lg border border-accent-positive bg-bg-secondary p-4 text-sm"
+        >
+          <p className="text-text-primary">You&apos;re signed out.</p>
+          <p className="text-text-secondary mt-1">
+            Sign back in below, or{" "}
+            <a href={MARKETING_URL} className="text-accent-primary underline">
+              return to integramarkets.app
+            </a>
+            .
+          </p>
+        </div>
+      ) : null}
+
       <div>
-        <h1 className="text-2xl font-semibold">Sign in or create account</h1>
+        <h1 className="text-2xl font-semibold">
+          {signedOut ? "Sign back in" : "Sign in or create account"}
+        </h1>
         <p className="text-text-secondary text-sm mt-1">
           Same account as the iOS app. New here? Any option below creates your
           free account.
@@ -280,6 +303,15 @@ export default function LoginForm() {
       )}
 
       {error ? <p className="text-xs text-accent-negative">{error}</p> : null}
+
+      {/* Present whether or not the visitor just signed out. This page is where
+          every gated route sends an anonymous visitor, and it previously had no
+          link anywhere except deeper in. */}
+      <p className="border-t border-bg-tertiary pt-4 text-center text-xs text-text-secondary">
+        <a href={MARKETING_URL} className="hover:text-text-primary">
+          &larr; Back to integramarkets.app
+        </a>
+      </p>
     </div>
   );
 }
