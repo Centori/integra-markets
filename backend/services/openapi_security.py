@@ -103,17 +103,43 @@ def apply_security(schema: Dict[str, Any]) -> Dict[str, Any]:
     return schema
 
 
+def _generate(app, get_openapi: Callable[..., Dict[str, Any]]) -> Dict[str, Any]:
+    return get_openapi(
+        title=app.title,
+        version=app.version,
+        description=app.description,
+        routes=app.routes,
+    )
+
+
 def build_schema(app, get_openapi: Callable[..., Dict[str, Any]]) -> Dict[str, Any]:
-    """`app.openapi` replacement: the generated schema, plus security."""
+    """The FULL generated schema, plus security. Internal/debug use only.
+
+    Served at /internal/openapi.json when INTEGRA_INTERNAL_OPENAPI=1. This is
+    what /openapi.json used to return, and it describes all 66 routes including
+    the Kalshi trading surface — see services/openapi_public for why that is no
+    longer the public answer.
+    """
     if getattr(app, "openapi_schema", None):
         return app.openapi_schema
-    schema = apply_security(
-        get_openapi(
-            title=app.title,
-            version=app.version,
-            description=app.description,
-            routes=app.routes,
-        )
-    )
+    schema = apply_security(_generate(app, get_openapi))
     app.openapi_schema = schema
+    return schema
+
+
+def build_public_schema(app, get_openapi: Callable[..., Dict[str, Any]]) -> Dict[str, Any]:
+    """`app.openapi` replacement: the CUSTOMER surface, plus security.
+
+    Filtered first, then secured, so the security pass only walks operations
+    that survive. Cached on its own attribute rather than `openapi_schema`,
+    which FastAPI itself reads — writing the filtered spec there would make the
+    full schema unreachable even for the internal route.
+    """
+    cached = getattr(app, "_integra_public_openapi", None)
+    if cached:
+        return cached
+    from services.openapi_public import filter_to_public
+
+    schema = apply_security(filter_to_public(_generate(app, get_openapi)))
+    app._integra_public_openapi = schema
     return schema
