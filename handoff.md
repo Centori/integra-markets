@@ -1,3 +1,61 @@
+<!-- HANDOFF:AUTO:BEGIN -->
+
+## Where we left off
+
+_Captured 2026-09-28 12:52 WAT after 0 minutes idle, by `scripts/handoff-daemon.sh`._
+_Everything in this block is derived and will be overwritten; write anything
+you want kept outside it._
+
+**Branch** `main` — in sync with `origin/main`
+
+**Uncommitted changes** — this is the part most easily lost:
+
+```
+ M .gitignore
+ M handoff.md
+ M package.json
+```
+
+**Last commits**
+
+```
+1d783b64 fix(api): stop publishing the Kalshi trading surface, and make history readable past 1000 rows (#109)
+d33535c4 fix(dashboard): signing out left you with no way back to the site (#110)
+4e9e26b4 feat(api): take Usage, Billing and Alerts off "Soon", and fix what was behind them (#108)
+5e1023bf fix(sentiment): the gap stepped over the verb, and drivers now quote the words (#107)
+2cda8e55 fix(ingest): give agriculture and metals a source, and stop feeds failing silently (#106)
+eb23aea5 fix(data): the product is not empty — three reasons it looked like it (#105)
+```
+
+**Open pull requests** none.
+
+<!-- HANDOFF:NEXT:BEGIN -->
+**Next**
+
+1. **Apply `supabase/migrations/20260927_api_usage_analytics.sql`.** Until it
+   runs, `/account/usage` and `/account/alerts` load and then error — the three
+   `api_usage_*` functions and the `api_usage_alerts` table do not exist yet.
+   Confirmed absent in production on 2026-09-28; `api_keys` and
+   `api_key_usage` are present, so the migration is purely additive.
+   Applying it needs a database write, which the session could not perform.
+
+2. **Watch the first real paginated call** to
+   `/v1/sentiment/{commodity}/history?cursor=`. The keyset `or=` filter is
+   asserted at the level of the expression string sent to PostgREST, not
+   against a live PostgREST — there are no Supabase credentials in the
+   checkout. Quoting is PostgREST's documented escape, but it is unproven.
+
+3. **Marketing-site landing copy** (`web/`, www.integramarkets.app) is still
+   undrafted. The dashboard has no landing page — `/` redirects to `/account` —
+   so the taglines and pillar copy from the copy deck have nowhere to live yet.
+
+Standing constraints: do not advertise an SDK (never published), and do not
+advertise `find_historical_analogs` (its endpoint returns 501 until the archive
+backfill lands).
+<!-- HANDOFF:NEXT:END -->
+
+<!-- HANDOFF:AUTO:END -->
+
 # Handoff — 2026-09-23
 
 > Latest. Read `CLAUDE.md` "Before claiming anything works" and the code repair

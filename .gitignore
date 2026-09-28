@@ -107,8 +107,16 @@ uv.lock
 deployment/
 
 # Scripts (be selective)
+#
+# `*.sh` has no leading slash, so it matches at ANY depth — the same mistake
+# documented for backend/tests below. It was meant to keep ad-hoc shell scripts
+# out of the repo ROOT, but it also ignores scripts/, which is where the
+# deliberate ones live. Five files in there are tracked only because they
+# predate the rule; the next one added simply vanished, with `git status`
+# reporting nothing.
 *.sh
 !start_backend.sh
+!scripts/*.sh
 
 # Ad-hoc test scripts in the repo ROOT only (test_groq_connection.py etc).
 # The leading slash matters: without it git matches at ANY depth, which
@@ -124,3 +132,8 @@ deployment/
 # Raw live schema pulled for SDK regeneration — openapi.json is the filtered
 # artefact that gets committed, not this.
 live_openapi.json
+
+# Handoff daemon state: pidfile, log, last-write stamp.
+# Local runtime, not shared — and without this the daemon reports its own
+# state directory as an untracked change in every report it writes.
+.handoff/
