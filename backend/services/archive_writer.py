@@ -73,6 +73,48 @@ def _excerpt(value):
     return cut.rstrip() + "…"
 
 
+# The contextual drivers, persisted.
+#
+# The rulebook has produced these on every ingest since the polarity work — a
+# named signal ("Chokepoint disruption") bound to the span of text that fired it
+# — and they were computed and then dropped, because no column existed to
+# receive them. jobs/news_fetcher put them in a dict that went nowhere, and
+# services/feed_store read `row.get("key_drivers")` from a database row where
+# the key could not exist, so it silently served generic keyword nouns instead.
+#
+# Only FIRED RULES are stored. extract_key_drivers falls back to topic terms
+# marked direction="context" when nothing matched, and persisting those would
+# refill the column with exactly the generic nouns this replaces — "oil",
+# "price", "supply" — which are equally present in a headline that sent the
+# market up and one that sent it down. An empty result is stored as NULL, which
+# is the honest answer: the rulebook read this article and found nothing it
+# recognised.
+def _signals_for(doc_row: Dict[str, Any]) -> Optional[List[Dict[str, Any]]]:
+    """Fired rulebook signals for one document, or None if none fired."""
+    text = " ".join(
+        part for part in (doc_row.get("title"), doc_row.get("content")) if part
+    ).strip()
+    if not text:
+        return None
+
+    payload = doc_row.get("raw_payload") or {}
+    commodity = payload.get("commodity") if isinstance(payload, dict) else None
+
+    try:
+        from services.commodity_sentiment import extract_key_drivers
+
+        drivers = extract_key_drivers(text, commodity)
+    except Exception as exc:  # noqa: BLE001
+        # Never block the archive write on an enrichment. A missing signal is a
+        # row without evidence attached; a raised exception here would lose the
+        # score as well.
+        logger.warning("archive_writer: signal extraction failed: %s", exc)
+        return None
+
+    fired = [d for d in drivers if d.get("direction") != "context"]
+    return fired or None
+
+
 def _url_hash(url: str) -> str:
     return hashlib.sha256(url.strip().lower().encode("utf-8")).hexdigest()
 
@@ -238,6 +280,7 @@ def persist_articles(
             "score": score["score"],
             "confidence": score["confidence"],
             "distribution": score["distribution"],
+            "signals": _signals_for(row),
         })
 
     if not score_rows:

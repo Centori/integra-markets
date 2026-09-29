@@ -166,6 +166,34 @@ def _driver_terms(row: Dict[str, Any]) -> List[str]:
     return out[:5]
 
 
+def _signal_labels(row: Dict[str, Any]) -> List[str]:
+    """Rendered labels for the fired rulebook signals on this row.
+
+    NewsFeed.js renders these as chips and cannot take a structure, so each
+    becomes one string. The phrase is included because it is the whole point —
+    "Exchange stock draw" is a claim, and "Exchange stock draw · 'Stockpiles Hit
+    Three-Year Low'" is a claim a reader can check against the headline in front
+    of them.
+    """
+    signals = row.get("signals")
+    if not isinstance(signals, list):
+        return []
+    labels: List[str] = []
+    for signal in signals:
+        if not isinstance(signal, dict):
+            continue
+        existing = signal.get("label")
+        if existing:
+            labels.append(str(existing))
+            continue
+        driver = signal.get("driver")
+        if not driver:
+            continue
+        phrase = (signal.get("phrase") or "").strip()
+        labels.append(f"{driver} \u00b7 \u201c{phrase}\u201d" if phrase else str(driver))
+    return labels
+
+
 def _drivers(row: Dict[str, Any]) -> List[Dict[str, Any]]:
     """Drivers in the {word, score} shape AIAnalysisOverlay maps.
 
@@ -174,11 +202,16 @@ def _drivers(row: Dict[str, Any]) -> List[Dict[str, Any]]:
     assert a precision the pipeline does not have. Leading terms rank higher
     because `extract_keywords` orders commodities first.
     """
-    # Prefer the contextual drivers the scorer now writes — "Price action down
-    # · 'Gold slips'" rather than "gold". They are what the engine actually
-    # read, and a reader can check them against the headline. Rows written
-    # before that existed, and the whole archive, still carry only `keywords`.
-    terms = row.get("key_drivers") or _driver_terms(row)
+    # The contextual drivers the scorer writes — "Price action down · 'Gold
+    # slips'" rather than "gold" — read from the row they are actually stored on.
+    #
+    # This used to read `row.get("key_drivers")`, a key that could never be
+    # present: jobs/news_fetcher built it in a dict that was returned, not
+    # written, and no column existed to receive it. So the first operand was
+    # always None and this silently fell through to generic keyword nouns on
+    # every card, with nothing anywhere reporting a problem. The signals now live
+    # on sentiment_scores.signals and arrive with the score.
+    terms = _signal_labels(row) or _driver_terms(row)
     if not terms:
         return []
     step = 0.5 / max(len(terms), 1)
@@ -270,7 +303,7 @@ def _fetch_sentiments(supabase, doc_ids: Sequence[str]) -> Dict[str, Dict[str, A
     try:
         resp = (
             supabase.table("sentiment_scores")
-            .select("document_id,sentiment,score,confidence,scored_at")
+            .select("document_id,sentiment,score,confidence,scored_at,signals")
             .in_("document_id", list(doc_ids))
             .order("scored_at", desc=True)
             .execute()

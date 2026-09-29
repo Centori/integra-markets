@@ -111,6 +111,37 @@ jobs:
       - name: Dashboard links resolve and offer a way out
         run: node dashboard/scripts/check-links.mjs
 
+      # The two Next.js sites, actually built.
+      #
+      # Nothing here compiled either of them, and www broke exactly the way that
+      # allows: removing the last card carrying an optional `soon` property made
+      # TypeScript stop inferring it, a read of `c.soon` became a compile error,
+      # and Vercel failed the production build. It then kept serving the previous
+      # deployment — so the site looked unchanged rather than broken, and the
+      # failure was invisible until someone noticed the copy had not updated.
+      #
+      # A build is the only check that catches that. Type errors do not appear in
+      # a lint run and the pages render fine in development.
+      - name: Marketing site builds
+        working-directory: web
+        run: |
+          npm ci --silent
+          npm run build
+        env:
+          NEXT_PUBLIC_SUPABASE_URL: https://example.supabase.co
+          NEXT_PUBLIC_SUPABASE_ANON_KEY: ci-placeholder
+          EXPO_PUBLIC_SUPABASE_URL: https://example.supabase.co
+          EXPO_PUBLIC_SUPABASE_ANON_KEY: ci-placeholder
+
+      - name: Dashboard builds
+        working-directory: dashboard
+        run: |
+          npm ci --silent
+          npm run build
+        env:
+          NEXT_PUBLIC_SUPABASE_URL: https://example.supabase.co
+          NEXT_PUBLIC_SUPABASE_ANON_KEY: ci-placeholder
+
       # The OAuth flow is how every Claude.ai user now authenticates — their
       # dialog has no field for a static header — so it is an auth surface on a
       # production host. The test starts the built server and drives the whole
