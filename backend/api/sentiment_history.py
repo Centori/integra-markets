@@ -293,6 +293,44 @@ async def sentiment_now(
     }
 
 
+def _with_evidence(row: Dict[str, Any]) -> Dict[str, Any]:
+    """Flatten the embedded document and its signals onto a history row.
+
+    PostgREST returns embeds as nested objects, and `sentiment_scores` comes back
+    as a LIST because a document may be scored by more than one model version.
+    The most recent is the one that produced the score in this row, so that is
+    the one whose signals are reported; older vintages are dropped rather than
+    merged, because merging them would attach evidence from a model that did not
+    make this reading.
+    """
+    doc = row.get("raw_documents") or {}
+    scores = doc.get("sentiment_scores") or []
+    if isinstance(scores, dict):
+        scores = [scores]
+
+    signals: List[Dict[str, Any]] = []
+    for entry in scores:
+        found = (entry or {}).get("signals")
+        if found:
+            signals = found
+            break
+
+    return {
+        "document_id": row.get("document_id"),
+        "sentiment": row.get("sentiment"),
+        "sentiment_score": row.get("sentiment_score"),
+        "confidence": row.get("confidence"),
+        "published_at": row.get("published_at"),
+        "headline": doc.get("title"),
+        "source": doc.get("source"),
+        "url": doc.get("url"),
+        # Named signals with the quoted span that fired each one. Empty when the
+        # rulebook recognised nothing in this article — which is a real answer,
+        # not a gap, and is why it is [] rather than a list of topic nouns.
+        "signals": signals,
+    }
+
+
 def _keyset_filter(published_at: str, document_id: str) -> str:
     """PostgREST `or=` expression for "strictly after this row" in desc order.
 
@@ -365,7 +403,13 @@ async def sentiment_history(
     try:
         query = (
             supabase.table("entity_mentions")
-            .select("document_id, sentiment, sentiment_score, confidence, published_at")
+            # sentiment_scores is embedded over the document_id FK so each row
+            # carries the evidence that produced it. Without this the endpoint
+            # returns a column of numbers a reader has no way to check.
+            .select(
+                "document_id, sentiment, sentiment_score, confidence, published_at, "
+                "raw_documents(title, source, url, sentiment_scores(signals))"
+            )
             .eq("entity", commodity_lc)
             .gte("published_at", start.isoformat())
             .lte("published_at", end.isoformat())
@@ -391,7 +435,7 @@ async def sentiment_history(
         rows = []
 
     has_more = len(rows) > limit
-    page = rows[:limit]
+    page = [_with_evidence(r) for r in rows[:limit]]
 
     body: Dict[str, Any] = {
         "commodity": commodity_lc,

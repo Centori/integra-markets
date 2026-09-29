@@ -264,8 +264,49 @@ class TestBackwardCompatibility:
         for field in ("commodity", "from", "to", "count", "limit", "items"):
             assert field in body, f"{field} disappeared from the response"
 
-    def test_a_client_that_ignores_the_cursor_still_gets_a_first_page(self, monkeypatch):
+    def test_every_original_field_survives_on_each_row(self, monkeypatch):
+        """Rows are reshaped now that they carry evidence, so the compatibility
+        property is that the original keys are all still there — not that the
+        row is byte-identical to what the database returned."""
         rows = [_row("2026-09-27T12:00:00+00:00", "doc-0")]
         client, _fake, _ = _build(monkeypatch, rows)
-        body = client.get("/v1/sentiment/oil/history").json()
-        assert body["items"] == rows
+        item = client.get("/v1/sentiment/oil/history").json()["items"][0]
+        for field in ("document_id", "sentiment", "sentiment_score", "confidence",
+                      "published_at"):
+            assert item[field] == rows[0][field], f"{field} changed or disappeared"
+
+    def test_rows_now_carry_the_headline_and_the_signals(self, monkeypatch):
+        """A document_id with no headline is not something a person can read,
+        and a score with no evidence is not something they can check."""
+        rows = [_row("2026-09-27T12:00:00+00:00", "doc-0")]
+        rows[0]["raw_documents"] = {
+            "title": "Hormuz Traffic Running 80% Below Its 10-Day Average",
+            "source": "Reuters",
+            "url": "https://example.com/a",
+            "sentiment_scores": [{"signals": [
+                {"driver": "Chokepoint disruption", "phrase": "80% Below Its 10-Day Average",
+                 "direction": "bullish", "weight": 1.0},
+            ]}],
+        }
+        client, _fake, _ = _build(monkeypatch, rows)
+        item = client.get("/v1/sentiment/oil/history").json()["items"][0]
+        assert item["headline"].startswith("Hormuz")
+        assert item["source"] == "Reuters"
+        assert item["signals"][0]["driver"] == "Chokepoint disruption"
+        assert "80%" in item["signals"][0]["phrase"]
+
+    def test_a_row_the_rulebook_did_not_recognise_has_empty_signals(self, monkeypatch):
+        """[] rather than a list of topic nouns. "Nothing fired" is a real
+        answer; generic keywords dressed as evidence are not."""
+        rows = [_row("2026-09-27T12:00:00+00:00", "doc-0")]
+        rows[0]["raw_documents"] = {"title": "Quiet day", "source": "X", "url": "u",
+                                    "sentiment_scores": [{"signals": None}]}
+        client, _fake, _ = _build(monkeypatch, rows)
+        assert client.get("/v1/sentiment/oil/history").json()["items"][0]["signals"] == []
+
+    def test_a_row_with_no_embedded_document_does_not_crash(self, monkeypatch):
+        """The embed can come back absent; the endpoint must degrade, not 500."""
+        rows = [_row("2026-09-27T12:00:00+00:00", "doc-0")]
+        client, _fake, _ = _build(monkeypatch, rows)
+        item = client.get("/v1/sentiment/oil/history").json()["items"][0]
+        assert item["headline"] is None and item["signals"] == []

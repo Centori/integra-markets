@@ -1,7 +1,7 @@
 'use client';
 
 import { motion } from 'framer-motion';
-import { Terminal, Database, MessagesSquare } from 'lucide-react';
+import { Terminal, Database, MessagesSquare, type LucideIcon } from 'lucide-react';
 
 // Capability section for the landing page. Tells developers what the API does;
 // it deliberately does NOT price it.
@@ -17,7 +17,27 @@ import { Terminal, Database, MessagesSquare } from 'lucide-react';
 // check, no client state and no session round-trip on the home page — it is
 // purely presentational. 'use client' remains only because framer-motion needs it.
 
-const capabilities = [
+/**
+ * Explicitly typed, because the inferred type broke the production build.
+ *
+ * `soon` marks a capability that is designed but not yet reachable by a
+ * customer. When the last card carrying it was removed, TypeScript stopped
+ * inferring the property on the array element type and the `c.soon` read below
+ * became a compile error — so www stopped deploying and quietly kept serving
+ * the previous build. The site looked unchanged rather than broken, which is
+ * the worst way for a build failure to present.
+ *
+ * Declaring the shape keeps the badge available for the next honest "not yet"
+ * without the array's contents deciding whether the code compiles.
+ */
+type Capability = {
+    icon: LucideIcon;
+    title: string;
+    description: string;
+    soon?: boolean;
+};
+
+const capabilities: Capability[] = [
     {
         icon: Terminal,
         title: 'REST API',

@@ -161,6 +161,9 @@ async def sentiment(
         seen.add(url)
         top.append(
             {
+                # Carried so signals can be joined on, and so a caller can fetch
+                # the full record from /v1/sentiment/{c}/history.
+                "document_id": r.get("document_id"),
                 "headline": doc.get("title") or "(no headline)",
                 "source": doc.get("source") or "unknown",
                 # Named `sentiment`, so it must BE sentiment. This previously
@@ -171,6 +174,8 @@ async def sentiment(
         )
         if len(top) >= 10:
             break
+
+    _attach_signals(supabase, top)
 
     return {
         "commodity": commodity_lc,
@@ -184,6 +189,13 @@ async def sentiment(
         # failure this endpoint used to have silently.
         "truncated": truncated,
         "updated_at": dt.datetime.now(dt.timezone.utc).isoformat(),
+        # RENAMED. These are the highest-|score| headlines, which is not what
+        # "drivers" says — a driver is the thing that moved the number, and this
+        # ranks articles by magnitude. The old key is kept alongside for a
+        # deprecation window because clients read it today; `signals` inside each
+        # entry is the actual evidence, named by the rule that fired and quoting
+        # the words that fired it.
+        "top_headlines": top,
         "top_drivers": top,
         # Archive extent, independent of `window` above and of this caller's
         # depth cap. `window` is what was asked for; `coverage` is what exists.
@@ -193,6 +205,50 @@ async def sentiment(
         "entities_merged": entity_names if len(entity_names) > 1 else None,
     }
 
+
+
+def _attach_signals(supabase: Any, entries: List[Dict[str, Any]]) -> None:
+    """Add the fired rulebook signals to each headline entry, in place.
+
+    A second query rather than an embed on the main read. The aggregate pages
+    through up to 20,000 rows to compute its mean, and adding a nested
+    sentiment_scores embed there would carry the evidence for every one of them
+    across the wire to use ten. This asks for exactly the ten documents that
+    made it into the response.
+
+    Best effort: evidence is an enrichment, and a score that cannot be explained
+    is worse than one that cannot be explained YET — but it is much worse to
+    fail the whole request for it.
+    """
+    ids = [e["document_id"] for e in entries if e.get("document_id")]
+    if not ids:
+        return
+    try:
+        rows = (
+            supabase.table("sentiment_scores")
+            .select("document_id, signals, model_version")
+            .in_("document_id", ids)
+            .order("model_version", desc=True)
+            .execute()
+        ).data or []
+    except Exception as exc:  # noqa: BLE001
+        logger.warning("v1_public: could not attach signals: %s", exc)
+        for entry in entries:
+            entry["signals"] = []
+        return
+
+    # Ordered newest-vintage first, so the first row seen for a document is the
+    # model that produced the score being explained. Older vintages are ignored
+    # rather than merged — evidence from a model that did not make this reading
+    # is not evidence for it.
+    by_doc: Dict[str, List[Dict[str, Any]]] = {}
+    for row in rows:
+        doc = row.get("document_id")
+        if doc is not None and doc not in by_doc:
+            by_doc[doc] = row.get("signals") or []
+
+    for entry in entries:
+        entry["signals"] = by_doc.get(entry.get("document_id"), [])
 
 
 def _flatten_docs(rows: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
