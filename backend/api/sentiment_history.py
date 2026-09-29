@@ -97,7 +97,17 @@ COMMODITY_WINDOW_DAYS = 30
 
 
 @router.get("/commodities")
-async def list_commodities(auth: Dict[str, Any] = Depends(verify_api_key)) -> Dict[str, Any]:
+async def list_commodities(
+    category: Optional[str] = Query(
+        default=None,
+        description=(
+            "Filter to one taxonomy category: commodities, energy_products, "
+            "transition_metals, agriculture, logistics, macro, geopolitical, "
+            "political, crypto. Omit for everything."
+        ),
+    ),
+    auth: Dict[str, Any] = Depends(verify_api_key),
+) -> Dict[str, Any]:
     """Commodities with scored articles in the last 30 days, busiest first.
 
     THE BUG THIS REPLACES. The previous implementation asked for 10,000 rows of
@@ -183,6 +193,31 @@ async def list_commodities(auth: Dict[str, Any] = Depends(verify_api_key)) -> Di
         for row in entity_aliases.collapse(commodities)
     ]
 
+    # Macro, geopolitical and political subjects stay in the list by default.
+    #
+    # They look like noise beside `oil` and `copper`, and the temptation is to
+    # hide them — but they are the substrate of the cross-asset product. The
+    # transmission chain a client brief is built on (supply threat -> energy ->
+    # headline CPI -> rate expectations -> USD -> gold and industrial metals)
+    # runs entirely through `fed_rates`, `inflation` and `usd_strength`.
+    # Filtering them out of the default response would remove the data behind
+    # the most differentiated thing the archive can produce.
+    #
+    # So they are LABELLED rather than hidden, and a caller who wants only
+    # physical commodities asks for that explicitly.
+    categories = sorted({m["category"] for m in merged if m.get("category")})
+    if category:
+        wanted = category.strip().lower()
+        if wanted not in categories:
+            raise HTTPException(
+                status_code=400,
+                detail=(
+                    f"unknown category {wanted!r}. Available in this window: "
+                    f"{', '.join(categories)}"
+                ),
+            )
+        merged = [m for m in merged if m.get("category") == wanted]
+
     return {
         # A plain list of names, kept because it is what the field was before and
         # what every existing caller reads.
@@ -193,6 +228,10 @@ async def list_commodities(auth: Dict[str, Any] = Depends(verify_api_key)) -> Di
         # the second getting 86% of the data.
         "commodities": [c["commodity"] for c in merged],
         "window_days": COMMODITY_WINDOW_DAYS,
+        # So a caller can discover the filter without reading docs, and can see
+        # that `fed_rates` sitting beside `oil` is a category rather than a bug.
+        "categories": categories,
+        "category": category.strip().lower() if category else None,
         # Each entry carries its human label, its taxonomy category (so `macro`
         # and `oil` stop being indistinguishable values of one field), and the
         # alternate spellings folded into it.
