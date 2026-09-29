@@ -79,6 +79,70 @@ function claudeConnectorLink(name: string, url: string): string {
 }
 
 /**
+ * The same destination, addressed to the installed desktop app.
+ *
+ * Claude for macOS, Windows and Linux registers the `claude://` scheme and
+ * routes `claude://claude.ai/new` to the same place the web URL reaches — so
+ * the desktop link is the web link with the scheme swapped, and the query and
+ * fragment survive unchanged. Verified against the installed app bundle, whose
+ * CFBundleURLSchemes contains exactly `claude`.
+ *
+ * Built by substitution rather than written out twice, so the two cannot drift:
+ * a parameter added to the web link is automatically on the desktop one.
+ */
+function desktopConnectorLink(webLink: string): string {
+  return webLink.replace(/^https:\/\/claude\.ai/, "claude://claude.ai");
+}
+
+/** How long to wait for the desktop app to take over before opening the web app. */
+const DESKTOP_HANDOFF_MS = 800;
+
+/**
+ * Open the connector dialog in the desktop app if it is installed, otherwise on
+ * the web.
+ *
+ * There is no way to ask a browser whether a scheme is registered, so this is
+ * the standard shape: attempt the scheme, then see whether the page lost focus.
+ * An installed app backgrounds the tab; nothing happening means nothing handled
+ * it, and the web app opens instead.
+ *
+ * Two details that decide whether this is safe:
+ *
+ *   * The attempt goes through a hidden iframe rather than `location.href`. A
+ *     top-level navigation to an unregistered scheme shows a browser error page
+ *     in Safari and some Chromium builds — so the machines WITHOUT the desktop
+ *     app, which are most of them, would get an error before the fallback fired.
+ *     An iframe navigation fails silently.
+ *
+ *   * The fallback runs at 800ms, inside the window where browsers still treat
+ *     a `window.open` as user-initiated. Longer reads as more reliable
+ *     detection and gets the popup blocked instead, so the timing is a
+ *     constraint rather than a preference. If it is blocked anyway, the same
+ *     tab navigates — the one outcome that must never happen is neither.
+ */
+function openConnector(webLink: string): void {
+  let handled = false;
+  const onHidden = () => {
+    if (document.visibilityState === "hidden") handled = true;
+  };
+  document.addEventListener("visibilitychange", onHidden);
+  window.addEventListener("blur", onHidden, { once: true });
+
+  const frame = document.createElement("iframe");
+  frame.style.display = "none";
+  frame.src = desktopConnectorLink(webLink);
+  document.body.appendChild(frame);
+
+  window.setTimeout(() => {
+    document.removeEventListener("visibilitychange", onHidden);
+    frame.remove();
+    if (handled) return;
+    const opened = window.open(webLink, "_blank", "noopener,noreferrer");
+    if (!opened) window.location.href = webLink;
+  }, DESKTOP_HANDOFF_MS);
+}
+
+/**
  * Setup dialog, modelled on how other MCP products present this.
  *
  * A card of instructions on a settings page gets skimmed. The steps only matter
@@ -156,15 +220,36 @@ function ConnectDialog({
               </>
             }
           >
+            {/* Still an anchor, with the web URL as its href, so it keeps every
+                behaviour a link has: middle-click, copy link address, and a
+                working target if JavaScript never runs. The handler only adds
+                the desktop attempt on top of that. */}
             <a
               href={claudeConnectorLink(CONNECTOR_NAME, url)}
               target="_blank"
               rel="noopener noreferrer"
+              onClick={(e) => {
+                e.preventDefault();
+                openConnector(claudeConnectorLink(CONNECTOR_NAME, url));
+              }}
               className="mt-3 inline-flex items-center gap-2 rounded-lg bg-text-primary px-4 py-2.5 text-sm font-medium text-bg-primary transition hover:opacity-90"
             >
               Open in Claude
               <span aria-hidden="true">&#8599;</span>
             </a>
+            <p className="mt-2 text-xs text-text-secondary">
+              Opens the Claude desktop app if you have it installed, and
+              claude.ai otherwise.{" "}
+              <a
+                href={claudeConnectorLink(CONNECTOR_NAME, url)}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="text-accent-primary underline"
+              >
+                Use the browser instead
+              </a>
+              .
+            </p>
           </Step>
 
           <Step
