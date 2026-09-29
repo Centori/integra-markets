@@ -20,6 +20,8 @@ from typing import Any, Dict, List, Optional
 from fastapi import APIRouter, Depends, HTTPException, Query
 
 from services.api_key_auth import verify_api_key
+from services import archive_coverage, entity_aliases
+from services.entitlement import query_depth_days
 from services.pagination import fetch_all
 from services.tier_enforcement import (
     can_query_historical,
@@ -96,7 +98,13 @@ async def sentiment(
     tier = _tier_for(auth)
     hours = clamp_hours_back(tier, _WINDOW_TO_HOURS[window])
     supabase = _supabase()
-    commodity_lc = commodity.strip().lower()
+    commodity_lc = entity_aliases.canonical(commodity)
+    # The two labelling systems that write `entity` disagree on four subjects
+    # (oil/crude_oil, gas/natural_gas, freight/freight_shipping, lpg/lpg_ngl).
+    # Query every name that means this subject, then deduplicate — 93% of
+    # crude_oil documents also carry an oil mention, so a plain union would
+    # average most articles twice.
+    entity_names = entity_aliases.names_for(commodity)
     since = (dt.datetime.now(dt.timezone.utc) - dt.timedelta(hours=hours)).isoformat()
 
     # Paged to exhaustion rather than capped at 1000.
@@ -119,7 +127,7 @@ async def sentiment(
                 "document_id, sentiment, sentiment_score, published_at, "
                 "raw_documents(title, source, url)"
             )
-            .eq("entity", commodity_lc)
+            .in_("entity", entity_names)
             .gte("published_at", since)
             .order("published_at", desc=True)
             .range(start, end)
@@ -127,6 +135,10 @@ async def sentiment(
 
     try:
         rows, truncated = fetch_all(_page)
+        # Before anything is averaged or counted. `articles_analyzed` is a
+        # document count, and without this it would report the number of
+        # MENTIONS — inflating it by ~86% on oil.
+        rows = entity_aliases.dedupe_by_document(rows)
     except Exception as exc:  # noqa: BLE001
         # Loud, and fail the request. Returning [] here is what let a schema
         # error masquerade as "no news about this commodity" for months.
@@ -173,6 +185,12 @@ async def sentiment(
         "truncated": truncated,
         "updated_at": dt.datetime.now(dt.timezone.utc).isoformat(),
         "top_drivers": top,
+        # Archive extent, independent of `window` above and of this caller's
+        # depth cap. `window` is what was asked for; `coverage` is what exists.
+        "coverage": archive_coverage.describe(supabase, query_depth_days(tier)),
+        # Named so a caller can see why `oil` and `crude_oil` return the same
+        # answer, rather than discovering it by comparing two responses.
+        "entities_merged": entity_names if len(entity_names) > 1 else None,
     }
 
 

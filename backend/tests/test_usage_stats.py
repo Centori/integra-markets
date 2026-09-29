@@ -14,7 +14,7 @@ import types
 
 import pytest
 
-from services import usage_stats
+from services import archive_coverage, usage_stats
 from services.rate_limit import limit_for_tier
 
 
@@ -61,6 +61,14 @@ def _key(requests=0, errors=0, throttled=0, name="prod", prefix="ik_live_abc"):
         "p95_ms": 210,
         "last_used_at": "2026-09-27T00:00:00+00:00",
     }
+
+
+@pytest.fixture(autouse=True)
+def _reset_coverage_cache():
+    """summarise() now reads archive coverage, which is cached per process."""
+    archive_coverage.reset_cache()
+    yield
+    archive_coverage.reset_cache()
 
 
 class TestTheHeadlineNumber:
@@ -160,13 +168,27 @@ class TestThePeriodMatchesEnforcement:
         assert params["p_since"].startswith("2026-09-01")
 
     def test_the_user_id_is_passed_through_unchanged(self):
-        """The RPCs are security definer and filter on this argument, so it has
-        to be the verified one — asserted here so a refactor that starts
-        transforming it fails loudly."""
+        """The usage RPCs are security definer and filter on this argument, so it
+        has to be the verified one — asserted here so a refactor that starts
+        transforming it fails loudly.
+
+        `archive_coverage` is excluded deliberately: it takes no user id because
+        it describes the archive rather than the caller, and that is the whole
+        point of it. If it ever grows one, this assertion should start covering
+        it — hence matching on the prefix rather than listing names.
+        """
         fake = FakeRpc({"api_usage_by_key": []})
         usage_stats.summarise(fake, "the-real-user", "api_basic")
-        for _name, params in fake.calls:
+        checked = 0
+        for name, params in fake.calls:
+            if not name.startswith("api_usage_"):
+                assert "p_user_id" not in params, (
+                    f"{name} now takes a user id and is not covered by this test"
+                )
+                continue
             assert params["p_user_id"] == "the-real-user"
+            checked += 1
+        assert checked == 3, "expected three per-user usage RPCs"
 
 
 class TestSerialisable:

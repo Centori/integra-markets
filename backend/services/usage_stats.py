@@ -26,6 +26,8 @@ import datetime as dt
 import logging
 from typing import Any, Dict, List, Optional
 
+from services import archive_coverage
+from services.entitlement import query_depth_days
 from services.rate_limit import (
     limit_for_tier,
     period_end,
@@ -112,6 +114,11 @@ def summarise(
             "label": start.strftime("%B %Y"),
         },
         "plan": plan_spec(tier),
+        # The archive's extent beside the plan's depth. Shown because a depth
+        # figure alone reads as the size of the DATASET rather than the size of
+        # the entitlement — which is how "30 days" became an evaluator's
+        # conclusion that the product held 30 days of history.
+        "coverage": archive_coverage.describe(supabase, query_depth_days(tier)),
         "current": {
             "available": used is not None,
             "requests": used,

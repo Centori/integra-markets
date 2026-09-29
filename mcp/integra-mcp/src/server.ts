@@ -20,9 +20,12 @@
  * So the server takes a client *factory* rather than a client.
  */
 import { Server } from "@modelcontextprotocol/sdk/server/index.js";
+import { PROMPTS, PROMPT_BY_NAME } from "./prompts.js";
 import {
   CallToolRequestSchema,
   ListToolsRequestSchema,
+  GetPromptRequestSchema,
+  ListPromptsRequestSchema,
 } from "@modelcontextprotocol/sdk/types.js";
 import { z } from "zod";
 import { zodToJsonSchema } from "./util-zod-schema.js";
@@ -164,7 +167,7 @@ export function createServer(getClient: () => IntegraClient): Server {
         },
       ],
     },
-    { capabilities: { tools: {} } }
+    { capabilities: { tools: {}, prompts: {} } }
   );
 
   server.setRequestHandler(ListToolsRequestSchema, async () => ({
@@ -174,6 +177,47 @@ export function createServer(getClient: () => IntegraClient): Server {
       inputSchema: zodToJsonSchema(z.object(t.schema)),
     })),
   }));
+
+  // Prompts: the discovery surface.
+  //
+  // Tools answer questions someone already knows to ask. A new user arrived with
+  // seven tool names, no worked examples, and no way to know that `brent`
+  // matches nothing while `oil` matches 60,000 documents — so the first
+  // conversation was usually a guess that returned an empty result, which reads
+  // exactly like a product with no data in it. Clients surface prompts as
+  // pickable starting points, which is what "Hi Integra" needs to be.
+  server.setRequestHandler(ListPromptsRequestSchema, async () => ({
+    prompts: PROMPTS.map((p) => ({
+      name: p.name,
+      title: p.title,
+      description: p.description,
+      arguments: p.arguments ?? [],
+    })),
+  }));
+
+  server.setRequestHandler(GetPromptRequestSchema, async (req) => {
+    const prompt = PROMPT_BY_NAME.get(req.params.name);
+    if (!prompt) {
+      throw new Error(
+        `Unknown prompt: ${req.params.name}. Available: ` +
+          PROMPTS.map((p) => p.name).join(", ")
+      );
+    }
+    return {
+      description: prompt.description,
+      messages: [
+        {
+          role: "user" as const,
+          content: {
+            type: "text" as const,
+            text: prompt.render(
+              (req.params.arguments ?? {}) as Record<string, string>
+            ),
+          },
+        },
+      ],
+    };
+  });
 
   server.setRequestHandler(CallToolRequestSchema, async (req) => {
     const tool = TOOLS.find((t) => t.name === req.params.name);

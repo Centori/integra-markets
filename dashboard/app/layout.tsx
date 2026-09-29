@@ -1,7 +1,7 @@
 import type { Metadata } from "next";
 import Image from "next/image";
 import { serverClient } from "@/lib/supabase-server";
-import { MARKETING_URL } from "@/lib/site";
+import { MARKETING_ABOUT_URL, MARKETING_URL } from "@/lib/site";
 import "./globals.css";
 
 // Lives in public/ rather than being imported, so it has ONE stable URL:
@@ -31,14 +31,23 @@ export default async function RootLayout({ children }: { children: React.ReactNo
       <body>
         <div className="min-h-screen flex flex-col">
           <header className="border-b border-bg-tertiary px-6 py-4 flex items-center justify-between">
-            {/* Signed out, "/" bounces through /account to /login — i.e. back
-                to the page a signed-out visitor is already on, which made the
-                brand mark a no-op exactly when someone needs a way out. It now
-                leads to the marketing site, which is what "home" means for
-                someone who is not logged in. */}
+            {/* The brand mark leads to the marketing site's About section, for
+                everyone.
+
+                It used to point at "/", which on this host is a redirect: signed
+                out it bounced through /account to /login, landing a visitor back
+                on the page they were already looking at, so the one control
+                every visitor knows how to use did nothing precisely when they
+                needed a way out.
+
+                The same target signed in or out, deliberately. A console logo
+                that changes destination with session state is a small trap, and
+                the header's "Account" button and the left rail already cover
+                getting back to the console. */}
             <a
-              href={loggedIn ? "/account" : MARKETING_URL}
+              href={MARKETING_ABOUT_URL}
               className="flex items-center gap-2"
+              title="About Integra Markets"
             >
               <Image
                 src={ICON_PATH}

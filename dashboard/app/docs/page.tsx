@@ -216,14 +216,105 @@ curl "${BASE}/v1/markets/divergence" \\
       <section>
         <h2 className="text-xl font-semibold">Rate limits</h2>
         <p className="mt-2 text-text-secondary">
-          Limits and history depth are set by your plan — see{" "}
-          <a href="/api-tier" className="text-accent-positive underline">
-            API pricing
+          Two limits are enforced, and they fail differently. A monthly request
+          allowance, and a per-second rate per key. Both return{" "}
+          <code>429</code> with <code>Retry-After</code> in seconds — honour it
+          rather than retrying immediately, because only one of the two clears
+          with time.
+        </p>
+        <p className="mt-3 text-text-secondary">
+          Every response carries the state, so you can self-throttle instead of
+          discovering the ceiling by hitting it:
+        </p>
+        <Code>{`X-RateLimit-Limit       requests allowed this calendar month
+X-RateLimit-Remaining   requests left
+X-RateLimit-Rate        sustained requests/second for your plan
+X-RateLimit-Reset       unix seconds until the monthly allowance resets`}</Code>
+        <p className="mt-3 text-text-secondary">
+          Your plan&apos;s actual numbers are at{" "}
+          <a href="/account/usage" className="text-accent-positive underline">
+            Usage
           </a>
-          . Exceeding a limit returns <code>429</code>; retry with exponential
-          backoff and jitter. Requests for history beyond your plan&apos;s window
-          are truncated to it rather than rejected, and the applied window is
-          reported back in the response.
+          , read from the values the API enforces rather than from a written
+          description of the plan.
+        </p>
+      </section>
+
+      <section>
+        <h2 className="text-xl font-semibold">History depth</h2>
+        <p className="mt-2 text-text-secondary">
+          Asking for history older than your plan allows returns{" "}
+          <code>403</code> — it is <strong>not</strong> silently truncated. Depth
+          is measured from now to the oldest point requested, so a narrow window
+          far in the past is still a deep request.
+        </p>
+        <p className="mt-3 text-text-secondary">
+          The refusal names what exists beyond your plan, and{" "}
+          <code>/v1/commodities</code> and <code>/v1/sentiment</code> both return
+          a <code>coverage</code> block describing the whole archive regardless
+          of your entitlement — so a 30-day window is never mistaken for the size
+          of the dataset:
+        </p>
+        <Code>{`"coverage": {
+  "continuous_from": "2020-01-01",   // first year with 180+ days of data
+  "earliest": "2017-03-10",          // literal oldest record; sparse before the above
+  "latest": "2026-09-29",
+  "total_mentions": 386201,
+  "commodities": 49,
+  "your_query_depth_days": 30,       // null means unlimited
+  "you_can_read_from": "2026-08-30"
+}`}</Code>
+      </section>
+
+      <section>
+        <h2 className="text-xl font-semibold">Pagination</h2>
+        <p className="mt-2 text-text-secondary">
+          List endpoints return at most 1,000 rows. When more exist the response
+          carries <code>has_more: true</code> and a{" "}
+          <code>next_cursor</code>; pass it back as{" "}
+          <code>?cursor=</code> to continue. Treat cursors as opaque — do not
+          construct or parse one.
+        </p>
+        <Code>{`curl "${BASE}/v1/sentiment/oil/history?limit=1000" -H "Authorization: Bearer $KEY"
+# -> { "items": [...], "has_more": true, "next_cursor": "eyJwIjoi..." }
+
+curl "${BASE}/v1/sentiment/oil/history?limit=1000&cursor=eyJwIjoi..." \
+  -H "Authorization: Bearer $KEY"`}</Code>
+        <p className="mt-3 text-text-secondary">
+          Do not paginate by moving <code>from</code>/<code>to</code>. Many
+          articles share a publication timestamp, so a time-based cursor either
+          re-reads the tied rows or skips the ones it never saw — the keyset
+          cursor exists because neither is fixable from the client side. For a
+          backfill, use the CSV export instead of paging.
+        </p>
+      </section>
+
+      <section>
+        <h2 className="text-xl font-semibold">Commodities and topics</h2>
+        <p className="mt-2 text-text-secondary">
+          Match on the canonical name, never a market ticker:{" "}
+          <code>oil</code> rather than <code>brent</code> or <code>wti</code>,{" "}
+          <code>gas</code> rather than <code>ng</code>. A ticker matches nothing
+          and returns an empty <code>200</code>, which is indistinguishable from
+          a quiet news day.
+        </p>
+        <p className="mt-3 text-text-secondary">
+          <code>/v1/commodities</code> returns physical commodities alongside
+          macro and geopolitical subjects — <code>fed_rates</code>,{" "}
+          <code>inflation</code>, <code>usd_strength</code> — because cross-asset
+          work runs through them. Each entry carries a{" "}
+          <code>category</code>, and you can filter:
+        </p>
+        <Code>{`curl "${BASE}/v1/commodities?category=commodities" -H "Authorization: Bearer $KEY"
+# categories: commodities, energy_products, transition_metals, agriculture,
+#             logistics, macro, geopolitical, political, crypto`}</Code>
+        <p className="mt-3 text-text-secondary">
+          Four subjects are stored under two spellings for historical reasons
+          (<code>oil</code>/<code>crude_oil</code>,{" "}
+          <code>gas</code>/<code>natural_gas</code>, and two more). Either name
+          works and both return the same de-duplicated answer; the listing
+          collapses them to one entry and reports the alternates in{" "}
+          <code>aliases</code>.
         </p>
       </section>
 

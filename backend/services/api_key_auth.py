@@ -101,6 +101,21 @@ def _assert_depth(
     if query_depth_days(ARCHIVE_TIER) > allowed:
         detail += f". The {ARCHIVE_SCOPE} tier ({ARCHIVE_TIER}) reaches further"
 
+        # And say what "further" is worth. A refusal that names the cap but not
+        # the prize is how a caller concludes the dataset ends where their plan
+        # does — which is the mistake this whole change exists to stop. Best
+        # effort: if coverage cannot be read, the 403 is unchanged rather than
+        # trailing off mid-claim.
+        try:
+            from services import archive_coverage
+            from services._supabase import get_supabase_client
+
+            extent = archive_coverage.earliest_readable_label(get_supabase_client())
+            if extent:
+                detail += f" — {extent}"
+        except Exception:  # noqa: BLE001 — a 403 must not become a 500
+            logger.debug("could not attach coverage to depth refusal", exc_info=True)
+
     raise HTTPException(
         status_code=403,
         detail=f"{detail}. See https://dashboard.integramarkets.app/api-tier",

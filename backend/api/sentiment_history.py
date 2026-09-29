@@ -54,8 +54,11 @@ from services.api_key_auth import (
     HISTORY_SCOPE,
     assert_history_depth,
     require_scopes,
+    tier_of,
     verify_api_key,
 )
+from services.entitlement import query_depth_days
+from services import archive_coverage, entity_aliases
 from services.pagination import decode_cursor, encode_cursor
 
 logger = logging.getLogger(__name__)
@@ -94,7 +97,17 @@ COMMODITY_WINDOW_DAYS = 30
 
 
 @router.get("/commodities")
-async def list_commodities(_auth: Dict[str, Any] = Depends(verify_api_key)) -> Dict[str, Any]:
+async def list_commodities(
+    category: Optional[str] = Query(
+        default=None,
+        description=(
+            "Filter to one taxonomy category: commodities, energy_products, "
+            "transition_metals, agriculture, logistics, macro, geopolitical, "
+            "political, crypto. Omit for everything."
+        ),
+    ),
+    auth: Dict[str, Any] = Depends(verify_api_key),
+) -> Dict[str, Any]:
     """Commodities with scored articles in the last 30 days, busiest first.
 
     THE BUG THIS REPLACES. The previous implementation asked for 10,000 rows of
@@ -175,12 +188,61 @@ async def list_commodities(_auth: Dict[str, Any] = Depends(verify_api_key)) -> D
             "last_seen": row.get("last_seen"),
         })
 
+    merged = [
+        {**row, **entity_aliases.describe(row["commodity"])}
+        for row in entity_aliases.collapse(commodities)
+    ]
+
+    # Macro, geopolitical and political subjects stay in the list by default.
+    #
+    # They look like noise beside `oil` and `copper`, and the temptation is to
+    # hide them — but they are the substrate of the cross-asset product. The
+    # transmission chain a client brief is built on (supply threat -> energy ->
+    # headline CPI -> rate expectations -> USD -> gold and industrial metals)
+    # runs entirely through `fed_rates`, `inflation` and `usd_strength`.
+    # Filtering them out of the default response would remove the data behind
+    # the most differentiated thing the archive can produce.
+    #
+    # So they are LABELLED rather than hidden, and a caller who wants only
+    # physical commodities asks for that explicitly.
+    categories = sorted({m["category"] for m in merged if m.get("category")})
+    if category:
+        wanted = category.strip().lower()
+        if wanted not in categories:
+            raise HTTPException(
+                status_code=400,
+                detail=(
+                    f"unknown category {wanted!r}. Available in this window: "
+                    f"{', '.join(categories)}"
+                ),
+            )
+        merged = [m for m in merged if m.get("category") == wanted]
+
     return {
         # A plain list of names, kept because it is what the field was before and
         # what every existing caller reads.
-        "commodities": [c["commodity"] for c in commodities],
+        # Collapsed to one entry per subject. The raw table carries 49 entity
+        # values because two labelling systems write to it, and on four subjects
+        # they disagree about the name — so `oil` and `crude_oil` both appeared,
+        # with nothing saying they were the same thing and a caller who picked
+        # the second getting 86% of the data.
+        "commodities": [c["commodity"] for c in merged],
         "window_days": COMMODITY_WINDOW_DAYS,
-        "details": commodities,
+        # So a caller can discover the filter without reading docs, and can see
+        # that `fed_rates` sitting beside `oil` is a category rather than a bug.
+        "categories": categories,
+        "category": category.strip().lower() if category else None,
+        # Each entry carries its human label, its taxonomy category (so `macro`
+        # and `oil` stop being indistinguishable values of one field), and the
+        # alternate spellings folded into it.
+        "details": merged,
+        # The archive's real extent, NOT clamped by this caller's depth cap.
+        # Everything above is a 30-day view; without this a reader cannot tell a
+        # window from the whole dataset, which is exactly how an evaluator
+        # concluded the product held 33 days of history and said so in writing.
+        "coverage": archive_coverage.describe(
+            supabase, query_depth_days(tier_of(auth))
+        ),
     }
 
 
