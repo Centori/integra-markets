@@ -71,6 +71,34 @@ const capabilities: Capability[] = [
     }
 ];
 
+/** Scanned, not read. Six words or fewer; no line needs a second pass. */
+const HIGHLIGHTS = [
+    'Sentiment that shows its work',
+    'Energy, metals, agriculture',
+    'Ask it in plain English',
+    'Named signals, quoted evidence',
+    'Sample size on every score',
+    'Daily history, not just today',
+    'No SDK to install',
+    'Prediction-market divergence, built in',
+    'Export to CSV or XLSX',
+    'Usage and limits you can see',
+];
+
+/** For the reader who has already decided. Each line is checkable in the code. */
+const SPECIFICS = [
+    'Bearer-token HTTP. Working curl in under a minute.',
+    'Seven MCP tools over the same data as the REST surface.',
+    'Aggregate sentiment by commodity and window, with article counts.',
+    'Emerging narratives clustered from recent coverage.',
+    'Model sentiment against Polymarket and Kalshi odds.',
+    'Daily series with momentum for backtesting.',
+    'Per-key usage, error rate, p95 latency and quota in the dashboard.',
+    'Quota webhooks at thresholds you choose.',
+    'Up to 10 active keys, revocable independently.',
+    'Rate limits published from the constants that enforce them.',
+];
+
 export default function ApiOffering() {
     return (
         <section id="api" className="py-32 bg-gradient-to-b from-black to-[#0a0a0a] relative">
@@ -97,7 +125,12 @@ export default function ApiOffering() {
                 {/* No bottom margin: the pricing grid that used to follow these
                     cards is gone, so the section's own py-32 provides the spacing
                     before How It Works. */}
-                <div className="grid md:grid-cols-2 lg:grid-cols-4 gap-6">
+                {/* Three columns, not four. The fourth was the Webhooks card;
+                    removing it left `lg:grid-cols-4` holding an empty track, so
+                    the row rendered three-quarters full and visibly off-centre
+                    against the section above it. A column count has to match
+                    what is in the array. */}
+                <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-6">
                     {capabilities.map((c, i) => (
                         <motion.div
                             key={c.title}
@@ -121,6 +154,51 @@ export default function ApiOffering() {
                             <p className="text-[14px] text-zinc-500 leading-relaxed font-light">{c.description}</p>
                         </motion.div>
                     ))}
+                </div>
+
+                {/*
+                  Two registers, deliberately separated.
+
+                  The strip is scanned — six words or fewer, no punctuation to
+                  parse, read in one pass by someone deciding whether to keep
+                  reading. The list below it is read by a developer who has
+                  already decided and now wants to know exactly what they get,
+                  where precision beats punch.
+
+                  Every line was checked against the code before it went up.
+                  "Quota webhooks at thresholds you choose" is here because that
+                  one is real — services/usage_alerts fires at thresholds the
+                  customer picks. The divergence-event webhook that used to be
+                  advertised beside it is not, and is not mentioned.
+                */}
+                <div className="mt-16 pt-12 border-t border-white/5">
+                    <ul className="flex flex-wrap gap-x-8 gap-y-3">
+                        {HIGHLIGHTS.map((h) => (
+                            <li
+                                key={h}
+                                className="flex items-center gap-2.5 text-[14px] font-light text-zinc-400"
+                            >
+                                <span className="h-1 w-1 rounded-full bg-[#4ECCA3]" aria-hidden="true" />
+                                {h}
+                            </li>
+                        ))}
+                    </ul>
+                </div>
+
+                <div className="mt-14">
+                    <h3 className="text-[11px] uppercase tracking-[0.18em] text-zinc-600 font-light mb-6">
+                        What you get
+                    </h3>
+                    <ul className="grid md:grid-cols-2 gap-x-12 gap-y-4">
+                        {SPECIFICS.map((line) => (
+                            <li
+                                key={line}
+                                className="text-[14px] font-light text-zinc-500 leading-relaxed border-l border-white/10 pl-4"
+                            >
+                                {line}
+                            </li>
+                        ))}
+                    </ul>
                 </div>
             </div>
         </section>
