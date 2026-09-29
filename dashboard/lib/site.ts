@@ -27,3 +27,17 @@ export const MARKETING_URL =
 
 /** The marketing site's own sign-in page, for the account-recovery path. */
 export const MARKETING_LOGIN_URL = `${MARKETING_URL}/login`;
+
+/**
+ * The "About" section on the marketing landing page.
+ *
+ * An anchor rather than a route — `web/src/components/About.tsx` renders
+ * `<section id="about">` inside the landing page, and the marketing header
+ * links to it the same way. Pointing at a `/about` path would 404.
+ *
+ * This is where the header logo goes. A brand mark is the one control every
+ * visitor already knows how to use, and on a console whose own root is a
+ * redirect it was previously either a loop (signed out) or a no-op on the page
+ * you were already looking at.
+ */
+export const MARKETING_ABOUT_URL = `${MARKETING_URL}/#about`;
