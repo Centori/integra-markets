@@ -1,7 +1,7 @@
 'use client';
 
 import { motion } from 'framer-motion';
-import { Terminal, Database, Webhook, MessagesSquare } from 'lucide-react';
+import { Terminal, Database, MessagesSquare } from 'lucide-react';
 
 // Capability section for the landing page. Tells developers what the API does;
 // it deliberately does NOT price it.
@@ -26,13 +26,7 @@ const capabilities = [
     {
         icon: Database,
         title: 'Historical Archive',
-        description: 'Query the sentiment archive across 34 commodity and macro topics for backtesting and research.'
-    },
-    {
-        icon: Webhook,
-        title: 'Webhooks',
-        description: 'Push divergence and threshold events straight into your own systems as they fire.',
-        soon: true,
+        description: 'Six years of daily commodity sentiment — 49 commodities, continuous from 2020 — queryable for backtesting and research.'
     },
     {
         // Replaces the old "Key Management" card. Key management is table stakes
@@ -41,16 +35,19 @@ const capabilities = [
         // is the only capability here that a non-developer can use, so the copy
         // leads with the plain-English question and leaves MCP as the second
         // clause for developers who are scanning for the protocol name.
-        // `soon` marks a capability that is designed and partly built but not yet
-        // reachable by a customer. The MCP server exists and its four tools work,
-        // but it is stdio-only, unpublished, and has no hosted endpoint — so
-        // "connect in one click" would be a promise, not a description. Webhooks
-        // are in the same state. Saying so costs a little marketing lift and buys
-        // the thing that actually sells an API: developers trusting the page.
+        // `soon` used to sit here, with a note that the MCP server was
+        // "stdio-only, unpublished, and has no hosted endpoint". That stopped
+        // being true: it is hosted at mcp.integramarkets.app with OAuth
+        // discovery, it is in the production verification suite, and the console
+        // ships a one-click connect button. The label was hiding the one
+        // capability here a non-developer can use.
+        //
+        // The Webhooks card that sat above this was removed rather than
+        // relabelled — divergence and threshold push does not exist, and a
+        // roadmap card earns its place only while someone is actually building it.
         icon: MessagesSquare,
         title: 'Ask in Claude',
-        description: 'Ask "what changed in copper this week?" in plain English and get sourced analysis back — an MCP connector that brings your feed into Claude.',
-        soon: true,
+        description: 'Ask "what changed in copper this week?" in plain English and get sourced analysis back, with every figure traceable to the headline behind it.',
     }
 ];
 

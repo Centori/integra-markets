@@ -37,6 +37,42 @@ ACTIVE_MODEL_NAME = "vader_v2_commodity"
 ACTIVE_MODEL_VERSION = "2026-09-02"
 
 
+# What `content` is allowed to hold.
+#
+# The column stores the RSS summary, and measured across 199,478 populated rows
+# it behaves like one: mean 175 characters, p95 372, p99 540. That is syndicated
+# description text, which is what a feed publishes it for.
+#
+# 116 rows are the exception — up to 6,388 characters, all from the archive
+# scrapers (NGI, Kitco, Mining.com), which followed through to article pages and
+# captured body text. Storing a publisher's article body is a different act from
+# storing the summary they syndicate, and it is the one a counterparty's counsel
+# asks about.
+#
+# So the cap is a bound on that failure mode rather than a change to normal
+# ingest: at 1,000 characters it is roughly twice p99 and truncates nothing a
+# feed legitimately provides, while making it impossible for a scraper change to
+# start banking article bodies again. Title, source, URL and timestamp are
+# untouched — attribution is unaffected.
+CONTENT_MAX_CHARS = 1000
+
+
+def _excerpt(value):
+    """Bound stored summary text. See CONTENT_MAX_CHARS."""
+    if not value:
+        return value
+    text = str(value)
+    if len(text) <= CONTENT_MAX_CHARS:
+        return text
+    # Cut on a word boundary where one is close, so the stored excerpt reads as
+    # a sentence fragment rather than a severed word.
+    cut = text[:CONTENT_MAX_CHARS]
+    space = cut.rfind(" ")
+    if space > CONTENT_MAX_CHARS - 120:
+        cut = cut[:space]
+    return cut.rstrip() + "…"
+
+
 def _url_hash(url: str) -> str:
     return hashlib.sha256(url.strip().lower().encode("utf-8")).hexdigest()
 
@@ -109,7 +145,7 @@ def persist_articles(
             "url": url,
             "url_hash": url_hash,
             "title": article.get("title"),
-            "content": article.get("summary"),
+            "content": _excerpt(article.get("summary")),
             "raw_payload": {
                 "categories": article.get("categories"),
                 "tickers": article.get("tickers"),

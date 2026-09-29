@@ -344,6 +344,59 @@ export default function UsageView({ usage }: { usage: UsageSummary }) {
         )}
       </section>
 
+      {/* --- What the archive holds, against what this plan may read. ---
+          Shown ABOVE the limits table on purpose. A depth figure on its own
+          reads as the size of the dataset rather than the size of the
+          entitlement — which is exactly how an evaluator concluded the product
+          held thirty days of history. */}
+      {usage.coverage ? (
+        <section className="space-y-3">
+          <h2 className="text-lg font-semibold">Archive</h2>
+          <div className="rounded-lg border border-divider bg-bg-secondary p-5">
+            <div className="flex flex-wrap items-baseline gap-x-6 gap-y-2">
+              <p className="text-sm text-text-secondary">
+                <span className="text-xl font-semibold tabular-nums text-text-primary">
+                  {num(usage.coverage.total_mentions)}
+                </span>{" "}
+                scored mentions across{" "}
+                <span className="text-text-primary">{num(usage.coverage.commodities)}</span>{" "}
+                commodities
+              </p>
+              <p className="text-sm tabular-nums text-text-secondary">
+                continuous from{" "}
+                <span className="text-text-primary">{usage.coverage.continuous_from ?? "—"}</span>
+              </p>
+            </div>
+
+            <div className="mt-4 border-t border-divider pt-4">
+              {usage.coverage.your_query_depth_days === null ? (
+                <p className="text-sm text-accent-positive">
+                  Your plan reaches the full archive.
+                </p>
+              ) : (
+                <p className="text-sm text-text-secondary">
+                  Your plan reaches{" "}
+                  <span className="text-text-primary tabular-nums">
+                    {usage.coverage.your_query_depth_days} days
+                  </span>{" "}
+                  — back to{" "}
+                  <span className="text-text-primary tabular-nums">
+                    {usage.coverage.you_can_read_from ?? "—"}
+                  </span>
+                  . Everything older exists and is queryable on a deeper plan.
+                </p>
+              )}
+            </div>
+
+            <p className="mt-3 text-xs text-text-muted">
+              Coverage before {usage.coverage.continuous_from ?? "that date"} is
+              sparse — the oldest record is {usage.coverage.earliest ?? "—"}, but
+              only from a handful of backfilled articles.
+            </p>
+          </div>
+        </section>
+      ) : null}
+
       {/* --- The plan, read from enforcement. Kept last: reference, not news. --- */}
       <section className="space-y-3">
         <h2 className="text-lg font-semibold">Enforced limits</h2>

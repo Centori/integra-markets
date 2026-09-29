@@ -298,7 +298,17 @@ async def get_limits(auth: Dict[str, Any] = Depends(verify_supabase_jwt)) -> Dic
     """
     supabase = _client_or_503()
     ent = _entitled(supabase, auth)
-    return {**plan_spec(ent.tier), "max_keys": MAX_KEYS_PER_USER}
+    from services import archive_coverage
+    from services.entitlement import query_depth_days
+
+    return {
+        **plan_spec(ent.tier),
+        "max_keys": MAX_KEYS_PER_USER,
+        # So the console can show the plan's depth against the archive's extent.
+        # Depth shown alone reads as the size of the dataset rather than the size
+        # of the entitlement.
+        "coverage": archive_coverage.describe(supabase, query_depth_days(ent.tier)),
+    }
 
 
 @router.get("/usage")

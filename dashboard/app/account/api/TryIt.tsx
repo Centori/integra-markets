@@ -19,56 +19,117 @@ const API_BASE =
 
 type Sample = {
   label: string;
-  path: string;
+  /** `{c}` is replaced with the selected commodity. */
+  template: string;
   note: string;
 };
 
-// `oil` / `gas` / `gold` are the real stored entity values. Tickers like
-// `brent`, `wti` and `ng` normalise to these at write time and match nothing
-// on read, so they return an empty 200 — which is why the samples below use
-// the canonical names.
+/**
+ * The commodity is a SEPARATE control, not baked into each sample.
+ *
+ * Every preset used to hard-code `oil` (four of six did), so the console
+ * demonstrated a one-commodity product. The archive holds 49 queryable
+ * entities. Showing one of them, repeatedly, is the same failure as the depth
+ * cap: the product concealing its own breadth from the person evaluating it.
+ *
+ * The list is loaded from /v1/commodities using the key the user just pasted,
+ * so it is always the live set rather than a copy that drifts.
+ */
 const SAMPLES: Sample[] = [
   {
-    label: "Current sentiment — oil",
-    path: "/v1/sentiment?commodity=oil&window=7d",
-    note: "Signed score, label, and the headlines driving it.",
+    label: "Current sentiment",
+    template: "/v1/sentiment?commodity={c}&window=7d",
+    note: "Signed score, sample size, and the headlines behind it.",
   },
   {
-    label: "Market brief — oil",
-    path: "/v1/brief?commodity=oil",
+    label: "Market brief",
+    template: "/v1/brief?commodity={c}",
     note: "Sentiment, narratives and 7d vs 30d in one call.",
   },
   {
-    label: "Daily series — oil, 30 days",
-    path: "/v1/sentiment/oil/daily?days=30",
-    note: "One row per day. The chartable series.",
+    label: "Daily series — 30 days",
+    template: "/v1/sentiment/{c}/daily?days=30",
+    note: "One row per day, with momentum. The chartable series.",
   },
   {
-    label: "Available commodities",
-    path: "/v1/commodities",
-    note: "Every entity value you can query.",
+    label: "History — individual articles",
+    template: "/v1/sentiment/{c}/history?limit=25",
+    note: "Paginate with the returned next_cursor.",
   },
   {
-    label: "Emerging narratives — gas",
-    path: "/v1/narratives?commodity=gas&lookback=7d",
+    label: "Emerging narratives",
+    template: "/v1/narratives?commodity={c}&lookback=7d",
     note: "Clustered themes across recent coverage.",
   },
   {
-    label: "CSV export — oil (first rows)",
-    path: "/v1/export/sentiment?commodity=oil&format=csv",
+    label: "CSV export (first rows)",
+    template: "/v1/export/sentiment?commodity={c}&format=csv",
     note: "Counts against your monthly export budget.",
   },
+  {
+    label: "Available commodities — and archive coverage",
+    template: "/v1/commodities",
+    note: "Every entity you can query, plus how far the archive reaches.",
+  },
+];
+
+/**
+ * Shown until the live list loads, and if it cannot be loaded.
+ *
+ * These are real stored entity values, not tickers: `brent`, `wti` and `ng`
+ * normalise to these at write time and match nothing on read, returning an
+ * empty 200 that reads exactly like "no news about this commodity".
+ */
+const FALLBACK_COMMODITIES = [
+  "oil", "crude_oil", "gas", "natural_gas", "gold", "copper", "silver",
+  "wheat", "corn", "coal", "lithium", "uranium", "freight_shipping",
+  "fertilizer", "iron_ore_steel", "platinum_palladium",
 ];
 
 export function TryIt() {
   const [apiKey, setApiKey] = useState("");
-  const [path, setPath] = useState(SAMPLES[0].path);
+  const [template, setTemplate] = useState(SAMPLES[0].template);
+  const [commodity, setCommodity] = useState("oil");
+  const [commodities, setCommodities] = useState<string[]>(FALLBACK_COMMODITIES);
+  const [listState, setListState] = useState<"fallback" | "loading" | "live" | "failed">(
+    "fallback"
+  );
   const [body, setBody] = useState("");
   const [status, setStatus] = useState<number | null>(null);
   const [meta, setMeta] = useState<string>("");
   const [busy, setBusy] = useState(false);
 
-  const active = SAMPLES.find((s) => s.path === path);
+  const active = SAMPLES.find((s) => s.template === template);
+  const path = template.replace("{c}", encodeURIComponent(commodity));
+  const needsCommodity = template.includes("{c}");
+
+  /**
+   * Load the caller's real commodity list.
+   *
+   * Runs off the key field rather than on mount, because /v1/commodities needs
+   * a key. Failure is silent-but-visible: the fallback list still works, and the
+   * label says which list is on screen — a console that quietly showed a stale
+   * set would be worse than one that admits it.
+   */
+  async function loadCommodities(key: string) {
+    if (!key.startsWith("ik_live_") || key.length < 20) return;
+    setListState("loading");
+    try {
+      const res = await fetch(`${API_BASE}/v1/commodities`, {
+        headers: { Authorization: `Bearer ${key}` },
+        signal: AbortSignal.timeout(15_000),
+      });
+      if (!res.ok) throw new Error(`HTTP ${res.status}`);
+      const data = (await res.json()) as { commodities?: string[] };
+      const live = (data.commodities ?? []).filter(Boolean);
+      if (!live.length) throw new Error("empty list");
+      setCommodities(live);
+      setListState("live");
+      if (!live.includes(commodity)) setCommodity(live[0]);
+    } catch {
+      setListState("failed");
+    }
+  }
 
   async function run() {
     if (!apiKey.trim()) {
@@ -133,6 +194,7 @@ export function TryIt() {
             type="password"
             value={apiKey}
             onChange={(e) => setApiKey(e.target.value)}
+            onBlur={(e) => loadCommodities(e.target.value.trim())}
             placeholder="ik_live_…"
             autoComplete="off"
             spellCheck={false}
@@ -146,12 +208,12 @@ export function TryIt() {
           </label>
           <select
             id="tryit-path"
-            value={path}
-            onChange={(e) => setPath(e.target.value)}
+            value={template}
+            onChange={(e) => setTemplate(e.target.value)}
             className="w-full rounded-lg border border-divider bg-bg-primary px-3 py-2 text-sm"
           >
             {SAMPLES.map((s) => (
-              <option key={s.path} value={s.path}>
+              <option key={s.template} value={s.template}>
                 {s.label}
               </option>
             ))}
@@ -160,6 +222,47 @@ export function TryIt() {
             <p className="text-text-secondary mt-1 text-xs">{active.note}</p>
           ) : null}
         </div>
+
+        {needsCommodity ? (
+          <div>
+            <label htmlFor="tryit-commodity" className="mb-1 block text-sm font-medium">
+              Commodity
+            </label>
+            <select
+              id="tryit-commodity"
+              value={commodity}
+              onChange={(e) => setCommodity(e.target.value)}
+              className="w-full rounded-lg border border-divider bg-bg-primary px-3 py-2 font-mono text-sm"
+            >
+              {commodities.map((c) => (
+                <option key={c} value={c}>
+                  {c}
+                </option>
+              ))}
+            </select>
+            <p className="text-text-secondary mt-1 text-xs">
+              {listState === "live" ? (
+                <>
+                  <span className="text-accent-positive">{commodities.length}</span>{" "}
+                  entities, loaded from your key.
+                </>
+              ) : listState === "loading" ? (
+                "Loading your commodity list…"
+              ) : listState === "failed" ? (
+                <>
+                  Couldn&apos;t load the live list — showing common entities.
+                  Run <span className="font-mono">/v1/commodities</span> to see all
+                  of them.
+                </>
+              ) : (
+                <>
+                  Common entities. Paste a key above to load the full list —
+                  there are far more than these.
+                </>
+              )}
+            </p>
+          </div>
+        ) : null}
 
         <div className="overflow-x-auto">
           <code className="text-text-secondary whitespace-nowrap text-xs">

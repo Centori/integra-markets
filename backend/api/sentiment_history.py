@@ -54,8 +54,11 @@ from services.api_key_auth import (
     HISTORY_SCOPE,
     assert_history_depth,
     require_scopes,
+    tier_of,
     verify_api_key,
 )
+from services.entitlement import query_depth_days
+from services import archive_coverage
 from services.pagination import decode_cursor, encode_cursor
 
 logger = logging.getLogger(__name__)
@@ -94,7 +97,7 @@ COMMODITY_WINDOW_DAYS = 30
 
 
 @router.get("/commodities")
-async def list_commodities(_auth: Dict[str, Any] = Depends(verify_api_key)) -> Dict[str, Any]:
+async def list_commodities(auth: Dict[str, Any] = Depends(verify_api_key)) -> Dict[str, Any]:
     """Commodities with scored articles in the last 30 days, busiest first.
 
     THE BUG THIS REPLACES. The previous implementation asked for 10,000 rows of
@@ -181,6 +184,13 @@ async def list_commodities(_auth: Dict[str, Any] = Depends(verify_api_key)) -> D
         "commodities": [c["commodity"] for c in commodities],
         "window_days": COMMODITY_WINDOW_DAYS,
         "details": commodities,
+        # The archive's real extent, NOT clamped by this caller's depth cap.
+        # Everything above is a 30-day view; without this a reader cannot tell a
+        # window from the whole dataset, which is exactly how an evaluator
+        # concluded the product held 33 days of history and said so in writing.
+        "coverage": archive_coverage.describe(
+            supabase, query_depth_days(tier_of(auth))
+        ),
     }
 
 

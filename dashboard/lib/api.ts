@@ -133,6 +133,7 @@ type PlanLimits = {
   export_rows_per_call_xlsx: number;
   enforced: boolean;
   max_keys: number;
+  coverage?: ArchiveCoverage | null;
 };
 
 /**
@@ -165,9 +166,30 @@ type UsageEndpointRow = {
   p95_ms: number | null;
 };
 
+/**
+ * The archive's extent, reported independently of what this plan may read.
+ *
+ * `continuous_from` is the first year with at least 180 days of coverage and is
+ * the figure to lead with; `earliest` is the literal oldest record and is sparse
+ * before it. Null when coverage could not be computed — render nothing rather
+ * than zeros.
+ */
+type ArchiveCoverage = {
+  continuous_from: string | null;
+  earliest: string | null;
+  latest: string | null;
+  total_mentions: number | null;
+  commodities: number | null;
+  active_days: number | null;
+  note: string;
+  your_query_depth_days?: number | null;
+  you_can_read_from?: string | null;
+};
+
 type UsageSummary = {
   period: { start: string; end: string; label: string };
   plan: Omit<PlanLimits, "max_keys">;
+  coverage: ArchiveCoverage | null;
   current: {
     available: boolean;
     requests: number | null;
@@ -234,6 +256,7 @@ export function createBillingPortalSession(jwt: string, returnPath = "/account/b
 }
 
 export type {
+  ArchiveCoverage,
   KeyRow,
   CreateKeyResponse,
   EntitlementResponse,

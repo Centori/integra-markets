@@ -20,6 +20,8 @@ from typing import Any, Dict, List, Optional
 from fastapi import APIRouter, Depends, HTTPException, Query
 
 from services.api_key_auth import verify_api_key
+from services import archive_coverage
+from services.entitlement import query_depth_days
 from services.pagination import fetch_all
 from services.tier_enforcement import (
     can_query_historical,
@@ -173,6 +175,9 @@ async def sentiment(
         "truncated": truncated,
         "updated_at": dt.datetime.now(dt.timezone.utc).isoformat(),
         "top_drivers": top,
+        # Archive extent, independent of `window` above and of this caller's
+        # depth cap. `window` is what was asked for; `coverage` is what exists.
+        "coverage": archive_coverage.describe(supabase, query_depth_days(tier)),
     }
 
 
