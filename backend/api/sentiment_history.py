@@ -58,7 +58,7 @@ from services.api_key_auth import (
     verify_api_key,
 )
 from services.entitlement import query_depth_days
-from services import archive_coverage
+from services import archive_coverage, entity_aliases
 from services.pagination import decode_cursor, encode_cursor
 
 logger = logging.getLogger(__name__)
@@ -178,12 +178,25 @@ async def list_commodities(auth: Dict[str, Any] = Depends(verify_api_key)) -> Di
             "last_seen": row.get("last_seen"),
         })
 
+    merged = [
+        {**row, **entity_aliases.describe(row["commodity"])}
+        for row in entity_aliases.collapse(commodities)
+    ]
+
     return {
         # A plain list of names, kept because it is what the field was before and
         # what every existing caller reads.
-        "commodities": [c["commodity"] for c in commodities],
+        # Collapsed to one entry per subject. The raw table carries 49 entity
+        # values because two labelling systems write to it, and on four subjects
+        # they disagree about the name — so `oil` and `crude_oil` both appeared,
+        # with nothing saying they were the same thing and a caller who picked
+        # the second getting 86% of the data.
+        "commodities": [c["commodity"] for c in merged],
         "window_days": COMMODITY_WINDOW_DAYS,
-        "details": commodities,
+        # Each entry carries its human label, its taxonomy category (so `macro`
+        # and `oil` stop being indistinguishable values of one field), and the
+        # alternate spellings folded into it.
+        "details": merged,
         # The archive's real extent, NOT clamped by this caller's depth cap.
         # Everything above is a 30-day view; without this a reader cannot tell a
         # window from the whole dataset, which is exactly how an evaluator
