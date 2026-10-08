@@ -624,8 +624,21 @@ def get_commodity_rulebook() -> Dict[str, Dict[str, List[Dict[str, str]]]]:
                 # Anchored to infrastructure nouns in both directions, because
                 # bare "attack" is far too broad — "attack on inflation" must
                 # not read as a supply shock.
-                {"pattern": r"(attack|attacked|strike|struck|drone|missile|shelling|sabotage|explosion|blast)\w*.{0,40}(refinery|refineries|pipeline|terminal|tanker|vessel|facilit\w*|oilfield|oil field|port|depot|infrastructure|installation\w*|energy site\w*|energy asset\w*|processing plant|pumping station|export)", "signal": "Infrastructure attack"},
-                {"pattern": r"(refinery|refineries|pipeline|terminal|tanker|vessel|facilit\w+|oilfield|oil field|port|depot|infrastructure|installation\w*|energy site\w*|energy asset\w*).{0,40}(attack|struck|hit|damaged|ablaze|sabotage|offline|shut in)", "signal": "Infrastructure attack"},
+                {"pattern": r"(attack|attacked|strike|struck|drone|missile|shelling|sabotage|explosion|blast)\w*.{0,40}(refinery|refineries|pipeline|terminal|tanker|vessel|facilit\w*|oilfield|oil field|\bport\b|depot|infrastructure|installation\w*|energy site\w*|energy asset\w*|processing plant|pumping station|export)", "signal": "Infrastructure attack"},
+                # `port` is word-bounded and `hit` requires "by".
+                #
+                # Both were found by reading the evidence this rule now publishes.
+                # "Saudi oil export strategy hits new hurdle as Red Sea insurance
+                # costs soar" scored BULLISH on Infrastructure attack, quoting
+                # "port strategy hit" — because `port` matched inside "export"
+                # and bare `hit` matched "hits new hurdle". Weight 0.9 is above
+                # the dominance threshold, so one substring made a commercial
+                # story read as a physical supply shock.
+                #
+                # "hit by" keeps the real form ("terminal hit by drone") and drops
+                # the idiomatic one ("hits a hurdle", "hits record", "hit back"),
+                # which is where all the false positives were.
+                {"pattern": r"(refinery|refineries|pipeline|terminal|tanker|vessel|facilit\w+|oilfield|oil field|\bport\b|depot|infrastructure|installation\w*|energy site\w*|energy asset\w*).{0,40}(attack|struck|hit by|damaged|ablaze|sabotage|offline|shut in)", "signal": "Infrastructure attack"},
                 {"pattern": r"(blockade|seiz\w+|impound\w*|detain\w*).{0,30}(tanker|vessel|ship|cargo|export|shipment)", "signal": "Shipping interdiction"},
                 # Chokepoints. A named waterway carrying less than usual is a
                 # supply event whatever verb the wire chose, and no rule knew
