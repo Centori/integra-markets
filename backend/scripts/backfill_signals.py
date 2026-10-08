@@ -91,10 +91,22 @@ def run(limit: int | None, dry_run: bool, force: bool) -> None:
             break
         span = PAGE if limit is None else min(PAGE, limit - seen)
 
+        # DELIBERATELY UNORDERED.
+        #
+        # This had `.order("scored_at", desc=True)`, and ordering a large filtered
+        # set is what made the first full pass unusable. Measured with EXPLAIN
+        # ANALYZE at ~94,000 rows in: the planner walked the timestamp index from
+        # one end and probed for unprocessed rows, discarding everything already
+        # done, so 17.4s of a 20.4s query was that single scan — and it lengthened
+        # every batch. Throughput fell 138/s -> 52/s and the estimate receded
+        # faster than the work completed. Unordered, with the partial index from
+        # 20261008_backfill_queue_index.sql, the same query runs in 877ms.
+        #
+        # Nothing here needs an order. Every row gets the same treatment, and the
+        # `signals is null` filter is what advances the window.
         query = (
             supabase.table("sentiment_scores")
             .select("id, document_id, signals, raw_documents(title, content, raw_payload)")
-            .order("scored_at", desc=True)
             .range(offset, offset + span - 1)
         )
         if not force:
