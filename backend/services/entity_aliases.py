@@ -61,14 +61,51 @@ _TO_CANONICAL: Dict[str, str] = {
 }
 
 
-def canonical(entity: Optional[str]) -> str:
-    """The preferred name for `entity`. Unknown names are returned unchanged.
+def _engine_alias(key: str) -> Optional[str]:
+    """What the SCORING ENGINE normalises `key` to, if it knows it.
 
-    Unchanged rather than rejected: the taxonomy grows, and an entity this
-    module has not heard of is a normal state, not an error.
+    `commodity_sentiment._COMMODITY_ALIASES` maps 68 synonyms and market tickers
+    onto 20 canonical names — `brent` and `wti` to `oil`, `henry hub`, `ttf` and
+    `jkm` to `gas`. It has always been applied at WRITE time and never at read
+    time, so the API's own documentation told customers that "`brent` matches
+    nothing": a correct map existed two modules away and nothing consulted it.
+
+    The consequence was an empty 200, which is indistinguishable from "no news
+    about this commodity" — the exact failure mode this codebase keeps hitting.
+    """
+    try:
+        from services.commodity_sentiment import _COMMODITY_ALIASES
+
+        return _COMMODITY_ALIASES.get(key)
+    except Exception:  # noqa: BLE001 — resolution must never break a request
+        return None
+
+
+def canonical(entity: Optional[str]) -> str:
+    """The preferred stored name for `entity`. Unknown names pass through.
+
+    Resolves in two steps, because there are two independent kinds of alias:
+
+      1. Stored-name variants, where the two labelling systems that write
+         `entity_mentions.entity` disagree — `crude_oil` -> `oil`.
+      2. Engine synonyms and market tickers — `brent` -> `oil`, `ttf` -> `gas`.
+
+    Step 2's output is fed back through step 1, so a ticker that resolves to a
+    name which itself has a stored variant lands on the right one.
+
+    Unknown names are returned unchanged rather than rejected: the taxonomy
+    grows, and an entity this module has not heard of is a normal state.
     """
     key = (entity or "").strip().lower()
-    return _TO_CANONICAL.get(key, key)
+    if not key:
+        return key
+    if key in _TO_CANONICAL:
+        return _TO_CANONICAL[key]
+
+    engine = _engine_alias(key)
+    if engine:
+        return _TO_CANONICAL.get(engine, engine)
+    return key
 
 
 def names_for(entity: Optional[str]) -> List[str]:
@@ -78,8 +115,15 @@ def names_for(entity: Optional[str]) -> List[str]:
     asks for a name outside the table still queries the name they asked for.
     """
     key = (entity or "").strip().lower()
-    group = EQUIVALENT_NAMES.get(_TO_CANONICAL.get(key, key))
-    return list(group) if group else ([key] if key else [])
+    if not key:
+        return []
+    canon = canonical(key)
+    group = EQUIVALENT_NAMES.get(canon)
+    if group:
+        return list(group)
+    # A ticker resolves to a canonical with no stored variants — query the
+    # canonical, NOT the ticker, which matches nothing in the table.
+    return [canon] if canon != key else [key]
 
 
 def is_alias(entity: Optional[str]) -> bool:
