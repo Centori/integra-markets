@@ -292,11 +292,18 @@ curl "${BASE}/v1/sentiment/oil/history?limit=1000&cursor=eyJwIjoi..." \
       <section>
         <h2 className="text-xl font-semibold">Commodities and topics</h2>
         <p className="mt-2 text-text-secondary">
-          Match on the canonical name, never a market ticker:{" "}
-          <code>oil</code> rather than <code>brent</code> or <code>wti</code>,{" "}
-          <code>gas</code> rather than <code>ng</code>. A ticker matches nothing
-          and returns an empty <code>200</code>, which is indistinguishable from
-          a quiet news day.
+          Common market tickers resolve: <code>brent</code>, <code>wti</code> and{" "}
+          <code>crude</code> all reach <code>oil</code>;{" "}
+          <code>henry hub</code>, <code>ttf</code> and <code>jkm</code> reach{" "}
+          <code>gas</code>. Resolution uses the same alias map the scoring engine
+          applies when writing, so the two cannot disagree.
+        </p>
+        <p className="mt-3 text-text-secondary">
+          An <em>unrecognised</em> term is still queried as given and returns an
+          empty <code>200</code> — indistinguishable from a quiet news day. So
+          prefer the canonical name, which is what{" "}
+          <code>/v1/commodities</code> returns and what every response echoes
+          back in its <code>commodity</code> field.
         </p>
         <p className="mt-3 text-text-secondary">
           <code>/v1/commodities</code> returns physical commodities alongside

@@ -83,10 +83,13 @@ async def sentiment(
     commodity: str = Query(
         ...,
         description=(
-            "Canonical commodity name, e.g. 'oil', 'gas', 'copper'. This is "
-            "matched against entity_mentions.entity, which stores the name the "
-            "sentiment engine normalises to — not a market ticker, so 'brent' "
-            "matches nothing."
+            "Commodity name or a common market ticker. 'brent', 'wti' and "
+            "'crude' resolve to 'oil'; 'henry hub', 'ttf' and 'jkm' resolve to "
+            "'gas'. Resolution uses the same alias map the scoring engine "
+            "applies at write time, so the two cannot disagree — it had simply "
+            "never been consulted on read, which is why this parameter used to "
+            "document that 'brent' matched nothing. An unrecognised term is "
+            "queried as given and returns an empty result rather than an error."
         ),
     ),
     window: str = Query("7d", description="One of 24h, 7d, 30d, 90d"),

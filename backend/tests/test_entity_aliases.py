@@ -230,3 +230,59 @@ class TestCanonicalSubjectsAreDescribed:
         """Guards the whole group rather than the four we happen to have today."""
         for canon in ea.EQUIVALENT_NAMES:
             assert ea.describe(canon)["category"], f"{canon} has no category"
+
+
+class TestMarketTickersResolve:
+    """`brent` matched nothing, and a correct map existed two modules away.
+
+    `commodity_sentiment._COMMODITY_ALIASES` maps 68 synonyms and tickers onto
+    20 canonical names, and had always been applied at WRITE time only. So
+    /v1/sentiment?commodity=brent returned an empty 200 — indistinguishable from
+    "no news about oil today" — and the endpoint's own docstring documented that
+    as expected behaviour rather than as the bug it was.
+
+    These are the highest-intent search terms a commodities product has. The App
+    Store keyword plan targets them, and buying traffic for a term that returns
+    nothing is worse than not buying it.
+    """
+
+    @pytest.mark.parametrize("ticker,canon", [
+        ("brent", "oil"),
+        ("wti", "oil"),
+        ("crude", "oil"),
+        ("henry hub", "gas"),
+        ("ttf", "gas"),
+        ("jkm", "gas"),
+    ])
+    def test_a_ticker_resolves_to_its_commodity(self, ticker, canon):
+        assert ea.canonical(ticker) == canon
+
+    def test_a_ticker_queries_the_stored_names_not_itself(self):
+        """The subtle half. `brent` resolving to `oil` is not enough — the query
+        has to go out as the names that exist in the table, and `oil` itself has
+        a second stored spelling."""
+        names = ea.names_for("brent")
+        assert set(names) == {"oil", "crude_oil"}
+        assert "brent" not in names, "querying the ticker matches zero rows"
+
+    def test_resolution_is_idempotent(self):
+        """canonical(canonical(x)) == canonical(x), or a second pass through the
+        read path would move the answer."""
+        for term in ("brent", "ttf", "crude_oil", "oil", "copper"):
+            once = ea.canonical(term)
+            assert ea.canonical(once) == once, term
+
+    def test_an_unknown_term_is_not_silently_mapped(self):
+        """Over-eager resolution would be worse than none: answering a question
+        about `hydrogen` with oil data is a wrong answer, not a near miss."""
+        assert ea.canonical("hydrogen") == "hydrogen"
+        assert ea.names_for("hydrogen") == ["hydrogen"]
+
+    def test_resolution_survives_the_engine_being_unimportable(self, monkeypatch):
+        """The engine import is wrapped. A failure there must degrade to
+        stored-name resolution, not 500 the request."""
+        import services.entity_aliases as mod
+
+        monkeypatch.setattr(mod, "_engine_alias", lambda _k: None)
+        assert mod.canonical("crude_oil") == "oil"   # stored variant still works
+        assert mod.canonical("brent") == "brent"     # ticker no longer resolves

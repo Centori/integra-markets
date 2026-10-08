@@ -76,9 +76,11 @@ const SAMPLES: Sample[] = [
 /**
  * Shown until the live list loads, and if it cannot be loaded.
  *
- * These are real stored entity values, not tickers: `brent`, `wti` and `ng`
- * normalise to these at write time and match nothing on read, returning an
- * empty 200 that reads exactly like "no news about this commodity".
+ * These are the real stored entity values. Common tickers now resolve on read
+ * too — `brent` and `wti` to `oil`, `ttf` and `jkm` to `gas` — using the same
+ * map the scoring engine applies at write time. The canonical names are still
+ * what the selector offers, because they are what /v1/commodities returns and
+ * what the response echoes back.
  */
 const FALLBACK_COMMODITIES = [
   "oil", "crude_oil", "gas", "natural_gas", "gold", "copper", "silver",

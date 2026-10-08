@@ -1,0 +1,1 @@
+ice,lme,gasoil,ttf,jkm,rapeseed,iron ore,thermal coal,freight,basis,cot,api2
