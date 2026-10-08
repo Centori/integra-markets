@@ -1,0 +1,54 @@
+# Integra Markets
+
+> Commodity news sentiment with the evidence attached. Every score names the
+> rule that produced it and quotes the words from the article, so it can be
+> checked rather than believed.
+
+Integra scores news coverage for commodity markets — energy, metals,
+agriculture — and for the macro subjects those markets transmit through
+(interest rates, inflation, dollar strength). Coverage is continuous from 2020
+across 49 subjects.
+
+## What makes the output unusual
+
+- **Named signals, quoted evidence.** A reading is not a bare number. It carries
+  the rule that fired ("Chokepoint disruption", "Exchange stock draw", "Demand
+  support") bound to the span of source text that triggered it.
+- **Sample size on every figure.** An aggregate always reports how many articles
+  it was computed from. A score on three articles and a score on nine hundred
+  are not the same claim, and are not presented as if they were.
+- **Archive extent is reported regardless of plan.** A response says how far the
+  archive reaches even when the caller's plan cannot read that far.
+
+## Interfaces
+
+- REST API: https://api.integramarkets.app — bearer token, no SDK required.
+  OpenAPI: https://api.integramarkets.app/openapi.json
+- MCP connector: https://mcp.integramarkets.app/mcp — works in Claude on web,
+  desktop and mobile. Seven tools over the same data as the REST surface.
+- Console: https://dashboard.integramarkets.app
+
+## Accuracy and limits
+
+- Sentiment classification scores 71.4% on the Financial Phrasebank benchmark.
+- Scores are signed, -1 to +1, 0 neutral. `confidence` is a separate magnitude
+  and is NOT directional.
+- Scoring is applied retroactively over the archive, with the model name,
+  version and scoring timestamp recorded per row. `published_at` is the genuine
+  publication time, so there is no look-ahead in the content — but the model is
+  applied with hindsight, and anyone backtesting should know that.
+- Evidence density is not stationary: roughly 30% of articles in the last 30
+  days carry a named signal, against 15% across the deep archive.
+
+## Not available
+
+- There is no SDK. The API is plain HTTP; generate a client from the OpenAPI
+  spec if you want one.
+- Historical analog matching (`/v1/historical/analogs`) returns 501 pending an
+  archive backfill.
+- Divergence and threshold event webhooks do not exist. Quota-threshold
+  webhooks do.
+
+## Contact
+
+support@integramarkets.app
