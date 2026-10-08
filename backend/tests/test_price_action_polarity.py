@@ -165,3 +165,82 @@ def test_observed_inventory_outweighs_tone():
             f"{signal} cannot govern a reading it is the direct evidence for"
         )
     assert signal_weight("Exchange stock draw") == signal_weight("Stocks tightening")
+
+
+# --- found by publishing the evidence ---------------------------------------
+#
+# The signals column made the rulebook's reasoning visible for the first time,
+# and the first batch of backfilled rows contained this:
+#
+#   "Saudi oil export strategy hits new hurdle as Red Sea insurance costs soar"
+#   -> BULLISH · Infrastructure attack · "port strategy hit"
+#
+# Two faults compounding. `port` sat unanchored in the infrastructure-noun
+# group, so it matched inside "ex-port-". And bare `hit` was in the attack-verb
+# group, so it matched "hits new hurdle". Infrastructure attack carries weight
+# 0.9, above SENTIMENT_RULE_DOMINANCE_WEIGHT — so one substring turned a
+# commercial story into a physical supply shock and governed the whole reading.
+#
+# Neither was visible while the drivers were being discarded. A score of +0.36
+# on that headline looks like an opinion; "port strategy hit" is a bug report.
+
+INFRASTRUCTURE_FALSE_POSITIVES = [
+    # The headline that surfaced it.
+    "Saudi oil export strategy hits new hurdle as Red Sea insurance costs soar",
+    # The same two mechanisms in their other common forms.
+    "Oil exports hit record high as demand climbs",
+    "OPEC export policy hits resistance from members",
+    "Gas export revenue hits a four-year low",
+]
+
+INFRASTRUCTURE_REAL = [
+    "Ras Tanura terminal hit by drone attack, exports halted",
+    "Drone strike on Russian refinery halts 200 kb/d",
+    "Pipeline damaged in overnight shelling",
+    "Tanker ablaze off Yemen after missile strike",
+]
+
+
+@pytest.mark.parametrize("headline", INFRASTRUCTURE_FALSE_POSITIVES)
+def test_commercial_language_is_not_an_infrastructure_attack(headline):
+    """`port` inside "export", and "hits" as in "hits a hurdle"."""
+    signals = {
+        s["signal"]
+        for s in analyze_market_sentiment(headline, "oil")
+        .get("market_context", {})
+        .get("matched_signals", [])
+    }
+    assert "Infrastructure attack" not in signals, (
+        f"{headline!r} read as a physical attack — check the `port` word "
+        f"boundary and that `hit` still requires `by`"
+    )
+
+
+@pytest.mark.parametrize("headline", INFRASTRUCTURE_REAL)
+def test_a_real_attack_still_fires(headline):
+    """The bound that keeps the fix from being a deletion. Narrowing a rule
+    until it matches nothing is not an improvement."""
+    signals = {
+        s["signal"]
+        for s in analyze_market_sentiment(headline, "oil")
+        .get("market_context", {})
+        .get("matched_signals", [])
+    }
+    assert "Infrastructure attack" in signals, f"{headline!r} no longer fires"
+
+
+def test_the_quoted_phrase_is_what_made_this_findable():
+    """The product property, not just the rule.
+
+    A named signal with the span attached is checkable by eye; a number is not.
+    This asserts the phrase is still carried, because losing it would make the
+    next rule of this kind invisible again.
+    """
+    from services.commodity_sentiment import extract_key_drivers
+
+    drivers = extract_key_drivers(
+        "Ras Tanura terminal hit by drone attack, exports halted", "oil"
+    )
+    infra = [d for d in drivers if d["driver"] == "Infrastructure attack"]
+    assert infra, "the real attack stopped producing a driver"
+    assert infra[0]["phrase"], "a driver with no quoted phrase cannot be checked"

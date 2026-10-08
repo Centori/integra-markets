@@ -44,12 +44,26 @@ PAGE = 1000
 
 
 def _client():
-    from services._supabase import get_supabase_client
+    """Build a client directly from the environment.
 
-    supabase = get_supabase_client()
-    if supabase is None:
-        sys.exit("no Supabase client — check SUPABASE_URL / SUPABASE_SERVICE_KEY")
-    return supabase
+    Deliberately NOT services._supabase.get_supabase_client(), which reaches
+    into `main` for the client the FastAPI app made. Importing main to run a
+    batch job executes the whole application module — torch, the scheduler, every
+    router — which is slow, and makes a maintenance script fail for reasons that
+    have nothing to do with the maintenance.
+    """
+    from dotenv import load_dotenv
+    from supabase import create_client
+
+    load_dotenv()
+    url = os.getenv("SUPABASE_URL")
+    key = os.getenv("SUPABASE_SERVICE_ROLE_KEY") or os.getenv("SUPABASE_KEY")
+    if not url or not key:
+        sys.exit(
+            "set SUPABASE_URL and SUPABASE_SERVICE_ROLE_KEY (the service role, "
+            "not the anon key — this writes)"
+        )
+    return create_client(url, key)
 
 
 def _signals(title: str, content: str, commodity: str | None) -> List[Dict[str, Any]]:
