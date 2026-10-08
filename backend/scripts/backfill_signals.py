@@ -112,11 +112,12 @@ def run(limit: int | None, dry_run: bool, force: bool) -> None:
             commodity = payload.get("commodity") if isinstance(payload, dict) else None
             found = _signals(doc.get("title") or "", doc.get("content") or "", commodity)
             if not found:
-                # Left NULL deliberately: "the rulebook read this and recognised
-                # nothing" is the honest record, and writing [] would make a
-                # future re-run unable to tell it from "not yet processed".
+                # Written as `[]`, not left NULL. NULL means "not evaluated";
+                # `[]` means "evaluated, nothing fired", and conflating them
+                # stalls this very loop — the filter below is `signals is null`,
+                # so a non-firing row left NULL never leaves the queue and the
+                # newest-first ordering returns it on every batch forever.
                 skipped += 1
-                continue
             updates.append({"id": row["id"], "signals": found})
 
         if updates and not dry_run:
@@ -134,9 +135,9 @@ def run(limit: int | None, dry_run: bool, force: bool) -> None:
         elif updates:
             written += len(updates)
 
-        # Without --force the filter itself advances the window, because written
-        # rows drop out of it. With --force nothing drops out, so the offset has
-        # to move or the same page repeats forever.
+        # Every examined row is written now — signals or `[]` — so the filter
+        # itself advances the window and the offset only matters under --force,
+        # where nothing drops out of it.
         if force:
             offset += span
 

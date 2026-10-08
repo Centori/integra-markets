@@ -86,16 +86,26 @@ def _excerpt(value):
 # marked direction="context" when nothing matched, and persisting those would
 # refill the column with exactly the generic nouns this replaces — "oil",
 # "price", "supply" — which are equally present in a headline that sent the
-# market up and one that sent it down. An empty result is stored as NULL, which
-# is the honest answer: the rulebook read this article and found nothing it
-# recognised.
-def _signals_for(doc_row: Dict[str, Any]) -> Optional[List[Dict[str, Any]]]:
-    """Fired rulebook signals for one document, or None if none fired."""
+# market up and one that sent it down.
+#
+# Nothing fired is stored as `[]`, NOT NULL. The two mean different things and
+# the first version had them the wrong way round:
+#
+#     NULL  this row has not been evaluated
+#     []    evaluated, and the rulebook recognised nothing
+#
+# Storing NULL for "nothing fired" collapsed those, and the consequence was not
+# cosmetic: the backfill selects `where signals is null`, so non-firing rows
+# never left the queue. Ordered newest-first, it re-read the same 500 rows every
+# batch and the signalled count froze at 38 while the row count climbed past
+# 62,000. A pass that can never finish is worse than one that reports nothing.
+def _signals_for(doc_row: Dict[str, Any]) -> List[Dict[str, Any]]:
+    """Fired rulebook signals for one document; [] when none fired."""
     text = " ".join(
         part for part in (doc_row.get("title"), doc_row.get("content")) if part
     ).strip()
     if not text:
-        return None
+        return []
 
     payload = doc_row.get("raw_payload") or {}
     commodity = payload.get("commodity") if isinstance(payload, dict) else None
@@ -109,10 +119,11 @@ def _signals_for(doc_row: Dict[str, Any]) -> Optional[List[Dict[str, Any]]]:
         # row without evidence attached; a raised exception here would lose the
         # score as well.
         logger.warning("archive_writer: signal extraction failed: %s", exc)
+        # NULL on failure, deliberately: this row was NOT evaluated, and a later
+        # pass should pick it up rather than treat the failure as a verdict.
         return None
 
-    fired = [d for d in drivers if d.get("direction") != "context"]
-    return fired or None
+    return [d for d in drivers if d.get("direction") != "context"]
 
 
 def _url_hash(url: str) -> str:
