@@ -1,1 +1,1 @@
-soja,milho,acucar,cafe,minerio,petroleo,gas,cobre,ouro,trigo,safra,cotacao,mercado
+brent,wti,gnl,cobre,ouro,prata,litio,uranio,potassio,trigo,frete,safra,cotacao,opep,diesel

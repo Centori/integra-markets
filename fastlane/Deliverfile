@@ -1,0 +1,30 @@
+# Metadata-only upload to App Store Connect.
+#
+# Every skip below is deliberate. `deliver` with default settings will look for
+# a binary, replace screenshots, and can submit for review — none of which is
+# wanted here. The build lineage is still split (the live App Store build has
+# never been built from main), so nothing in this directory should go anywhere
+# near a binary until that is resolved.
+
+app_identifier "com.centori.integramarkets"
+
+# Listing text only.
+skip_binary_upload true
+skip_screenshots   true
+skip_app_version_update false
+
+# Screenshots stay as they are. Localised screenshots showing an English UI is
+# the one combination reviewers reliably flag, and the app is not localised yet.
+overwrite_screenshots false
+
+# Never submit from here. Upload, then read the listing in App Store Connect and
+# submit by hand.
+submit_for_review false
+
+# Show the HTML preview and wait for confirmation rather than uploading blind.
+force false
+
+# Apple's own metadata linter: catches placeholder text, broken support URLs and
+# mentions of other platforms before a human reviewer does.
+run_precheck_before_submit true
+precheck_include_in_app_purchases false

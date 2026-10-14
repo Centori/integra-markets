@@ -1,1 +1,1 @@
-brut,petrole,gaz naturel,cuivre,or,ble,mais,soja,matiere premiere,marche,cours,opep
+brut,brent,wti,gnl,cuivre,or,argent,lithium,uranium,potasse,mais,ble,fret,opep,cours,gazole

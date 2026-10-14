@@ -1,0 +1,35 @@
+Integra Markets reads the commodity news flow and tells you what moved, and why.
+
+WHY IT IS DIFFERENT
+
+Most sentiment tools hand you a number. A number you cannot check is an opinion with a decimal point.
+
+Every reading here carries its evidence: the named signal that fired, and the exact phrase from the article that triggered it. "Price action down - Gold slips" takes two seconds to verify by eye. That is the whole design.
+
+WHAT IT COVERS
+
+Energy: crude, refined products, natural gas, LPG
+Metals: copper, gold, silver, lithium, uranium
+Agriculture: corn, wheat, fertilizer
+Also: freight, FX and weather, where a shipping disruption or a currency move becomes a supply story
+
+SIXTEEN MARKETS, ONE METHOD
+
+- Current sentiment per commodity, with the drivers behind it
+- Day-on-day momentum, so you see a change rather than a level
+- The headlines that set the reading, summarized
+- Alerts on the commodities you follow
+
+BUILT ON A REAL ARCHIVE
+
+339,000 scored documents going back to 2020, with named evidence on more than 52,000 of them. Sentiment history is computed from that record, not inferred from today's snapshot.
+
+FOR DESK USE
+
+A read-only HTTP API and a Claude connector are available on paid plans, so the same data reaches your notebook, your spreadsheet or your model. No SDK to install.
+
+ONE HONEST LIMIT
+
+Named signals fire more often in recent coverage than in the deep archive - roughly 30% of recent articles against 15% further back. If you are calibrating against history, that skew matters, and you should hear it from us rather than discover it.
+
+Integra Markets is an information service. It is not investment advice, and nothing in it is a recommendation to trade.

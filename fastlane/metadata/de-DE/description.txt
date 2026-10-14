@@ -1,0 +1,37 @@
+Integra Markets liest den Nachrichtenfluss der Rohstoffmärkte und sagt Ihnen, was sich bewegt hat und warum.
+
+WARUM ES ANDERS IST
+
+Die meisten Sentiment-Werkzeuge liefern eine Zahl. Eine Zahl, die man nicht prüfen kann, ist eine Meinung mit Dezimalstelle.
+
+Jede Bewertung trägt hier ihren Beleg: das benannte Signal, das ausgelöst hat, und die genaue Textstelle aus dem Artikel. "Preis fallend - Gold slips" ist in zwei Sekunden mit dem Auge prüfbar. Das ist der ganze Entwurf.
+
+WAS ABGEDECKT IST
+
+Energie: Rohöl, Mineralölprodukte, Erdgas, Flüssiggas
+Metalle: Kupfer, Gold, Silber, Lithium, Uran
+Agrar: Mais, Weizen, Düngemittel
+Außerdem: Frachtraten, Devisen und Wetter, wo eine Transportstörung oder eine Währungsbewegung zur Angebotsgeschichte wird
+
+SECHZEHN MÄRKTE, EINE METHODE
+
+- Aktuelles Sentiment je Rohstoff, mit den Treibern dahinter
+- Veränderung zum Vortag, damit Sie die Bewegung sehen und nicht nur das Niveau
+- Die Schlagzeilen, die die Bewertung bestimmt haben, zusammengefasst
+- Benachrichtigungen zu den Rohstoffen, die Sie verfolgen
+
+AUF EINEM ECHTEN ARCHIV
+
+339.000 bewertete Dokumente zurück bis 2020, davon mehr als 52.000 mit benanntem Beleg. Die Historie wird aus diesem Bestand berechnet, nicht aus der heutigen Momentaufnahme abgeleitet.
+
+FÜR DEN HANDELSTISCH
+
+In den bezahlten Tarifen stehen eine schreibgeschützte HTTP-API und ein Claude-Connector bereit, damit dieselben Daten in Ihr Notebook, Ihre Tabelle oder Ihr Modell gelangen. Kein SDK nötig.
+
+EINE EHRLICHE EINSCHRÄNKUNG
+
+Signale lösen in aktueller Berichterstattung häufiger aus als im tiefen Archiv: rund 30 Prozent der jüngeren Artikel gegenüber 15 Prozent weiter zurück. Wer gegen die Historie kalibriert, muss diese Verzerrung kennen.
+
+Hinweis: Die Benutzeroberfläche der App ist derzeit auf Englisch.
+
+Integra Markets ist ein Informationsdienst. Es ist keine Anlageberatung und keine Empfehlung zum Handeln.

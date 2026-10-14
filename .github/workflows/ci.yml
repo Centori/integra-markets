@@ -111,6 +111,19 @@ jobs:
       - name: Dashboard links resolve and offer a way out
         run: node dashboard/scripts/check-links.mjs
 
+      # App Store metadata, which is text nothing has ever checked. Apple
+      # truncates an over-long keyword field mid-word and reports nothing, and
+      # `wc -m` on a shell with no LANG set counts bytes — it called the es-MX
+      # subtitle 31/30 and the ja subtitle 48/30 when both were within limits.
+      #
+      # The coverage rule is the one that matters. The first drafts advertised
+      # soybean, iron ore, thermal coal, alumina, nickel, canola, rapeseed,
+      # acucar, cafe and minerio; the engine resolves none of them, so a user
+      # who searched one, installed, and typed the same word got an empty
+      # result. Every term now has to declare what it resolves to.
+      - name: App Store metadata is within limits and only claims what resolves
+        run: node scripts/check-store-metadata.mjs
+
       # The two Next.js sites, actually built.
       #
       # Nothing here compiled either of them, and www broke exactly the way that

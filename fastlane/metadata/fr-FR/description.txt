@@ -1,0 +1,37 @@
+Integra Markets lit le flux d'actualités des matières premières et vous dit ce qui a bougé, et pourquoi.
+
+POURQUOI C'EST DIFFÉRENT
+
+La plupart des outils de sentiment livrent un chiffre. Un chiffre que l'on ne peut pas vérifier est un avis avec une décimale.
+
+Ici, chaque lecture porte sa preuve : le signal nommé qui s'est déclenché et la phrase exacte de l'article qui l'a déclenché. « Prix en baisse - Gold slips » se vérifie à l'œil en deux secondes. C'est tout le principe.
+
+CE QUI EST COUVERT
+
+Énergie : brut, produits raffinés, gaz naturel, GPL
+Métaux : cuivre, or, argent, lithium, uranium
+Agriculture : maïs, blé, engrais
+Également : fret, devises et météo, là où une rupture logistique ou un mouvement de change devient une histoire d'offre
+
+SEIZE MARCHÉS, UNE MÉTHODE
+
+- Sentiment actuel par matière première, avec les facteurs qui l'expliquent
+- Variation d'un jour sur l'autre, pour voir le mouvement et pas seulement le niveau
+- Les titres qui ont déterminé la lecture, résumés
+- Alertes sur les matières premières que vous suivez
+
+SUR UNE VRAIE ARCHIVE
+
+339 000 documents analysés depuis 2020, dont plus de 52 000 avec une preuve nommée. L'historique est calculé sur cet enregistrement, non déduit de l'instantané du jour.
+
+POUR LE DESK
+
+Les offres payantes donnent accès à une API HTTP en lecture seule et à un connecteur Claude, pour amener les mêmes données dans votre notebook, votre tableur ou votre modèle. Aucun SDK à installer.
+
+UNE LIMITE ASSUMÉE
+
+Les signaux se déclenchent plus souvent dans la couverture récente que dans l'archive profonde : environ 30 % des articles récents contre 15 % plus loin. Si vous calibrez sur l'historique, ce biais compte.
+
+Remarque : l'interface de l'application est actuellement en anglais.
+
+Integra Markets est un service d'information. Ce n'est pas un conseil en investissement ni une recommandation d'opérer.
