@@ -1,1 +1,1 @@
-rohoel,erdgas,kupfer,gold,weizen,mais,rohstoff,terminkontrakt,preis,markt,opec,handel
+rohoel,brent,wti,erdgas,lng,kupfer,gold,silber,lithium,uran,kali,mais,weizen,fracht,opec,ttf

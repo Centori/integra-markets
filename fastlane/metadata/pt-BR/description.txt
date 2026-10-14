@@ -1,0 +1,37 @@
+A Integra Markets lê o fluxo de notícias de commodities e explica o que se moveu, e por quê.
+
+POR QUE É DIFERENTE
+
+A maioria das ferramentas de sentimento entrega um número. Um número que não se pode verificar é uma opinião com casas decimais.
+
+Aqui cada leitura vem com sua evidência: o sinal identificado e a frase exata da matéria que o acionou. "Preço em queda - Gold slips" se confere a olho em dois segundos. Esse é todo o projeto.
+
+O QUE COBRE
+
+Energia: petróleo, derivados, gás natural, GLP
+Metais: cobre, ouro, prata, lítio, urânio
+Agricultura: milho, trigo, fertilizantes
+Também: fretes, câmbio e clima, quando uma interrupção logística ou um movimento de câmbio vira uma história de oferta
+
+DEZESSEIS MERCADOS, UM MÉTODO
+
+- Sentimento atual por commodity, com os fatores por trás dele
+- Variação dia a dia, para ver a mudança e não apenas o nível
+- As manchetes que determinaram a leitura, resumidas
+- Alertas sobre as commodities que você acompanha
+
+SOBRE UM ARQUIVO REAL
+
+339.000 documentos analisados desde 2020, com evidência identificada em mais de 52.000 deles. O histórico é calculado sobre esse registro, não inferido da foto de hoje.
+
+PARA USO PROFISSIONAL
+
+Nos planos pagos há uma API HTTP somente leitura e um conector para o Claude, levando os mesmos dados ao seu notebook, à sua planilha ou ao seu modelo. Sem SDK para instalar.
+
+UM LIMITE HONESTO
+
+Os sinais disparam com mais frequência na cobertura recente do que no arquivo profundo: cerca de 30% das matérias recentes contra 15% mais atrás. Se você calibra contra o histórico, esse viés importa.
+
+Observação: a interface do aplicativo está atualmente em inglês.
+
+A Integra Markets é um serviço de informação. Não é recomendação de investimento nem indicação para operar.

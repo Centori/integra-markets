@@ -1,1 +1,1 @@
-ice,lme,gasoil,ttf,jkm,rapeseed,iron ore,thermal coal,freight,basis,cot,api2
+ice,lme,gasoil,ttf,jkm,naphtha,diesel,propane,uranium,potash,urea,freight,tanker,basis,cot
