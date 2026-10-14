@@ -288,7 +288,25 @@ class NewsDataSources:
             category="agriculture",
             limit=15,
         )
-        return topical + trade_press
+        # Softs. The docstring above has claimed them since this fetcher was
+        # written and the query never contained one: no sugar, no coffee, no
+        # cocoa reached the platform from any source.
+        #
+        # Each commodity word is paired with market vocabulary because the bare
+        # terms are badly polluted -- "sugar" returns diet and tax coverage,
+        # "coffee" returns retail and cafe openings, and scoring either as a
+        # commodity story is worse than not having it.
+        softs = await self._fetch_google_news(
+            query=(
+                "(sugar OR coffee OR arabica OR robusta OR cocoa) "
+                "(futures OR price OR crop OR harvest OR export OR mill OR "
+                "grindings OR deficit OR surplus OR ICE)"
+            ),
+            source="Softs Wire",
+            category="agriculture",
+            limit=20,
+        )
+        return topical + trade_press + softs
 
     async def fetch_metals_news(self) -> List[Dict]:
         """Precious and base metals.
@@ -296,12 +314,27 @@ class NewsDataSources:
         Replaces fetch_kitco_news, whose three configured RSS URLs all answer
         404. Kitco is still the publisher; only the transport changed.
         """
-        return await self._fetch_google_news(
+        precious_and_base = await self._fetch_google_news(
             query="site:kitco.com OR site:mining.com OR site:miningweekly.com",
             source="Metals Wire",
             category="metals",
             limit=25,
         )
+        # Iron ore and coal, named rather than hoped for. Both arrived only
+        # incidentally through the mining trade press above, which is a coverage
+        # policy nobody chose: the two largest dry-bulk trades on earth, and the
+        # markets the Australian and Brazilian store listings lead with.
+        bulk = await self._fetch_google_news(
+            query=(
+                "(\"iron ore\" OR \"thermal coal\" OR \"coking coal\" OR \"met coal\") "
+                "(price OR futures OR shipment OR port OR stockpile OR mill OR "
+                "steel OR supply OR China OR India)"
+            ),
+            source="Bulk Commodities Wire",
+            category="bulk",
+            limit=20,
+        )
+        return precious_and_base + bulk
 
     async def fetch_reuters_commodities(self) -> List[Dict]:
         """Fetch Reuters commodities news via RSS feed"""

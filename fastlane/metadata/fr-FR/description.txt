@@ -8,12 +8,12 @@ Ici, chaque lecture porte sa preuve : le signal nommé qui s'est déclenché et 
 
 CE QUI EST COUVERT
 
-Énergie : brut, produits raffinés, gaz naturel, GPL
-Métaux : cuivre, or, argent, lithium, uranium
-Agriculture : maïs, blé, engrais
+Énergie : brut, produits raffinés, gaz naturel, GPL, charbon
+Métaux : cuivre, or, argent, lithium, uranium, minerai de fer
+Agriculture : maïs, blé, soja, sucre, café, cacao, engrais
 Également : fret, devises et météo, là où une rupture logistique ou un mouvement de change devient une histoire d'offre
 
-SEIZE MARCHÉS, UNE MÉTHODE
+UNE MÉTHODE, TOUS LES MARCHÉS
 
 - Sentiment actuel par matière première, avec les facteurs qui l'expliquent
 - Variation d'un jour sur l'autre, pour voir le mouvement et pas seulement le niveau

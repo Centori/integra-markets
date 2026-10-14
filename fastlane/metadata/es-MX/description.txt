@@ -8,12 +8,12 @@ Aquí cada lectura viene con su evidencia: la señal identificada y la frase exa
 
 QUÉ CUBRE
 
-Energía: crudo, productos refinados, gas natural, GLP
-Metales: cobre, oro, plata, litio, uranio
-Agricultura: maíz, trigo, fertilizantes
+Energía: crudo, productos refinados, gas natural, GLP, carbón
+Metales: cobre, oro, plata, litio, uranio, mineral de hierro
+Agricultura: maíz, trigo, soja, azúcar, café, cacao, fertilizantes
 También: fletes, divisas y clima, donde una interrupción logística o un movimiento de divisa se convierte en una historia de oferta
 
-DIECISÉIS MERCADOS, UN MÉTODO
+UN MÉTODO, TODOS LOS MERCADOS
 
 - Sentimiento actual por materia prima, con los factores que lo explican
 - Variación día a día, para ver el cambio y no solo el nivel

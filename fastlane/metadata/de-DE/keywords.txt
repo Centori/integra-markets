@@ -1,1 +1,1 @@
-rohoel,brent,wti,erdgas,lng,kupfer,gold,silber,lithium,uran,kali,mais,weizen,fracht,opec,ttf
+rohoel,brent,wti,erdgas,kupfer,gold,silber,lithium,uran,kali,weizen,eisenerz,kohle,fracht,lng

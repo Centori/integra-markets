@@ -1,1 +1,1 @@
-brent,wti,gnl,cobre,ouro,prata,litio,uranio,potassio,trigo,frete,safra,cotacao,opep,diesel
+acucar,cafe,minerio,cacau,brent,wti,gnl,cobre,ouro,prata,litio,uranio,potassio,trigo,frete,safra

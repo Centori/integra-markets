@@ -1,1 +1,1 @@
-crude,brent,wti,lng,copper,gold,silver,uranium,lithium,potash,corn,wheat,freight,sentiment,opec
+crude,brent,wti,lng,copper,gold,silver,uranium,lithium,potash,corn,wheat,soybean,freight,sentiment

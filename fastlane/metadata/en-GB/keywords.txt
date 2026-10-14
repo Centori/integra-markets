@@ -1,1 +1,1 @@
-ice,lme,gasoil,ttf,jkm,naphtha,diesel,propane,uranium,potash,urea,freight,tanker,basis,cot
+ice,lme,gasoil,ttf,jkm,naphtha,propane,uranium,potash,cocoa,robusta,sugar,freight,basis,cot
