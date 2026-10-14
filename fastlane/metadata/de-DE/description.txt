@@ -8,12 +8,12 @@ Jede Bewertung trägt hier ihren Beleg: das benannte Signal, das ausgelöst hat,
 
 WAS ABGEDECKT IST
 
-Energie: Rohöl, Mineralölprodukte, Erdgas, Flüssiggas
-Metalle: Kupfer, Gold, Silber, Lithium, Uran
-Agrar: Mais, Weizen, Düngemittel
+Energie: Rohöl, Mineralölprodukte, Erdgas, Flüssiggas, Kohle
+Metalle: Kupfer, Gold, Silber, Lithium, Uran, Eisenerz
+Agrar: Mais, Weizen, Sojabohnen, Zucker, Kaffee, Kakao, Düngemittel
 Außerdem: Frachtraten, Devisen und Wetter, wo eine Transportstörung oder eine Währungsbewegung zur Angebotsgeschichte wird
 
-SECHZEHN MÄRKTE, EINE METHODE
+EINE METHODE, ALLE MÄRKTE
 
 - Aktuelles Sentiment je Rohstoff, mit den Treibern dahinter
 - Veränderung zum Vortag, damit Sie die Bewegung sehen und nicht nur das Niveau

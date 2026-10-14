@@ -1,1 +1,1 @@
-crudo,brent,wti,gnl,cobre,oro,plata,litio,uranio,potasa,maiz,trigo,flete,opep,mercado,precio
+crudo,brent,wti,gnl,cobre,oro,plata,litio,uranio,potasa,maiz,trigo,soja,cafe,azucar,flete,opep

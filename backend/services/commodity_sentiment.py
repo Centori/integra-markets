@@ -125,6 +125,35 @@ _COMMODITY_ALIASES: Dict[str, str] = {
     "lpg": "lpg", "propane": "lpg", "butane": "lpg", "ngl": "lpg",
     "coltan": "coltan", "columbite": "coltan", "tantalum": "coltan",
     "niobium": "coltan",
+
+    # The softs and bulk metals the ingestion already fetched and nothing could
+    # name. `fetch_agriculture_news` has queried "corn OR soybeans OR wheat OR
+    # soybean meal" since it was written, and topic_taxonomy has carried
+    # soybean, iron ore, steel, coffee, arabica, robusta, cocoa and sugar as
+    # topics -- but with no canonical here, not one of those articles could
+    # produce an entity_mentions row. `coffee` and `sugar` were half-wired:
+    # present in _DRIVER_TERMS and in the ticker map, absent from the only two
+    # structures that decide whether a market exists.
+    #
+    # This is also what the App Store drafts were selling. pt-BR led its
+    # subtitle with "Soja" and en-AU with iron ore and coal, which is exactly
+    # the trade that would have found an empty result.
+    "soybean": "soybeans", "soybeans": "soybeans", "soy": "soybeans",
+    "soya": "soybeans", "soybean meal": "soybeans", "soymeal": "soybeans",
+    "soybean oil": "soybeans", "soyoil": "soybeans",
+    "sugar": "sugar", "raw sugar": "sugar", "white sugar": "sugar",
+    "sugarcane": "sugar", "cane sugar": "sugar",
+    "coffee": "coffee", "arabica": "coffee", "robusta": "coffee",
+    "cocoa": "cocoa", "cacao": "cocoa",
+    # Two words, so no word-boundary hazard. Bare "iron" is deliberately absent:
+    # it is a word in ordinary prose ("iron out", "ironclad") and the market is
+    # always named in full.
+    "iron ore": "iron_ore", "iron-ore": "iron_ore",
+    # `\bcoal\b` cannot match inside "charcoal" -- the preceding "r" is a word
+    # character -- so the bare alias is safe. "coalition" IS reachable by the
+    # driver-term matcher's \w*, which is guarded in _DRIVER_FALSE_FORMS.
+    "coal": "coal", "thermal coal": "coal", "coking coal": "coal",
+    "metallurgical coal": "coal", "met coal": "coal",
 }
 
 
@@ -197,6 +226,17 @@ def normalize_commodity(commodity: Optional[str], text: Optional[str] = None) ->
 
 
 _SIGNAL_WEIGHTS: Dict[str, float] = {
+    # Softs and bulk: the slow or indirect evidence. Everything else added with
+    # those canonicals keeps the 1.0 default, which is correct for a named
+    # supply disruption, an export ban or a measured stock move.
+    "Biofuel demand": 0.8,          # a mandate moves demand over quarters
+    "Tight supply": 0.8,            # true but said loosely; no number attached
+    "Chinese demand support": 0.8,  # policy, one transmission step from price
+    "Property sector weakness": 0.8,
+    "Shipments rising": 0.8,        # a real flow, routinely a Tuesday
+    "Renewables displacement": 0.75,
+    "Mild weather": 0.8,            # matches Adverse crop weather at 0.8
+
     # Decisive, market-defining
     "OPEC supply cut": 1.0,
     "OPEC quota increase": 1.0,
@@ -302,6 +342,18 @@ _SIGNAL_WEIGHTS: Dict[str, float] = {
     "Source supply risk": 0.8,
     "Supply tightness": 0.8,
     "Supply surplus": 0.8,
+    # Its mirror, registered because the default of 1.0 made the pair
+    # asymmetric: "A global sugar deficit is forecast" governed the reading and
+    # scored BULLISH, while the same sentence with "surplus" could not govern
+    # and scored NEUTRAL. One word changed, and the engine was readier to call a
+    # bull case than a bear case on identical evidence. A forecast is softer
+    # than an observation in both directions, so both inform at 0.8 and neither
+    # overrules the sentence's own tone.
+    "Supply deficit": 0.8,
+    # Caught by the symmetry test on its first run: this took the 1.0 default
+    # against a pre-existing "Export restriction" at 0.85, so lifting a ban
+    # governed a reading more strongly than imposing one.
+    "Export resumption": 0.85,
     "Technical demand": 0.5,
     "Demand substitution": 0.5,
     "Electronics demand": 0.6,
@@ -510,6 +562,27 @@ _WEATHER_MODIFIERS: Dict[str, Dict[str, List[Dict[str, str]]]] = {
     },
     "corn": {
         "bullish": [{"pattern": r"(drought|heatwave|frost|freeze|flood|excessive rain|dry spell)", "signal": "Adverse crop weather"}],
+        "bearish": [{"pattern": r"(timely rain|favou?rable weather|beneficial rain|ideal conditions)", "signal": "Favourable crop weather"}],
+    },
+    # The four softs added with the canonicals take the same sign: a drought is
+    # bullish for anything that has to be grown. Frost belongs here rather than
+    # only in coffee's book because it is the single most price-moving weather
+    # word in arabica, and the standalone "weather" book would have scored it
+    # with a generic sign.
+    "soybeans": {
+        "bullish": [{"pattern": r"(drought|heatwave|frost|freeze|flood|excessive rain|dry spell)", "signal": "Adverse crop weather"}],
+        "bearish": [{"pattern": r"(timely rain|favou?rable weather|beneficial rain|ideal conditions)", "signal": "Favourable crop weather"}],
+    },
+    "sugar": {
+        "bullish": [{"pattern": r"(drought|heatwave|frost|freeze|flood|excessive rain|dry spell)", "signal": "Adverse crop weather"}],
+        "bearish": [{"pattern": r"(timely rain|favou?rable weather|beneficial rain|ideal conditions)", "signal": "Favourable crop weather"}],
+    },
+    "coffee": {
+        "bullish": [{"pattern": r"(drought|heatwave|frost|freeze|flood|excessive rain|dry spell)", "signal": "Adverse crop weather"}],
+        "bearish": [{"pattern": r"(timely rain|favou?rable weather|beneficial rain|ideal conditions)", "signal": "Favourable crop weather"}],
+    },
+    "cocoa": {
+        "bullish": [{"pattern": r"(drought|heatwave|harmattan|flood|excessive rain|dry spell)", "signal": "Adverse crop weather"}],
         "bearish": [{"pattern": r"(timely rain|favou?rable weather|beneficial rain|ideal conditions)", "signal": "Favourable crop weather"}],
     },
     "gas": {
@@ -827,6 +900,117 @@ def get_commodity_rulebook() -> Dict[str, Dict[str, List[Dict[str, str]]]]:
                 {"pattern": r"(wasde|usda).{0,30}(rais\w+|increas\w+|higher).{0,20}(yield|production|stocks?|acreage)", "signal": "WASDE upgrade"},
                 {"pattern": r"(crop conditions?|good[- ]to[- ]excellent|good/excellent).{0,24}(ris\w*|rose|improv\w+|better)", "signal": "Crop conditions improving"},
             ]
+        },
+        # --- softs and bulk, added with the canonicals ---------------------
+        #
+        # Modelled on corn and copper rather than invented: the grain mechanics
+        # (WASDE, export sales, ending stocks, crop conditions) carry over to
+        # oilseeds unchanged, and the China-demand/port-stock pair carries over
+        # from copper to the bulk metals. What is specific to each market is the
+        # origin -- Mato Grosso for soy, Minas Gerais for coffee, Cote d'Ivoire
+        # for cocoa, the Pilbara for iron ore -- because that is where a supply
+        # story starts and what the headline names.
+        #
+        # Every pattern anchors a noun to a verb. The `strong\w*` bug is the
+        # reason: it sat unanchored in corn's Ample supply rule and read
+        # "Export Shipments Remain Strong" as abundant supply, inverting a
+        # bullish headline. No bare adjective appears below.
+        "soybeans": {
+            "bullish": [
+                {"pattern": r"(crush margin\w*|crush demand|crushing).{0,24}(ris\w*|rose|strong\w*|record|improv\w+|widen\w*)", "signal": "Crush demand strength"},
+                {"pattern": r"(china|chinese|sinograin|cofco).{0,30}(bought|buying|purchas\w+|booked|snapp\w+ up)", "signal": "Chinese buying"},
+                {"pattern": r"(export sales?|export shipments?|export inspections?|export demand)"
+                            r".{0,24}(ris\w*|rose|strong\w*|strengthen\w*|robust|brisk|remain\w* strong)",
+                 "signal": "Demand support"},
+                {"pattern": r"(ending stocks?|carryout|stocks?[- ]to[- ]use).{0,26}(fall\w*|fell|drop\w*|declin\w+|tighten\w*|below|cut\w*)", "signal": "Stocks tightening"},
+                {"pattern": r"(wasde|usda).{0,30}(cut\w*|lower\w*|reduc\w+).{0,20}(yield|production|stocks?|acreage)", "signal": "WASDE downgrade"},
+                {"pattern": r"(?:(brazil|argentin\w+|mato grosso|parana|rio grande).{0,34}(drought|dry\w*|heat\w*|crop loss|yield loss|downgrad\w+|cut\w*)"
+                            r"|(drought|dry spell|heatwave|crop loss|yield loss).{0,34}(brazil|argentin\w+|mato grosso|parana|rio grande))", "signal": "South American crop risk"},
+                {"pattern": r"(biodiesel|renewable diesel|soyoil demand|blending mandate).{0,26}(ris\w*|rose|increas\w+|rais\w+|expand\w+|boost\w*)", "signal": "Biofuel demand"},
+            ],
+            "bearish": [
+                {"pattern": r"(brazil|argentin\w+).{0,30}(record\s+(?:\w+\s+){0,2}(?:crop|harvest|production)|bumper\s+(?:\w+\s+){0,2}crop)", "signal": "South American record crop"},
+                {"pattern": r"(record\s+(?:\w+\s+){0,2}crops?|ample supply|"
+                            r"(?:crop|harvest|yield|production|output|supply|supplies)\w*"
+                            r"(?:\s+\w+){0,2}\s+strong\w*|"
+                            r"strong\w*(?:\s+\w+){0,2}\s+(?:crop|harvest|yield|production|output|supply|supplies))", "signal": "Ample supply"},
+                {"pattern": r"(ending stocks?|carryout|stocks?[- ]to[- ]use).{0,26}(ris\w*|rose|build\w*|built|increas\w+|above|ample|raise\w*)", "signal": "Stocks building"},
+                {"pattern": r"(wasde|usda).{0,30}(rais\w+|increas\w+|higher).{0,20}(yield|production|stocks?|acreage)", "signal": "WASDE upgrade"},
+                {"pattern": r"(crush margin\w*|crush demand).{0,24}(fall\w*|fell|drop\w*|declin\w+|narrow\w*|weaken\w*)", "signal": "Crush margin compression"},
+                {"pattern": r"(china|chinese).{0,30}(cancel\w+|washout\w*|wash[- ]out)", "signal": "Chinese cancellations"},
+            ],
+        },
+        "sugar": {
+            "bullish": [
+                {"pattern": r"(india|thailand|thai|pakistan).{0,34}(export\s+(?:ban|curb\w*|restrict\w+|quota|cap)|ban\w*\s+(?:on\s+)?export)", "signal": "Export restriction"},
+                {"pattern": r"(mill\w*|cane|crush\w*).{0,30}(divert\w*|favou?r\w*|switch\w*|shift\w*).{0,24}ethanol", "signal": "Cane diverted to ethanol"},
+                {"pattern": r"(cane crush|crush\w*|sugar production|sugar output).{0,24}(fall\w*|fell|drop\w*|declin\w+|below|cut\w*|lower\w*)", "signal": "Production decline"},
+                {"pattern": r"(deficit|shortfall|shortage).{0,26}(sugar|market|global)|sugar.{0,24}(deficit|shortfall)", "signal": "Supply deficit"},
+            ],
+            "bearish": [
+                {"pattern": r"(surplus|glut|oversupply).{0,26}(sugar|market|global)|sugar.{0,24}(surplus|glut)", "signal": "Supply surplus"},
+                {"pattern": r"(record|bumper).{0,24}(cane|sugar|crop|harvest|crush)", "signal": "Record cane crop"},
+                {"pattern": r"(india|thailand|thai).{0,34}(allow\w*\s+export|resum\w+\s+export|rais\w+\s+(?:the\s+)?export\s+quota|lift\w*\s+(?:the\s+)?(?:ban|curb))", "signal": "Export resumption"},
+                {"pattern": r"(cane crush|crush\w*|sugar production|sugar output).{0,24}(ris\w*|rose|increas\w+|above|exceed\w+|record)", "signal": "Production rising"},
+            ],
+        },
+        "coffee": {
+            "bullish": [
+                {"pattern": r"(?:(brazil|minas gerais|vietnam|colombia|espirito santo).{0,34}(frost|drought|dry\w*|heat\w*|crop loss|yield loss)"
+                            r"|(frost|drought|dry spell|heatwave|crop loss|yield loss).{0,34}(brazil|minas gerais|vietnam|colombia|espirito santo))", "signal": "Origin crop stress"},
+                {"pattern": r"((?:ice|certified|exchange|warehouse)\s+)?(stocks?|inventor\w+).{0,24}(fall\w*|fell|drop\w*|declin\w+|draw\w*|lowest|multi[- ]year low)", "signal": "Certified stocks draw"},
+                {"pattern": r"(tight\w*|short\w*|scarce).{0,22}(supply|supplies|availability|bean\w*)", "signal": "Tight supply"},
+                {"pattern": r"(arabica|robusta|coffee).{0,26}(output|production|crop|harvest).{0,22}(cut\w*|lower\w*|downgrad\w+|fall\w*|fell|declin\w+)", "signal": "Output downgrade"},
+            ],
+            "bearish": [
+                {"pattern": r"(brazil|vietnam|colombia).{0,34}(record\s+(?:\w+\s+){0,2}(?:crop|harvest|production)|bumper\s+(?:\w+\s+){0,2}crop)", "signal": "Record origin crop"},
+                {"pattern": r"((?:ice|certified|exchange|warehouse)\s+)?(stocks?|inventor\w+).{0,24}(ris\w*|rose|build\w*|built|increas\w+|highest)", "signal": "Certified stocks build"},
+                {"pattern": r"(timely rain|favou?rable weather|beneficial rain|ideal conditions|good rain\w*).{0,30}(brazil|vietnam|colombia|crop|harvest)|(?:brazil|vietnam|colombia).{0,30}(timely rain|favou?rable weather|beneficial rain)", "signal": "Favourable origin weather"},
+                {"pattern": r"(arabica|robusta|coffee).{0,26}(output|production|crop|harvest).{0,22}(rais\w+|upgrad\w+|ris\w*|rose|increas\w+|exceed\w+)", "signal": "Output upgrade"},
+            ],
+        },
+        "cocoa": {
+            "bullish": [
+                {"pattern": r"(?:(ivory coast|cote d.?ivoire|ghana|nigeria|cameroon).{0,34}(arrival\w*|deliver\w+|crop|harvest).{0,22}(fall\w*|fell|drop\w*|declin\w+|below|down|behind)"
+                            r"|(arrival\w*|deliver\w+).{0,22}(fall\w*|fell|drop\w*|declin\w+|below|down|behind).{0,30}(ivory coast|cote d.?ivoire|ghana|nigeria))", "signal": "West African arrivals down"},
+                {"pattern": r"(black pod|swollen shoot|cocoa swollen|harmattan|pod disease)", "signal": "Crop disease"},
+                {"pattern": r"(grinding\w*|grind\w*).{0,24}(ris\w*|rose|strong\w*|record|increas\w+|beat\w*)", "signal": "Grindings strength"},
+                {"pattern": r"(deficit|shortfall|shortage).{0,26}(cocoa|market|global)|cocoa.{0,24}(deficit|shortfall)", "signal": "Supply deficit"},
+            ],
+            "bearish": [
+                {"pattern": r"(ivory coast|cote d.?ivoire|ghana|nigeria).{0,34}(arrival\w*|deliver\w+|crop|harvest).{0,22}(ris\w*|rose|increas\w+|above|ahead|record)", "signal": "West African arrivals up"},
+                {"pattern": r"(grinding\w*|grind\w*).{0,24}(fall\w*|fell|drop\w*|declin\w+|weak\w*|miss\w*)", "signal": "Grindings weakness"},
+                {"pattern": r"(surplus|glut|oversupply).{0,26}(cocoa|market|global)|cocoa.{0,24}(surplus|glut)", "signal": "Supply surplus"},
+                {"pattern": r"(timely rain|favou?rable weather|beneficial rain|good rain\w*).{0,30}(ivory coast|cote d.?ivoire|ghana|crop|harvest)", "signal": "Favourable origin weather"},
+            ],
+        },
+        "iron_ore": {
+            "bullish": [
+                {"pattern": r"(china|chinese|beijing).{0,34}(stimulus|infrastructure (?:push|spend\w*|plan)|property support|easing measures?)", "signal": "Chinese demand support"},
+                {"pattern": r"((?:port|portside|mill)\s+)?(stock\w*|inventor\w+).{0,24}(fall\w*|fell|drop\w*|declin\w+|draw\w*|lowest)", "signal": "Port stock draw"},
+                {"pattern": r"(vale|rio tinto|bhp|fortescue|fmg|pilbara|carajas).{0,34}(cut\w*|disrupt\w+|halt\w*|suspend\w+|force majeure|cyclone|guidance (?:cut|lower\w*)|derail\w*)", "signal": "Supply disruption"},
+                {"pattern": r"(steel|blast furnace|mill\w*).{0,26}(output|production|margin\w*|utilisation|utilization).{0,22}(ris\w*|rose|increas\w+|improv\w+|restart\w*|record)", "signal": "Steel output rising"},
+            ],
+            "bearish": [
+                {"pattern": r"((?:port|portside|mill)\s+)?(stock\w*|inventor\w+).{0,24}(ris\w*|rose|build\w*|built|increas\w+|highest|pile\w* up)", "signal": "Port stock build"},
+                {"pattern": r"(steel|blast furnace|mill\w*).{0,26}(output|production).{0,22}(cut\w*|curb\w*|fall\w*|fell|restrict\w+|declin\w+|halt\w*)", "signal": "Steel output cuts"},
+                {"pattern": r"(shipment\w*|export\w*|cargo\w*).{0,22}(ris\w*|rose|increas\w+|record|surg\w+|rebound\w*)", "signal": "Shipments rising"},
+                {"pattern": r"(property|real estate|housing).{0,26}(weak\w*|slump\w*|crisis|declin\w+|downturn|default\w*)", "signal": "Property sector weakness"},
+            ],
+        },
+        "coal": {
+            "bullish": [
+                {"pattern": r"(power demand|electricity demand|power consumption).{0,24}(ris\w*|rose|surg\w+|record|increas\w+|strong\w*)", "signal": "Power demand strength"},
+                {"pattern": r"(mine|mining|colliery).{0,26}(accident|halt\w*|suspend\w+|closure|clos\w+|flood\w*|strike|evacuat\w+)", "signal": "Mine supply disruption"},
+                {"pattern": r"(china|india|japan|korea).{0,30}(import\w*).{0,22}(ris\w*|rose|surg\w+|increas\w+|record)", "signal": "Import demand"},
+                {"pattern": r"((?:port|plant|utility|stockpile)\s+)?(stock\w*|inventor\w+).{0,24}(fall\w*|fell|drop\w*|declin\w+|draw\w*|lowest|critical\w*)", "signal": "Stockpile draw"},
+            ],
+            "bearish": [
+                {"pattern": r"((?:port|plant|utility|stockpile)\s+)?(stock\w*|inventor\w+).{0,24}(ris\w*|rose|build\w*|built|increas\w+|highest|ample)", "signal": "Stockpile build"},
+                {"pattern": r"(china|india).{0,30}(import\s+(?:ban|curb\w*|restrict\w+|quota|cap)|ban\w*\s+(?:on\s+)?import)", "signal": "Import restriction"},
+                {"pattern": r"(renewable\w*|solar|wind|hydro|gas[- ]to[- ]coal switch\w*).{0,26}(displac\w+|replac\w+|erod\w+|undercut\w*|cheaper)", "signal": "Renewables displacement"},
+                {"pattern": r"(mild|warm\w*|above[- ]normal).{0,22}(weather|winter|temperatures?)", "signal": "Mild weather"},
+            ],
         },
         "macro": {
             "bullish": [
@@ -1310,7 +1494,7 @@ def build_headline_sentiment_overview(
 _DRIVER_TERMS = [
     # commodities first, so they lead the truncated list
     "oil", "gas", "wheat", "corn", "gold", "silver", "copper", "coffee",
-    "sugar", "bitcoin", "btc",
+    "sugar", "bitcoin", "btc", "soybean", "cocoa", "coal",
     # market drivers
     "price", "production", "supply", "demand", "forecast", "harvest",
     "export", "import", "inflation", "fed", "yield", "weather",
@@ -1337,6 +1521,11 @@ _DRIVER_FALSE_FORMS = {
     "import": {"important", "importantly", "importance"},
     "gas": {"gasket", "gaskets"},
     "corn": {"cornerstone", "corner", "cornered"},
+    # `coal\w*` reaches "coalition", which is a word about politics and appears
+    # in energy coverage constantly ("the governing coalition agreed a levy").
+    # The alias matcher is safe -- it anchors `\bcoal\b` -- but the driver-term
+    # matcher is not, and a driver is text shown to a reader.
+    "coal": {"coalition", "coalitions", "coalesce", "coalesced", "coalescing"},
 }
 
 
@@ -1659,6 +1848,22 @@ _MIRROR_PAIRS = (
     ("Freight rates rising", "Freight rates falling"),
     ("Helium shortage", "Helium surplus"),
     ("Supply tightness", "Supply surplus"),
+    # Pairs introduced with the softs and bulk markets.
+    ("Supply deficit", "Supply surplus"),
+    ("Crush demand strength", "Crush margin compression"),
+    ("Chinese buying", "Chinese cancellations"),
+    ("South American crop risk", "South American record crop"),
+    ("Production decline", "Production rising"),
+    ("Export restriction", "Export resumption"),
+    ("Origin crop stress", "Favourable origin weather"),
+    ("Certified stocks draw", "Certified stocks build"),
+    ("Output downgrade", "Output upgrade"),
+    ("West African arrivals down", "West African arrivals up"),
+    ("Grindings strength", "Grindings weakness"),
+    ("Port stock draw", "Port stock build"),
+    ("Steel output rising", "Steel output cuts"),
+    ("Stockpile draw", "Stockpile build"),
+    ("Import demand", "Import restriction"),
     ("Electronics demand", "Electronics demand weakness"),
     ("Petrochemical demand", "Petrochemical demand weakness"),
     ("Port congestion", "Congestion easing"),

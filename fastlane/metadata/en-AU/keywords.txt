@@ -1,1 +1,1 @@
-spodumene,yellowcake,copper,gold,silver,corn,potash,freight,dry bulk,crude,brent,wti,opec
+spodumene,yellowcake,copper,gold,silver,wheat,corn,sugar,potash,freight,dry bulk,crude,brent,wti

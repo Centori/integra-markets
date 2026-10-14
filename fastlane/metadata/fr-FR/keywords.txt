@@ -1,1 +1,1 @@
-brut,brent,wti,gnl,cuivre,or,argent,lithium,uranium,potasse,mais,ble,fret,opep,cours,gazole
+brut,brent,wti,gnl,cuivre,or,argent,lithium,uranium,potasse,cacao,cafe,sucre,ble,fret,mais

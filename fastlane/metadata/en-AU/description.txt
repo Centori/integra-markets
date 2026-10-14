@@ -8,12 +8,12 @@ Every reading here carries its evidence: the named signal that fired, and the ex
 
 WHAT IT COVERS
 
-Energy: crude, refined products, natural gas, LPG
-Metals: copper, gold, silver, lithium, uranium
-Agriculture: wheat, corn, fertiliser
+Energy: crude, refined products, natural gas, LPG, thermal and coking coal
+Metals: iron ore, copper, gold, silver, lithium, uranium
+Agriculture: wheat, corn, soybeans, sugar, coffee, cocoa, fertiliser
 Also: freight, FX and weather, where a shipping disruption or a currency move becomes a supply story
 
-SIXTEEN MARKETS, ONE METHOD
+ONE METHOD, EVERY MARKET
 
 - Current sentiment per commodity, with the drivers behind it
 - Day-on-day momentum, so you see a change rather than a level

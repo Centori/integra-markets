@@ -8,12 +8,12 @@ Aqui cada leitura vem com sua evidência: o sinal identificado e a frase exata d
 
 O QUE COBRE
 
-Energia: petróleo, derivados, gás natural, GLP
-Metais: cobre, ouro, prata, lítio, urânio
-Agricultura: milho, trigo, fertilizantes
+Energia: petróleo, derivados, gás natural, GLP, carvão
+Metais: minério de ferro, cobre, ouro, prata, lítio, urânio
+Agricultura: soja, milho, trigo, açúcar, café, cacau, fertilizantes
 Também: fretes, câmbio e clima, quando uma interrupção logística ou um movimento de câmbio vira uma história de oferta
 
-DEZESSEIS MERCADOS, UM MÉTODO
+UM MÉTODO, TODOS OS MERCADOS
 
 - Sentimento atual por commodity, com os fatores por trás dele
 - Variação dia a dia, para ver a mudança e não apenas o nível
