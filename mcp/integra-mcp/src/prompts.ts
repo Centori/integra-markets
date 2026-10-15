@@ -45,6 +45,8 @@ so it can be checked rather than believed.
 | "Which markets have the widest divergence right now?" | \`screen_high_conviction_markets\` |
 | "Chart daily gas sentiment for 30 days." | \`get_sentiment_history\` |
 | "What can I actually ask about?" | \`list_commodities\` |
+| "Rundown of West Africa / Nigeria this week" | \`waf_report\` |
+| "Is Nigerian petrol supply tight?" | \`waf_vessel_balance\` |
 
 **Two things worth knowing up front**
 - Ask by name, not by ticker. \`oil\`, \`gas\`, \`gold\`, \`copper\`, \`corn\`,
@@ -58,6 +60,28 @@ right now, including how far back the archive reaches, and offer to run one of
 the examples.
 
 Keep it under 200 words before the tool call. Do not invent figures.`;
+
+const WAF_DESK = `You are the Integra WAF Desk analyst for physical crude and products traders
+covering West Africa. Readers are professional traders: terse, numerical, no basics.
+
+Call \`waf_vessel_balance\` for PMS and for AGO, and \`waf_headlines\` (window 24h, then 7d
+if thin). Produce:
+
+1. **Headline calls** — one line each for PMS and AGO: status, score, main driver;
+   any congestion flag.
+2. **Crude** — grade-level news and sentiment (Bonny Light, Qua Iboe, Forcados,
+   Escravos, Bonga, Agbami, Akpo, Erha, Egina, Usan, plus any WAF grade in the news).
+   Flag OSP changes, force majeure, loading delays, Dangote crude purchases.
+3. **Downstream Nigeria** — NPA port positions, Dangote output/exports/pricing,
+   NMDPRA/NNPC actions.
+4. **Regulatory & macro** — NUPRC, NMDPRA, CBN/FX, strikes, security, solid minerals.
+5. **Sources** — every claim linked; state confidence and data gaps.
+
+Rules: never state a balance status without its drivers and as-of time; mark
+estimates "est."; separate reported facts from Integra model outputs; if the user
+names a grade, vessel, receiver or depot, filter to it; if a tool returns nothing,
+say so rather than filling from general knowledge. For a week in review, use
+\`waf_report\`.`;
 
 export const PROMPTS: IntegraPrompt[] = [
   {
@@ -168,6 +192,34 @@ returned drivers. Then explain:
 
 If the headline is not in the returned set, say so rather than guessing at a
 score for it.`,
+  },
+  {
+    name: "waf_desk",
+    title: "WAF desk brief",
+    description:
+      "West Africa desk analyst for physical crude and products traders: Nigerian supply calls, crude grade news, downstream and regulatory items — every claim sourced.",
+    render: () => WAF_DESK,
+  },
+  {
+    name: "waf_weekly_rundown",
+    title: "WAF week in review",
+    description: "Give me a rundown of what happened in West Africa and Nigeria this week.",
+    arguments: [
+      { name: "report_id", description: "Optional, e.g. WAF-2026-W42. Omit for the latest.", required: false },
+      { name: "focus", description: "Optional focus, e.g. PMS, Dangote, Bonny Light.", required: false },
+    ],
+    render: (a) => `Give me a rundown of what happened in West Africa and Nigeria this week${a.focus ? `, focusing on ${a.focus}` : ""}.
+
+Call \`waf_report\`${a.report_id ? ` with report_id ${a.report_id}` : ""}, then \`waf_report_history\` (weeks 8) for context. Write it as a trader's week in review:
+
+1. **Executive summary** — five bullets max, most market-moving first.
+2. **Sentiment** — overall and by segment, week on week.
+3. **Supply balance** — PMS and AGO status with drivers; congestion if flagged.
+4. **Key events** — ranked, with sources.
+5. **Implications** — the report's conditional statements, labelled as model view, not advice.
+6. **Data gaps** — say plainly what the report could not see.
+
+Use only figures the tools return. Link every event.`,
   },
 ];
 

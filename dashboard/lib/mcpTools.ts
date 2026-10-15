@@ -52,6 +52,23 @@ export const MCP_TOOLS: McpTool[] = [
     blurb: "daily score, article counts and momentum over a range",
     historyTier: true,
   },
+  {
+    name: "waf_report",
+    blurb: "WAF Weekly Report — West Africa sentiment, supply balance and key events",
+  },
+  {
+    name: "waf_report_history",
+    blurb: "week-by-week WAF sentiment, overall or by segment",
+    historyTier: true,
+  },
+  {
+    name: "waf_headlines",
+    blurb: "West Africa energy headlines by country, grade, product or entity",
+  },
+  {
+    name: "waf_vessel_balance",
+    blurb: "Nigerian PMS/AGO supply balance and NPA port positions",
+  },
 ];
 
 /**

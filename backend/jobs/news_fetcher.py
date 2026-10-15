@@ -63,6 +63,9 @@ async def _fetch_and_archive() -> Dict[str, Any]:
             "fetch_eia_reports",
             "fetch_iea_news",
             "fetch_oilprice_news",
+            # West Africa (WAF module): Nigerian/WAF energy wires and relevance-
+            # gated Nigerian outlets. Tagged afterwards by jobs/waf_ingest.py.
+            "fetch_waf_news",
         ):
             fetcher = getattr(ns, fetcher_name, None)
             if fetcher is None:

@@ -50,9 +50,19 @@ import {
   listCommodities,
   listCommoditiesSchema,
 } from "./tools/history.js";
+import {
+  wafHeadlines,
+  wafHeadlinesSchema,
+  wafReport,
+  wafReportHistory,
+  wafReportHistorySchema,
+  wafReportSchema,
+  wafVesselBalance,
+  wafVesselBalanceSchema,
+} from "./tools/waf.js";
 
 export const SERVER_NAME = "integra-mcp";
-export const SERVER_VERSION = "0.2.0";
+export const SERVER_VERSION = "0.3.0";
 
 type ToolDef = {
   name: string;
@@ -110,6 +120,34 @@ export const TOOLS: ToolDef[] = [
       "Daily sentiment series for a commodity over the last N days: average score, article counts, and day-on-day momentum. Use this for 'how has X moved', trends and turning points — get_sentiment returns a single aggregate and cannot answer those.",
     schema: getSentimentHistorySchema,
     handler: (c, a) => getSentimentHistory(c, a),
+  },
+  {
+    name: "waf_report",
+    description:
+      "The WAF (West Africa) Weekly Report: executive summary, net sentiment by segment, Nigerian PMS/AGO supply balance, ranked key events, crude grade watch, regulatory items and implications — every line sourced. Use for 'what happened in West Africa / Nigeria this week'. Published Fridays 18:00 WAT.",
+    schema: wafReportSchema,
+    handler: (c, a) => wafReport(c, a),
+  },
+  {
+    name: "waf_report_history",
+    description:
+      "Week-by-week WAF net sentiment from past weekly reports, overall or for one segment (crude, pms, ago, lpg, refining, fx_macro, mining). Use for 'how has WAF / Nigerian crude sentiment moved over N weeks'.",
+    schema: wafReportHistorySchema,
+    handler: (c, a) => wafReportHistory(c, a),
+  },
+  {
+    name: "waf_headlines",
+    description:
+      "Recent West Africa energy headlines with sentiment, filterable by country, crude grade (bonny_light, qua_iboe, forcados ...), product (PMS, AGO, LPG, CRUDE), entity (dangote_refinery, nnpc, nuprc, nmdpra ...) or topic (force_majeure, osp_change, port_position ...).",
+    schema: wafHeadlinesSchema,
+    handler: (c, a) => wafHeadlines(c, a),
+  },
+  {
+    name: "waf_vessel_balance",
+    description:
+      "Nigerian PMS or AGO supply balance — GLUT / COMFORTABLE / BALANCED / TIGHT / SHORTAGE RISK with score, drivers, congestion flag and data gaps — plus the last 7 days of NPA shipping-position counts.",
+    schema: wafVesselBalanceSchema,
+    handler: (c, a) => wafVesselBalance(c, a),
   },
 ];
 

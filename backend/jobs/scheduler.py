@@ -114,6 +114,23 @@ def start_all() -> None:
         t5.start()
         _threads["archive_backfill"] = t5
 
+    # WAF (West Africa) module. waf_ingest tags the archive with the WAF
+    # taxonomy, parses NPA shipping-position reports and pulls MEMAN
+    # publications every 30 min. waf_weekly_report checks every 5 min and does
+    # real work twice a week: generate after Friday's 17:00 WAT cutoff, publish
+    # (in-app card + push) at 18:00 WAT.
+    try:
+        from jobs import waf_ingest, waf_weekly_report
+    except ImportError as exc:
+        logger.warning("scheduler: WAF jobs not importable: %s", exc)
+    else:
+        t6 = _SchedulerThread("waf_ingest", waf_ingest.run, interval_s=1800)
+        t6.start()
+        _threads["waf_ingest"] = t6
+        t7 = _SchedulerThread("waf_weekly_report", waf_weekly_report.run, interval_s=300)
+        t7.start()
+        _threads["waf_weekly_report"] = t7
+
 
 def stop_all() -> None:
     for t in _threads.values():

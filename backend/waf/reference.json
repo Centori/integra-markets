@@ -1,0 +1,60 @@
+{
+  "_comment": "Reference data for the WAF balance model. Every figure carries its source and as_of so a stale number is visible in API output (data_gaps), never silently reused. Update nmdpra_factsheets when NMDPRA publishes a new month.",
+  "density_kg_per_litre": {
+    "PMS": 0.74,
+    "AGO": 0.85,
+    "DPK": 0.80,
+    "ATK": 0.80,
+    "LPG": 0.54
+  },
+  "consumption_benchmark_litres_per_day": {
+    "_source": "NMDPRA 2026 daily benchmarks, as reported in coverage of the March 2026 factsheet (Leadership, 2026)",
+    "_source_url": "https://leadership.ng/petrol-consumption-drops-to-47-3m-litres-daily-in-march-amid-increased-import-nmdpra/",
+    "PMS": 50000000,
+    "AGO": 14000000,
+    "ATK": 3000000
+  },
+  "nmdpra_factsheets": [
+    {
+      "month": "2026-03",
+      "product": "PMS",
+      "consumption_litres_per_day": 47300000,
+      "supply_litres_per_day": 40100000,
+      "import_litres_per_day": 5900000,
+      "sufficiency_days": 21.2,
+      "source": "NMDPRA factsheet March 2026 (via Leadership)",
+      "source_url": "https://leadership.ng/petrol-consumption-drops-to-47-3m-litres-daily-in-march-amid-increased-import-nmdpra/"
+    },
+    {
+      "month": "2026-06",
+      "product": "PMS",
+      "dangote_output_litres_per_day": 39100000,
+      "sufficiency_days": 20.0,
+      "source": "NMDPRA data June 2026 (via Legit.ng)",
+      "source_url": "https://www.legit.ng/business-economy/energy/1723026-new-nmdpra-data-shows-nigerians-buying-petrol-dangote-refinery-boost/"
+    }
+  ],
+  "typical_cargo_mt": {
+    "_comment": "Assumed parcel size when only a vessel COUNT is known (NPA reports). Always labelled as an estimate in output.",
+    "PMS": 30000,
+    "AGO": 30000,
+    "ATK": 15000,
+    "LPG": 10000
+  },
+  "balance": {
+    "sufficiency_target_days": 30,
+    "sufficiency_neutral_days": 20,
+    "sufficiency_scale_days": 10,
+    "factsheet_stale_after_days": 75,
+    "weights": {"cover": 0.4, "inflow": 0.3, "price": 0.3},
+    "congestion_waiting_multiple": 2.0,
+    "congestion_min_waiting": 8,
+    "labels": [
+      [50, "GLUT"],
+      [20, "COMFORTABLE"],
+      [-20, "BALANCED"],
+      [-50, "TIGHT"],
+      [-101, "SHORTAGE RISK"]
+    ]
+  }
+}

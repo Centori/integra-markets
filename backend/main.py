@@ -128,6 +128,15 @@ try:
 except ImportError:
     export_available = False
 
+# WAF (West Africa) module: /v1/waf/* for API customers + MCP, /api/waf/* for
+# the app's weekly report card.
+try:
+    from api.waf import router as waf_router, app_router as waf_app_router
+    waf_available = True
+except ImportError as _waf_exc:
+    print(f"WARNING: WAF router import failed: {_waf_exc}")
+    waf_available = False
+
 try:
     from api.kalshi import router as kalshi_router
     kalshi_available = True
@@ -277,6 +286,9 @@ if market_sentiment_available:
     app.include_router(market_sentiment_router)
 if export_available:
     app.include_router(export_router)
+if waf_available:
+    app.include_router(waf_router)
+    app.include_router(waf_app_router)
 
 # Every router above is imported under `except ImportError: <n>_available =
 # False`, which means a typo'd import silently deletes an entire API surface
@@ -305,6 +317,7 @@ _ROUTER_STATUS = {
     "stripe": stripe_available,
     "v1_public": v1_public_available,
     "market_sentiment": market_sentiment_available,
+    "waf": waf_available,
 }
 _missing = sorted(name for name, ok in _ROUTER_STATUS.items() if not ok)
 if _missing:

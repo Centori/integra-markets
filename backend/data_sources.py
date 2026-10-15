@@ -290,6 +290,61 @@ class NewsDataSources:
         )
         return topical + trade_press
 
+    async def fetch_waf_news(self) -> List[Dict]:
+        """West Africa energy coverage for the WAF module (see waf/sources.py).
+
+        Google News queries are WAF-specific and kept whole. Outlet feeds
+        (Punch, Vanguard, ...) are general news, so each item must pass the WAF
+        relevance gate — a WAF location plus an energy/mining term, or a named
+        crude grade — or national politics would flood the commodity archive.
+        """
+        from waf.sources import FEEDS
+        from waf.taxonomy import is_waf_relevant, tag_text
+
+        articles: List[Dict] = []
+        for feed in FEEDS:
+            if feed.query:
+                items = await self._fetch_google_news(
+                    query=feed.query, source=feed.name, category="energy", limit=20
+                )
+            else:
+                items = await self._fetch_rss_items(feed.url, feed.name, "energy")
+            for item in items:
+                if feed.gated:
+                    tags = tag_text(f"{item.get('title', '')} {item.get('summary', '')}")
+                    if not is_waf_relevant(tags):
+                        continue
+                articles.append(item)
+        logger.info("Fetched %d WAF articles across %d feeds", len(articles), len(FEEDS))
+        return articles
+
+    async def _fetch_rss_items(self, url: str, source: str, category: str) -> List[Dict]:
+        """A plain RSS feed, normalised to this module's article shape."""
+        try:
+            content = await self._get_text_with_retry(url)
+        except Exception as exc:  # noqa: BLE001
+            logger.error("Error fetching %s RSS (%s): %s", source, url, exc)
+            source_tracker.update_status(source, success=False, error=str(exc))
+            return []
+        entries = list(feedparser.parse(content).entries)
+        if not entries:
+            logger.error("%s RSS parsed to 0 items — treat as a broken feed", source)
+            source_tracker.update_status(source, success=False, error="feed parsed to no items")
+            return []
+        source_tracker.update_status(source, success=True)
+        return [
+            {
+                "source": source,
+                "title": entry.title,
+                "summary": getattr(entry, "summary", ""),
+                "image_url": extract_image_url(entry),
+                "url": entry.link,
+                "published": self._parse_date(getattr(entry, "published", "")),
+                "category": category,
+            }
+            for entry in entries
+        ]
+
     async def fetch_metals_news(self) -> List[Dict]:
         """Precious and base metals.
 

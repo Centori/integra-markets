@@ -83,3 +83,9 @@ stripe==11.4.1
 # as the missing `stripe` above: a lazy import that lets the app boot healthy
 # and fail only on the path that needs it.
 PyJWT==2.10.1
+
+# pypdf — REQUIRED by the WAF module (waf/pdf_text.py) to read MEMAN bulletin,
+# digest and market-analysis PDFs. Imported lazily, so a missing install would
+# boot healthy and fail only inside the waf_ingest job — the same shape as the
+# stripe/PyJWT entries above. Pure Python, no system packages.
+pypdf==4.3.1
