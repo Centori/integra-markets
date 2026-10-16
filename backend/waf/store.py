@@ -14,9 +14,13 @@ from services.pagination import fetch_all
 from waf.taxonomy import Tags
 from waf.vessels import PortPosition, TankerPosition
 
+# Document reads go by id in chunks: 150 UUIDs keep the request URL near 6 KB.
+ID_CHUNK = 150
+MAX_TAG_ROWS = 50_000
+
 _DOC_COLUMNS = (
     "id, source, url, title, content, published_at, fetched_at,"
-    " waf_document_tags!inner(tag_type, tag),"
+    " waf_document_tags(tag_type, tag),"
     " sentiment_scores(sentiment, score, confidence, model_name, model_version)"
 )
 
@@ -56,19 +60,44 @@ def upsert_tags(supabase: Any, document_id: str, tags: Tags) -> int:
 def tagged_documents(supabase: Any, start: datetime, end: datetime,
                      tag_type: Optional[str] = None, tag: Optional[str] = None,
                      max_rows: int = 5000) -> Tuple[List[Dict], bool]:
-    """WAF-tagged documents published in [start, end). Point-in-time: no look-ahead."""
+    """WAF-tagged documents published in [start, end), newest first. No look-ahead.
 
-    def build(s: int, e: int):
-        query = (supabase.table("raw_documents").select(_DOC_COLUMNS)
-                 .gte("published_at", start.isoformat()).lt("published_at", end.isoformat()))
+    Two steps, tags table first. The previous single query inner-joined
+    raw_documents (the whole archive) to the tags and scanned every document
+    in the window; over 90 days that ran past the statement timeout and the
+    endpoint answered 500. Filtering on the embedded tag also trimmed each
+    document's tags to the one filtered on, so a PMS query lost its grades.
+
+    `tagged_at >= start` is a safe pre-filter: a document is tagged after it
+    is published, so anything published in the window was tagged after its
+    start. Backfill-tagged documents only widen the superset, never drop rows.
+    """
+
+    def ids_query(s: int, e: int):
+        query = supabase.table("waf_document_tags").select("document_id").gte("tagged_at", start.isoformat())
         if tag_type:
-            query = query.eq("waf_document_tags.tag_type", tag_type)
+            query = query.eq("tag_type", tag_type)
         if tag:
-            query = query.eq("waf_document_tags.tag", tag)
-        return query.order("published_at", desc=True).range(s, e)
+            query = query.eq("tag", tag)
+        return query.order("tagged_at", desc=True).range(s, e)
 
-    rows, truncated = fetch_all(build, max_rows=max_rows)
-    return [_flatten(r) for r in rows], truncated
+    id_rows, truncated = fetch_all(ids_query, max_rows=MAX_TAG_ROWS)
+    ids = list(dict.fromkeys(r["document_id"] for r in id_rows))
+    docs: List[Dict] = []
+    for i in range(0, len(ids), ID_CHUNK):
+        docs.extend(
+            (supabase.table("raw_documents").select(_DOC_COLUMNS).in_("id", ids[i:i + ID_CHUNK])
+             .gte("published_at", start.isoformat()).lt("published_at", end.isoformat())
+             .execute()).data or []
+        )
+        # ids are newest-tagged first, so an early stop keeps the most recent
+        # documents; only list endpoints with a small limit ever trigger it.
+        if len(docs) > max_rows:
+            truncated = True
+            break
+    docs.sort(key=lambda r: r.get("published_at") or "", reverse=True)
+    truncated = truncated or len(docs) > max_rows
+    return [_flatten(r) for r in docs[:max_rows]], truncated
 
 
 def _flatten(row: Dict) -> Dict:
@@ -142,6 +171,36 @@ def mark_published(supabase: Any, report_id: str, published_at: datetime, push_r
     (supabase.table("waf_reports")
      .update({"published_at": published_at.isoformat(), "push_result": push_result})
      .eq("report_id", report_id).execute())
+
+
+def record_push_result(supabase: Any, report_id: str, push_result: Dict) -> None:
+    """Record a delivery decision without publishing (e.g. a withheld empty report)."""
+    supabase.table("waf_reports").update({"push_result": push_result}).eq("report_id", report_id).execute()
+
+
+def pipeline_counts(supabase: Any, since: datetime, waf_sources: Sequence[str]) -> Dict[str, Any]:
+    """Counts for /health/waf: is anything arriving, and is anything being tagged?"""
+
+    def count(query) -> Optional[int]:
+        return query.limit(1).execute().count
+
+    latest = (supabase.table("raw_documents").select("fetched_at")
+              .order("fetched_at", desc=True).limit(1).execute()).data
+    latest_tag = (supabase.table("waf_document_tags").select("tagged_at")
+                  .order("tagged_at", desc=True).limit(1).execute()).data
+    return {
+        "archive_docs_fetched_since": count(
+            supabase.table("raw_documents").select("id", count="exact").gte("fetched_at", since.isoformat())),
+        "waf_source_docs_fetched_since": count(
+            supabase.table("raw_documents").select("id", count="exact")
+            .gte("fetched_at", since.isoformat()).in_("source", list(waf_sources))),
+        "waf_tags_since": count(
+            supabase.table("waf_document_tags").select("document_id", count="exact")
+            .gte("tagged_at", since.isoformat())),
+        "npa_positions_total": count(supabase.table("waf_port_positions").select("id", count="exact")),
+        "latest_archive_fetch": latest[0]["fetched_at"] if latest else None,
+        "latest_tag": latest_tag[0]["tagged_at"] if latest_tag else None,
+    }
 
 
 def list_reports(supabase: Any, start: Optional[datetime], end: Optional[datetime],

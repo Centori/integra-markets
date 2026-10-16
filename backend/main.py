@@ -131,7 +131,7 @@ except ImportError:
 # WAF (West Africa) module: /v1/waf/* for API customers + MCP, /api/waf/* for
 # the app's weekly report card.
 try:
-    from api.waf import router as waf_router, app_router as waf_app_router
+    from api.waf import router as waf_router, app_router as waf_app_router, health_router as waf_health_router
     waf_available = True
 except ImportError as _waf_exc:
     print(f"WARNING: WAF router import failed: {_waf_exc}")
@@ -289,6 +289,7 @@ if export_available:
 if waf_available:
     app.include_router(waf_router)
     app.include_router(waf_app_router)
+    app.include_router(waf_health_router)
 
 # Every router above is imported under `except ImportError: <n>_available =
 # False`, which means a typo'd import silently deletes an entire API surface

@@ -27,25 +27,43 @@ _running_lock = threading.Lock()
 TAG_LOOKBACK = timedelta(hours=3)
 
 
+# Last tick's outcome, served by /health/waf. Errors are recorded here as well as
+# logged: an ingest that raises every 30 minutes looked, from outside, exactly
+# like a quiet news week (W41 shipped with 0 articles and no visible reason).
+LAST_TICK: Dict[str, Any] = {}
+
+
 def run() -> Dict[str, Any]:
     if not _running_lock.acquire(blocking=False):
         return {"skipped": "still_running"}
+    started = datetime.now(timezone.utc)
     try:
-        from services._supabase import get_supabase_client
-
-        supabase = get_supabase_client()
-        if supabase is None:
-            logger.error("waf_ingest: no Supabase client — nothing can be tagged or stored")
-            return {"error": "no_supabase_client"}
-        from waf import store
-
-        docs, truncated = store.recent_documents(supabase, datetime.now(timezone.utc) - TAG_LOOKBACK)
-        result = tag_documents(supabase, docs)
-        result["truncated"] = truncated
-        result["meman"] = ingest_meman(supabase)
+        result = _tick()
+        LAST_TICK.clear()
+        LAST_TICK.update(started_at=started.isoformat(), ok="error" not in result, result=result)
         return result
+    except Exception as exc:
+        LAST_TICK.clear()
+        LAST_TICK.update(started_at=started.isoformat(), ok=False, error=f"{type(exc).__name__}: {exc}")
+        raise
     finally:
         _running_lock.release()
+
+
+def _tick() -> Dict[str, Any]:
+    from services._supabase import get_supabase_client
+
+    supabase = get_supabase_client()
+    if supabase is None:
+        logger.error("waf_ingest: no Supabase client — nothing can be tagged or stored")
+        return {"error": "no_supabase_client"}
+    from waf import store
+
+    docs, truncated = store.recent_documents(supabase, datetime.now(timezone.utc) - TAG_LOOKBACK)
+    result = tag_documents(supabase, docs)
+    result["truncated"] = truncated
+    result["meman"] = ingest_meman(supabase)
+    return result
 
 
 def tag_documents(supabase: Any, docs: List[Dict[str, Any]]) -> Dict[str, int]:

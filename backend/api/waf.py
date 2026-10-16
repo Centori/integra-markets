@@ -215,3 +215,34 @@ async def app_reports(weeks: int = Query(12, ge=1, le=52),
     rows = store.list_reports(_supabase(), since, None, limit=weeks)
     return {"reports": [{"report_id": r["report_id"], "cutoff": r["cutoff"],
                          "teaser": r["payload"].get("teaser")} for r in rows]}
+
+
+# ------------------------------------------------------------------ health
+
+health_router = APIRouter(tags=["health"])
+
+
+@health_router.get("/health/waf")
+def waf_health() -> Dict[str, Any]:
+    """Is the WAF pipeline alive? Counts and last-tick outcomes only — no content.
+
+    Unauthenticated on purpose, like /health/routers: when the weekly report
+    comes out empty, the first question is whether articles are arriving at
+    all, whether they are being tagged, or whether the ingest job is raising.
+    """
+    from jobs import waf_ingest, scheduler
+    from waf.sources import WAF_SOURCES
+
+    since = datetime.now(timezone.utc) - timedelta(hours=24)
+    try:
+        counts = store.pipeline_counts(_supabase(), since, WAF_SOURCES)
+    except HTTPException:
+        raise
+    except Exception as exc:  # noqa: BLE001 — the health page must report, not 500
+        counts = {"error": f"{type(exc).__name__}: {exc}"}
+    return {
+        "window": "last 24h",
+        "counts": counts,
+        "waf_ingest_last_tick": waf_ingest.LAST_TICK or "no tick since this process started",
+        "scheduler_threads": {name: t.is_alive() for name, t in scheduler._threads.items()},
+    }

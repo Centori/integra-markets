@@ -50,8 +50,17 @@ def run(now: datetime | None = None) -> Dict[str, Any] | None:
         if existing is None:
             existing = report_service.generate(supabase, week)
             logger.info("waf_weekly_report: generated %s v%s", week.report_id, existing["version"])
-        if existing.get("published_at") or now < week.publish_at:
+        if existing.get("published_at") or (existing.get("push_result") or {}).get("withheld"):
+            return None  # already handled this week
+        if now < week.publish_at:
             return None  # nothing to do this tick; stays quiet in the log
+        if not existing["payload"].get("documents_analysed"):
+            # An empty report is a pipeline failure, not a quiet week. Pushing it
+            # tells every user "nothing happened in West Africa" — worse than
+            # silence. Withhold it: not published, not pushed, loud in the log.
+            store.record_push_result(supabase, week.report_id, {"withheld": "no documents in window"})
+            logger.error("waf_weekly_report: %s has 0 documents — withheld (check /health/waf)", week.report_id)
+            return {"withheld": week.report_id}
         if now - week.publish_at > PUBLISH_GRACE:
             store.mark_published(supabase, week.report_id, now, {"skipped_push": "published late"})
             logger.warning("waf_weekly_report: %s published late, push skipped", week.report_id)
