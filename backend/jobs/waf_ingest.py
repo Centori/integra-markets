@@ -9,6 +9,11 @@ raw_documents like every other article. This job adds the WAF layer on top:
   3. Ingest new MEMAN publications (RSS + bulletin PDF), score and archive them
      through the shared path, and tag them from their FULL text.
 
+Catch-up: the first tick after the process starts also tags the last
+CATCH_UP_DAYS of the archive by published_at, so a deploy (or the first deploy
+of this module) never leaves the current report week untagged. Upserts are
+idempotent, so repeating it on every restart costs time, not correctness.
+
 Backfill: `python -m jobs.waf_ingest --backfill-days 730` re-runs steps 1-2 over
 the existing archive (published_at window).
 """
@@ -25,6 +30,8 @@ logger = logging.getLogger(__name__)
 
 _running_lock = threading.Lock()
 TAG_LOOKBACK = timedelta(hours=3)
+CATCH_UP_DAYS = 8  # one full report week plus a day of slack
+_caught_up = False
 
 
 # Last tick's outcome, served by /health/waf. Errors are recorded here as well as
@@ -59,9 +66,13 @@ def _tick() -> Dict[str, Any]:
         return {"error": "no_supabase_client"}
     from waf import store
 
+    global _caught_up
     docs, truncated = store.recent_documents(supabase, datetime.now(timezone.utc) - TAG_LOOKBACK)
     result = tag_documents(supabase, docs)
     result["truncated"] = truncated
+    if not _caught_up:
+        result["catch_up"] = backfill(supabase, CATCH_UP_DAYS)
+        _caught_up = True  # only after success: a failed catch-up retries next tick
     result["meman"] = ingest_meman(supabase)
     return result
 
@@ -121,12 +132,10 @@ def ingest_meman(supabase: Any) -> Dict[str, Any]:
             "supply_signals": sum(d.supply_signal for d in documents)}
 
 
-def backfill(days: int) -> Dict[str, Any]:
-    """Tag and parse the existing archive, one day at a time (bounded reads)."""
-    from services._supabase import get_supabase_client
+def backfill(supabase: Any, days: int) -> Dict[str, Any]:
+    """Tag and parse the existing archive, one day at a time (indexed, bounded reads)."""
     from services.pagination import fetch_all
 
-    supabase = get_supabase_client()
     end = datetime.now(timezone.utc)
     totals = {"seen": 0, "tagged": 0, "port_positions": 0}
     for offset in range(days):
@@ -136,7 +145,7 @@ def backfill(days: int) -> Dict[str, Any]:
             lambda s, e: supabase.table("raw_documents")
             .select("id, source, url, title, content, published_at")
             .gte("published_at", day_start.isoformat()).lt("published_at", day_end.isoformat())
-            .range(s, e)
+            .order("published_at").range(s, e)
         )
         for key, value in tag_documents(supabase, docs).items():
             totals[key] += value
@@ -148,4 +157,9 @@ if __name__ == "__main__":
     parser.add_argument("--backfill-days", type=int, default=0)
     args = parser.parse_args()
     logging.basicConfig(level=logging.INFO)
-    print(backfill(args.backfill_days) if args.backfill_days else run())
+    if args.backfill_days:
+        from services._supabase import get_supabase_client
+
+        print(backfill(get_supabase_client(), args.backfill_days))
+    else:
+        print(run())

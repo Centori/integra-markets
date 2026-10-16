@@ -163,3 +163,30 @@ def test_health_reports_db_errors_instead_of_500(monkeypatch):
     body = TestClient(app).get("/health/waf").json()
     assert "does not exist" in body["counts"]["error"]
     assert "waf_ingest_last_tick" in body and "scheduler_threads" in body
+
+
+# ------------------------------------------------------------ catch-up
+
+def test_first_tick_catches_up_once_and_retries_after_failure(monkeypatch):
+    from jobs import waf_ingest
+
+    calls = []
+    monkeypatch.setattr("services._supabase.get_supabase_client", lambda: object())
+    monkeypatch.setattr(store, "recent_documents", lambda sb, since: ([], False))
+    monkeypatch.setattr(waf_ingest, "ingest_meman", lambda sb: {"new": 0})
+    monkeypatch.setattr(waf_ingest, "_caught_up", False)
+
+    def flaky_backfill(sb, days):
+        calls.append(days)
+        if len(calls) == 1:
+            raise TimeoutError("read timed out")
+        return {"seen": 5, "tagged": 2, "port_positions": 0}
+
+    monkeypatch.setattr(waf_ingest, "backfill", flaky_backfill)
+    import pytest
+    with pytest.raises(TimeoutError):
+        waf_ingest.run()
+    assert waf_ingest.LAST_TICK["ok"] is False and "timed out" in waf_ingest.LAST_TICK["error"]
+    assert waf_ingest.run()["catch_up"]["tagged"] == 2
+    assert "catch_up" not in waf_ingest.run()
+    assert calls == [waf_ingest.CATCH_UP_DAYS, waf_ingest.CATCH_UP_DAYS]
